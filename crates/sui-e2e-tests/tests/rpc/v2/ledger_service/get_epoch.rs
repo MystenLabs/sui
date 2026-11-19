@@ -7,9 +7,12 @@ use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2::Epoch;
+use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
 use sui_rpc::proto::sui::rpc::v2::GetEpochRequest;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use test_cluster::TestClusterBuilder;
+use tonic::transport::Channel;
 
 #[sim_test]
 async fn get_epoch() {
@@ -66,6 +69,58 @@ async fn get_epoch() {
         .await
         .unwrap_err();
     assert_eq!(status.code(), tonic::Code::NotFound);
+}
+
+/// Without rpc indexes a node serves the current epoch from the live system state, refuses a past
+/// epoch, whose data only the indexes hold, as not set up for it, and answers `NotFound` for an
+/// epoch that has not started.
+#[sim_test]
+async fn past_epoch_without_rpc_indexes_is_not_served_here() {
+    use prost::Message;
+    use sui_rpc::proto::google::rpc::ErrorInfo;
+    use sui_rpc::proto::sui::rpc::v2::ErrorReason;
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .with_rpc_config(sui_config::RpcConfig {
+            enable_indexing: Some(false),
+            ..Default::default()
+        })
+        .build()
+        .await;
+    test_cluster.trigger_reconfiguration().await;
+
+    let mut client = LedgerServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+
+    let current_epoch = client
+        .get_epoch(GetEpochRequest::latest())
+        .await
+        .unwrap()
+        .into_inner()
+        .epoch
+        .unwrap()
+        .epoch
+        .unwrap();
+    assert!(current_epoch > 0);
+
+    let status = client.get_epoch(GetEpochRequest::new(0)).await.unwrap_err();
+    assert_eq!(status.code(), tonic::Code::Unimplemented, "{status:?}");
+    let error_info = sui_rpc::proto::google::rpc::Status::decode(status.details())
+        .unwrap()
+        .details
+        .iter()
+        .find_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .unwrap_or_else(|| panic!("no ErrorInfo in {status:?}"));
+    assert_eq!(error_info.reason, ErrorReason::NotServedHere.as_str_name());
+    assert_eq!(error_info.metadata["cause"], "no_rpc_indexes");
+
+    let status = client
+        .get_epoch(GetEpochRequest::new(current_epoch + 1000))
+        .await
+        .unwrap_err();
+    assert_eq!(status.code(), tonic::Code::NotFound, "{status:?}");
 }
 
 #[sim_test]
@@ -154,4 +209,85 @@ async fn get_epoch_protocol_config_exposes_gasless_allowlist() {
     let expected_json =
         serde_json::json!([["0xa::usdc::USDC", "10000"], ["0xb::usdt::USDT", "0"],]);
     assert_eq!(parsed, expected_json);
+}
+
+async fn read_epoch(
+    client: &mut LedgerServiceClient<Channel>,
+    epoch: u64,
+    paths: &[&str],
+) -> Epoch {
+    let request =
+        GetEpochRequest::new(epoch).with_read_mask(FieldMask::from_paths(paths.iter().copied()));
+    client
+        .get_epoch(request)
+        .await
+        .unwrap_or_else(|status| panic!("GetEpoch {epoch}: {status:?}"))
+        .into_inner()
+        .epoch
+        .unwrap()
+}
+
+/// After an epoch change, epoch 0's end-of-epoch fields match its last checkpoint and epoch 1's
+/// are unset.
+#[sim_test]
+async fn get_epoch_end_fields() {
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .disable_fullnode_pruning()
+        .build()
+        .await;
+    cluster.trigger_reconfiguration().await;
+    // Epoch 0's end and epoch 1's start are indexed from epoch 0's last checkpoint, which the
+    // fullnode executed before it entered epoch 1.
+    cluster.wait_for_rpc_index_ready().await;
+    let mut client = LedgerServiceClient::connect(cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+
+    let end_mask = [
+        "first_checkpoint",
+        "last_checkpoint",
+        "transaction_start_inclusive",
+        "transaction_end_exclusive",
+        "ended_in_safe_mode",
+        "system_epoch_info",
+        "epoch_commitments",
+    ];
+    let epoch_0 = read_epoch(&mut client, 0, &end_mask).await;
+    let last_of_epoch_0 = epoch_0.last_checkpoint.unwrap();
+    let summary = client
+        .get_checkpoint(
+            GetCheckpointRequest::by_sequence_number(last_of_epoch_0)
+                .with_read_mask(FieldMask::from_paths(["summary"])),
+        )
+        .await
+        .unwrap()
+        .into_inner()
+        .checkpoint
+        .unwrap()
+        .summary
+        .unwrap();
+    assert_eq!(epoch_0.transaction_start_inclusive, Some(0));
+    assert_eq!(
+        epoch_0.transaction_end_exclusive,
+        summary.total_network_transactions
+    );
+    assert_eq!(epoch_0.ended_in_safe_mode, Some(false));
+    assert!(epoch_0.system_epoch_info.unwrap().total_stake.unwrap() > 0);
+    assert_eq!(
+        epoch_0.epoch_commitments,
+        summary.end_of_epoch_data.unwrap().epoch_commitments
+    );
+
+    let epoch_1 = read_epoch(&mut client, 1, &end_mask).await;
+    assert_eq!(epoch_1.first_checkpoint, Some(last_of_epoch_0 + 1));
+    assert_eq!(
+        epoch_1.transaction_start_inclusive,
+        epoch_0.transaction_end_exclusive
+    );
+    assert_eq!(epoch_1.last_checkpoint, None);
+    assert_eq!(epoch_1.transaction_end_exclusive, None);
+    assert_eq!(epoch_1.ended_in_safe_mode, None);
+    assert_eq!(epoch_1.system_epoch_info, None);
+    assert!(epoch_1.epoch_commitments.is_empty());
 }

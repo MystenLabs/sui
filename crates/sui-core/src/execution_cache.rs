@@ -54,6 +54,17 @@ pub use writeback_cache::WritebackCache;
 
 use metrics::ExecutionCacheMetrics;
 
+/// An entry [`ObjectCacheRead::find_object_or_tombstone_lt_or_eq_version_unlocked`] found.
+#[derive(Debug)]
+pub struct FoundObjectOrTombstone {
+    pub entry: ObjectOrTombstone,
+    /// Whether the entry was read from the store rather than from the entries waiting to be
+    /// committed. An uncommitted entry is newer than every version pruning has deleted: pruning
+    /// deletes only versions replaced by committed transactions, and a transaction that has not
+    /// been committed follows every committed one that touched the same object.
+    pub committed: bool,
+}
+
 // If you have Arc<ExecutionCache>, you cannot return a reference to it as
 // an &Arc<dyn ExecutionCacheRead> (for example), because the trait object is a fat pointer.
 // So, in order to be able to return &Arc<dyn T>, we create all the converted trait objects
@@ -351,6 +362,39 @@ pub trait ObjectCacheRead: Send + Sync {
         object_id: ObjectID,
         version: SequenceNumber,
     ) -> Option<Object>;
+
+    /// The newest entry of the object at or below `version`, the object or the tombstone of a
+    /// deletion or wrap, for reads outside transaction execution (RPC). It holds no cache lock
+    /// while it reads the store, and fills no cache: it takes the newest uncommitted entry at or
+    /// below `version`, copied out under the dirty map's shard read lock, and the newest
+    /// committed row at or below `version`, read from the store after that lock is released,
+    /// and returns the higher of the two. The writeback cache writes a version to the store
+    /// before it removes it from the uncommitted entries, so a version committed between the
+    /// two reads is seen by the store read. `None` if the object has no entry at or below
+    /// `version`.
+    ///
+    /// The store read sees versions the pruner range-deleted that compaction has not dropped
+    /// yet; see
+    /// [`crate::authority::authority_store_tables::AuthorityPerpetualTables::find_object_or_tombstone_lt_or_eq_version`].
+    ///
+    /// Execution reads [`Self::find_object_lt_or_eq_version`], which this method leaves
+    /// unchanged.
+    fn find_object_or_tombstone_lt_or_eq_version_unlocked(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> Option<FoundObjectOrTombstone>;
+
+    /// Iterate the versions of `object_id` within `versions`, oldest first, or newest first if
+    /// `descending`, each a live object or the tombstone at which the object was deleted or
+    /// wrapped. The cache holds no ranges, so this reads the store alone and sees only versions
+    /// already committed to it.
+    fn object_versions_iter(
+        &self,
+        object_id: ObjectID,
+        versions: std::ops::RangeInclusive<SequenceNumber>,
+        descending: bool,
+    ) -> SuiResult<Box<dyn Iterator<Item = SuiResult<ObjectOrTombstone>> + '_>>;
 
     /// Test-only: production code no longer reads owned-object lock status by ref.
     #[cfg(test)]

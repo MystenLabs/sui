@@ -80,7 +80,8 @@ use tracing::Level;
 use tracing::info;
 use tracing::warn;
 
-const MAX_REPLACEMENTS_PER_CYCLE: usize = 2;
+/// Fewest channels `refresh` may replace per maintenance cycle.
+const MIN_REPLACEMENTS_PER_CYCLE: usize = 2;
 
 /// `PoolEntry::last_response_nanos` of a channel that has never responded.
 const NO_RESPONSE: u64 = u64::MAX;
@@ -478,14 +479,15 @@ impl ChannelPool {
 }
 
 impl ChannelPoolInner {
-    /// Replace channels that have exceeded their refresh age. Limits replacements
-    /// per cycle to `MAX_REPLACEMENTS_PER_CYCLE` to avoid reconnection storms.
+    /// Replace channels that have exceeded their refresh age, at most
+    /// [`replacements_per_cycle`] per cycle to avoid reconnection storms.
     /// Also resets and logs per-channel error/success counters.
     async fn refresh(&self) {
         let _write = self.entries_write_lock.lock().await;
         let snapshot = self.entries.load_full();
         let mut new_entries: Vec<Arc<PoolEntry>> = (*snapshot).clone();
         let now = Instant::now();
+        let replacement_limit = replacements_per_cycle(snapshot.len(), &self.config);
         let mut replacements = 0;
 
         for (idx, entry) in snapshot.iter().enumerate() {
@@ -498,7 +500,7 @@ impl ChannelPoolInner {
                 );
             }
 
-            if replacements >= MAX_REPLACEMENTS_PER_CYCLE {
+            if replacements >= replacement_limit {
                 continue;
             }
 
@@ -1618,6 +1620,19 @@ fn millis(duration: Duration) -> u64 {
     duration.as_millis() as u64
 }
 
+/// Channels `refresh` may replace per maintenance cycle: at least `MIN_REPLACEMENTS_PER_CYCLE`,
+/// and enough to replace the whole pool within one `refresh_jitter` window. Channels opened
+/// together, such as the `initial_pool_size` opened at startup, all come due within that window,
+/// and BigTable's frontend disconnects a channel still open about 60 minutes after it connected.
+fn replacements_per_cycle(pool_size: usize, config: &PoolConfig) -> usize {
+    let cycles_per_jitter_window = (config.refresh_jitter.as_millis()
+        / config.maintenance_interval.as_millis().max(1))
+    .max(1) as usize;
+    pool_size
+        .div_ceil(cycles_per_jitter_window)
+        .max(MIN_REPLACEMENTS_PER_CYCLE)
+}
+
 fn compute_refresh_at(refresh_age: Duration, refresh_jitter: Duration) -> Instant {
     let jitter = if refresh_jitter.is_zero() {
         Duration::ZERO
@@ -2093,33 +2108,67 @@ mod tests {
 
         pool.inner.refresh().await;
 
-        // Both entries expired, both replaced (within MAX_REPLACEMENTS_PER_CYCLE=2).
+        // Both entries expired, both replaced (within MIN_REPLACEMENTS_PER_CYCLE=2).
         assert_eq!(metrics(&pool).channels_replaced.get(), 2);
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn test_age_refresh_caps_replacements_per_cycle() {
         let (_mock, endpoint, _handle) = start_mock_server().await;
         let registry = Registry::new();
 
+        // A jitter window of 2 cycles over 4 channels allows MIN_REPLACEMENTS_PER_CYCLE=2.
         let config = PoolConfig {
             initial_pool_size: 4,
             min_pool_size: 1,
             max_pool_size: 10,
+            maintenance_interval: Duration::from_secs(1),
             refresh_age: Duration::from_millis(0),
-            refresh_jitter: Duration::ZERO,
+            refresh_jitter: Duration::from_secs(2),
             ..PoolConfig::default()
         };
         let pool = ChannelPool::new(endpoint, config, None, Some(&registry));
         pool.connect().await.unwrap();
+        tokio::time::advance(Duration::from_secs(2)).await;
 
-        // All 4 entries are expired, but only MAX_REPLACEMENTS_PER_CYCLE=2 replaced per cycle.
+        // All 4 entries are expired, but only 2 are replaced per cycle.
         pool.inner.refresh().await;
         assert_eq!(metrics(&pool).channels_replaced.get(), 2);
 
         // Second cycle replaces the remaining 2.
         pool.inner.refresh().await;
         assert_eq!(metrics(&pool).channels_replaced.get(), 4);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn channels_opened_at_startup_are_all_refreshed_before_bigtable_disconnects_them() {
+        let (_mock, endpoint, _handle) = start_mock_server().await;
+        let registry = Registry::new();
+
+        let config = PoolConfig {
+            initial_pool_size: 40,
+            min_pool_size: 40,
+            ..PoolConfig::default()
+        };
+        let (interval, refresh_age, refresh_jitter) = (
+            config.maintenance_interval,
+            config.refresh_age,
+            config.refresh_jitter,
+        );
+        let pool = ChannelPool::new(endpoint, config, None, Some(&registry));
+        pool.connect().await.unwrap();
+
+        // Maintenance cycles from the refresh age until one cycle past the jitter window: the
+        // startup channels come due inside the window and must all be replaced by its end,
+        // well before the frontend's ~60-minute disconnect.
+        tokio::time::advance(refresh_age).await;
+        let mut elapsed = refresh_age;
+        while elapsed <= refresh_age + refresh_jitter + interval {
+            pool.inner.refresh().await;
+            tokio::time::advance(interval).await;
+            elapsed += interval;
+        }
+        assert_eq!(metrics(&pool).channels_replaced.get(), 40);
     }
 
     #[test]

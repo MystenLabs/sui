@@ -43,6 +43,7 @@ use sui_kvstore::PROTOCOL_CONFIGS_V2_PIPELINE;
 use sui_kvstore::PipelineLayer;
 use sui_kvstore::ScanDirection;
 use sui_kvstore::default_committer_config;
+use sui_kvstore::tables::objects::ObjectVersionRow;
 use sui_kvstore::tables::{checkpoints, epochs, transactions};
 use sui_kvstore::testing::BigTableEmulator;
 use sui_kvstore::testing::INSTANCE_ID;
@@ -773,7 +774,7 @@ async fn test_indexer_e2e() -> Result<()> {
     // get_package_versions: paginate versions
     let versions = harness
         .bigtable_client()
-        .get_package_versions(original_id, max_checkpoint, None, None, 10, false)
+        .get_package_versions(original_id, max_checkpoint, 0..u64::MAX, 10, false)
         .await?;
     assert_eq!(versions.len(), 1);
     assert_eq!(versions[0].package_version, package_version);
@@ -781,23 +782,34 @@ async fn test_indexer_e2e() -> Result<()> {
     // get_packages_by_checkpoint_range: should include the published package
     let by_cp = harness
         .bigtable_client()
-        .get_packages_by_checkpoint_range(None, None, 100, false)
+        .get_packages_by_checkpoint_range(
+            std::ops::Bound::Unbounded,
+            std::ops::Bound::Unbounded,
+            100,
+            false,
+        )
         .await?;
     assert!(
         by_cp.iter().any(|p| p.package_id == package_id.to_vec()),
         "published package should appear in checkpoint range scan",
     );
 
-    // get_system_packages: genesis system packages (0x1, 0x2, etc.)
-    let sys_pkgs = harness
-        .bigtable_client()
-        .get_system_packages(max_checkpoint, None, 100)
-        .await?;
-    assert!(
-        !sys_pkgs.is_empty(),
-        "there should be system packages from genesis"
-    );
-    for pkg in &sys_pkgs {
+    // get_system_package_ids: genesis system packages (0x1, 0x2, etc.), in ascending order, each
+    // with a system package version in `packages`.
+    let sys_ids = harness.bigtable_client().get_system_package_ids().await?;
+    for expected in [ObjectID::from_single_byte(1), ObjectID::from_single_byte(2)] {
+        assert!(
+            sys_ids.contains(&expected),
+            "genesis system package {expected} missing from {sys_ids:?}"
+        );
+    }
+    assert!(sys_ids.is_sorted(), "{sys_ids:?}");
+    for id in &sys_ids {
+        let pkg = harness
+            .bigtable_client()
+            .get_package_latest(*id, max_checkpoint)
+            .await?
+            .expect("system package has a version");
         assert!(pkg.is_system_package);
     }
 
@@ -1348,19 +1360,42 @@ async fn test_object_tombstones() -> Result<()> {
                 "{id} at version {version}",
             );
 
+            // The exact-version read, and the row at that version read with and without the
+            // object's contents, which keeps a deletion or wrap there.
+            let expected_exact = live_versions.contains(&version).then_some(version);
             let exact = harness
                 .bigtable_client()
                 .get_objects(&[ObjectKey(id, version)])
                 .await?;
-            let expected_exact = live_versions.contains(&version).then_some(version);
             assert_eq!(
                 exact.first().map(|o| o.version()),
                 expected_exact,
                 "{id} exactly at version {version}",
             );
+            let changed_here = history
+                .iter()
+                .find(|(changed_at, _)| *changed_at == version)
+                .map(|(_, status)| *status);
+            for with_contents in [true, false] {
+                let rows: Vec<(ObjectKey, ObjectVersionRow)> = harness
+                    .bigtable_client()
+                    .get_object_rows_stream(vec![ObjectKey(id, version)], with_contents)
+                    .await?
+                    .try_collect()
+                    .await?;
+                let status = rows.first().map(|(_, row)| match row {
+                    ObjectVersionRow::Live(_) => ObjectStatus::Live,
+                    ObjectVersionRow::Tombstone(tombstone) => tombstone.status,
+                });
+                assert_eq!(
+                    status, changed_here,
+                    "{id} row at version {version}, with contents {with_contents}",
+                );
+            }
         }
 
-        // Both objects end deleted, so neither has a latest version.
+        // Both objects end deleted, so neither has a latest version, even though their older
+        // live versions remain.
         assert!(
             harness
                 .bigtable_client()

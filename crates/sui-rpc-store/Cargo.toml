@@ -33,5 +33,7 @@ typed-store-error.workspace = true
 
 [dev-dependencies]
 futures.workspace = true
+# Builds a synthetic package for the package_versions processor tests.
+move-binary-format.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt"] }

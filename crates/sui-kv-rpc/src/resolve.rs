@@ -28,7 +28,7 @@ use crate::bigtable_client::BigTableClient;
 use crate::config::ResolvedStageConfig;
 use crate::object_cache::{BigTableObjectFetcher, ObjectMap};
 use crate::pipeline::{
-    InputOrderEmitter, SeekUnit, Watermarked, pipelined_chunks, pipelined_keyed_batches,
+    InputOrderEmitter, MissingRow, SeekUnit, Watermarked, pipelined_chunks, pipelined_keyed_batches,
 };
 use crate::request_cache::CacheFetcher;
 
@@ -99,6 +99,7 @@ where
             objects_stage.concurrency,
             objects_stage.min_seeks_per_split_read,
             fetcher,
+            MissingRow::Error,
         )
     } else {
         let empty: ObjectMap = Arc::new(HashMap::new());

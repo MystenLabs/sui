@@ -12,6 +12,8 @@ use crate::RpcService;
 use crate::ledger_history::cursor::LedgerPoint;
 use crate::ledger_history::query_options::below_serving_floor;
 use crate::ledger_history::row_placement::RowPlacement;
+use crate::reader::index_empty;
+use crate::reader::indexes_disabled;
 
 pub(super) fn storage_error(e: impl std::fmt::Display) -> RpcError {
     RpcError::new(tonic::Code::Internal, e.to_string())
@@ -22,11 +24,11 @@ pub(super) fn checkpoint_hi_exclusive(service: &RpcService) -> Result<u64, RpcEr
         .reader
         .inner()
         .indexes()
-        .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
+        .ok_or_else(indexes_disabled)?;
     let checkpoint = indexes
         .get_highest_indexed_checkpoint_seq_number()
         .map_err(storage_error)?
-        .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc index is empty"))?;
+        .ok_or_else(index_empty)?;
     checkpoint
         .checked_add(1)
         .ok_or_else(|| RpcError::new(tonic::Code::Internal, "checkpoint bound overflow"))
@@ -77,20 +79,9 @@ pub(super) fn pruned_or(
     checkpoint: CheckpointSequenceNumber,
     error: RpcError,
 ) -> RpcError {
-    pruned_or_else(service, checkpoint, below_serving_floor, error)
-}
-
-/// [`classify_miss`] against this server's serving floor.
-pub(super) fn pruned_or_else(
-    service: &RpcService,
-    checkpoint: CheckpointSequenceNumber,
-    pruned_error: impl FnOnce(u64) -> RpcError,
-    error: RpcError,
-) -> RpcError {
     classify_miss(
         checkpoint,
         || service.reader.get_lowest_available_checkpoint(),
-        pruned_error,
         error,
     )
 }
@@ -99,16 +90,15 @@ pub(super) fn pruned_or_else(
 /// admitted it. The pruners advance the floor in the same write that deletes a
 /// checkpoint's data, so the floor may have risen past `checkpoint` between
 /// the request's floor check and its read. Re-read the floor: a checkpoint now
-/// below it was pruned, reported as `pruned_error(floor)`; otherwise, or if the
-/// floor cannot be read, the miss is `error`.
+/// below it was pruned, reported as [`below_serving_floor`] at that floor;
+/// otherwise, or if the floor cannot be read, the miss is `error`.
 fn classify_miss(
     checkpoint: CheckpointSequenceNumber,
     floor: impl FnOnce() -> Result<u64, RpcError>,
-    pruned_error: impl FnOnce(u64) -> RpcError,
     error: RpcError,
 ) -> RpcError {
     match floor() {
-        Ok(floor) if checkpoint < floor => pruned_error(floor),
+        Ok(floor) if checkpoint < floor => below_serving_floor(floor),
         _ => error,
     }
 }
@@ -336,7 +326,7 @@ pub(super) fn get_tx_seq_digest_multi(
         .reader
         .inner()
         .indexes()
-        .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
+        .ok_or_else(indexes_disabled)?;
     indexes
         .ledger_tx_seq_digest_multi_get(tx_seqs)
         .map_err(storage_error)?
@@ -360,7 +350,7 @@ pub(super) fn get_tx_seq_digest_rows(
         .reader
         .inner()
         .indexes()
-        .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
+        .ok_or_else(indexes_disabled)?;
     let mut iter = indexes
         .ledger_tx_seq_digest_iter(range.start, range.end, descending)
         .map_err(storage_error)?;
@@ -587,7 +577,7 @@ mod tests {
     #[test]
     fn miss_below_the_reread_floor_is_pruned() {
         for checkpoint in [0, 9] {
-            let error = classify_miss(checkpoint, || Ok(10), below_serving_floor, missing_data());
+            let error = classify_miss(checkpoint, || Ok(10), missing_data());
             assert_below_serving_floor_error(error, 10);
         }
     }
@@ -596,7 +586,7 @@ mod tests {
     fn miss_at_or_above_the_reread_floor_keeps_its_error() {
         // The floor still covers the checkpoint, so its data should be present.
         for checkpoint in [10, 11] {
-            let error = classify_miss(checkpoint, || Ok(10), below_serving_floor, missing_data());
+            let error = classify_miss(checkpoint, || Ok(10), missing_data());
             assert_eq!(error.to_string(), missing_data().to_string());
         }
 
@@ -604,7 +594,6 @@ mod tests {
         let error = classify_miss(
             0,
             || Err(RpcError::new(tonic::Code::Internal, "floor unavailable")),
-            below_serving_floor,
             missing_data(),
         );
         assert_eq!(error.to_string(), missing_data().to_string());

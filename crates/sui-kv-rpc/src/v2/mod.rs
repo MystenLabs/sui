@@ -5,13 +5,16 @@ use sui_kvstore::{BigTableClient, KeyValueStoreReader};
 use sui_rpc::proto::sui::rpc::v2::{
     BatchGetObjectsRequest, BatchGetObjectsResponse, BatchGetTransactionsRequest,
     BatchGetTransactionsResponse, GetCheckpointRequest, GetCheckpointResponse, GetEpochRequest,
-    GetEpochResponse, GetObjectRequest, GetObjectResponse, GetServiceInfoRequest,
-    GetServiceInfoResponse, GetTransactionRequest, GetTransactionResponse, ListCheckpointsRequest,
-    ListCheckpointsResponse, ListEventsRequest, ListEventsResponse, ListTransactionsRequest,
-    ListTransactionsResponse, ledger_service_server::LedgerService,
+    GetEpochResponse, GetObjectRequest, GetObjectResponse, GetProtocolConfigRequest,
+    GetProtocolConfigResponse, GetServiceInfoRequest, GetServiceInfoResponse,
+    GetTransactionRequest, GetTransactionResponse, ListCheckpointsRequest, ListCheckpointsResponse,
+    ListEventsRequest, ListEventsResponse, ListObjectVersionsRequest, ListObjectVersionsResponse,
+    ListTransactionsRequest, ListTransactionsResponse, ledger_service_server::LedgerService,
 };
 use sui_rpc_api::proto::timestamp_ms_to_proto;
-use sui_rpc_api::{CheckpointNotFoundError, RpcError, ServerVersion};
+use sui_rpc_api::{
+    CheckpointNotFoundError, NotServedHereCause, RpcError, ServerVersion, not_served_here,
+};
 use sui_types::digests::{ChainIdentifier, CheckpointDigest};
 use tonic::codegen::BoxStream;
 
@@ -23,9 +26,11 @@ use crate::served_height::ServedHeight;
 pub(crate) mod get_checkpoint;
 mod get_epoch;
 mod get_object;
+mod get_protocol_config;
 pub(crate) mod get_transaction;
 mod list_checkpoints;
 mod list_events;
+mod list_object_versions;
 mod list_transactions;
 mod move_package_service;
 #[cfg(test)]
@@ -48,28 +53,34 @@ impl LedgerService for KvRpcServer {
         &self,
         request: tonic::Request<GetObjectRequest>,
     ) -> Result<tonic::Response<GetObjectResponse>, tonic::Status> {
-        get_object::get_object(
-            self.client.clone(),
-            request.into_inner(),
-            &self.package_resolver,
-        )
-        .await
-        .map(tonic::Response::new)
-        .map_err(Into::into)
+        get_object::get_object(self, request)
+            .await
+            .map(tonic::Response::new)
+            .map_err(Into::into)
     }
 
     async fn batch_get_objects(
         &self,
         request: tonic::Request<BatchGetObjectsRequest>,
     ) -> Result<tonic::Response<BatchGetObjectsResponse>, tonic::Status> {
-        get_object::batch_get_objects(
-            self.client.clone(),
-            request.into_inner(),
-            &self.package_resolver,
+        get_object::batch_get_objects(self, request)
+            .await
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+
+    async fn list_object_versions(
+        &self,
+        request: tonic::Request<ListObjectVersionsRequest>,
+    ) -> Result<tonic::Response<BoxStream<ListObjectVersionsResponse>>, tonic::Status> {
+        self.serve_stream(
+            OperationSpec::new(
+                list_object_versions::OPERATION,
+                self.ledger_history.list_object_versions().timeout,
+            ),
+            list_object_versions::list_object_versions(self, request),
         )
         .await
-        .map(tonic::Response::new)
-        .map_err(Into::into)
     }
 
     async fn get_transaction(
@@ -125,10 +136,32 @@ impl LedgerService for KvRpcServer {
         request: tonic::Request<GetEpochRequest>,
     ) -> Result<tonic::Response<GetEpochResponse>, tonic::Status> {
         get_epoch::get_epoch(
-            self.client.clone(),
+            self.limited_client("GetEpoch"),
+            self.alpha_features,
+            self.chain_id.chain(),
             ServedHeight::of(&request)?,
             request.into_inner(),
-            self.chain_id.chain(),
+        )
+        .await
+        .map(tonic::Response::new)
+        .map_err(Into::into)
+    }
+
+    async fn get_protocol_config(
+        &self,
+        request: tonic::Request<GetProtocolConfigRequest>,
+    ) -> Result<tonic::Response<GetProtocolConfigResponse>, tonic::Status> {
+        if !self.alpha_features.protocol_configs_v2 {
+            return Err(not_served_here(
+                NotServedHereCause::DisabledByConfig,
+                "GetProtocolConfig is not enabled on this instance",
+            )
+            .into());
+        }
+        get_protocol_config::get_protocol_config(
+            self.limited_client("GetProtocolConfig"),
+            ServedHeight::of(&request)?,
+            request.into_inner(),
         )
         .await
         .map(tonic::Response::new)
@@ -229,11 +262,16 @@ pub(crate) fn service_info(
 
 #[cfg(test)]
 pub(crate) mod test_utils {
+    use std::net::SocketAddr;
     use std::sync::Arc;
+    use std::time::Duration;
 
     use prometheus::Registry;
     use prometheus::proto::{Counter, Histogram, MetricFamily};
     use sui_kvstore::BigTableClient as InnerBigTableClient;
+    use sui_kvstore::ObjectStatus;
+    use sui_kvstore::tables::object_versions_by_checkpoint;
+    use sui_kvstore::tables::objects;
     use sui_kvstore::testing::MockBigtableServer;
     use sui_package_resolver::PackageStore;
     use sui_package_resolver::Resolver;
@@ -250,11 +288,16 @@ pub(crate) mod test_utils {
     use sui_rpc::proto::sui::rpc::v2::event_literal;
     use sui_rpc::proto::sui::rpc::v2::transaction_literal;
     use sui_types::balance_change::derive_balance_changes_2;
+    use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
     use sui_types::full_checkpoint_content::Checkpoint;
+    use sui_types::object::{Object, Owner};
     use sui_types::storage::{ObjectKey, get_transaction_object_set};
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
+    use crate::AlphaFeatures;
+    use crate::KvRpcConfig;
     use crate::KvRpcMetrics;
+    use crate::KvRpcServer;
     use crate::LedgerHistoryConfig;
     use crate::LedgerHistoryMethodConfig;
     use crate::StageConfig;
@@ -263,12 +306,22 @@ pub(crate) mod test_utils {
     use crate::operation::QueryContext;
     use crate::package_store::BigTablePackageStore;
     use crate::served_height::ServedHeight;
+    use crate::service_info_watermark_pipelines;
+    use crate::tests::seed_watermarks;
 
     /// A served height above every checkpoint and epoch, for tests of what a handler serves
     /// rather than of where the served height cuts it off.
     pub(crate) const UNBOUNDED_SERVED_HEIGHT: ServedHeight = ServedHeight {
         checkpoint: u64::MAX,
         epoch: u64::MAX,
+    };
+
+    /// The alpha features of a replica that serves `at_checkpoint` and `max_version` object
+    /// reads, `ListObjectVersions` and the running epoch's `GetEpoch.system_state`, and nothing
+    /// else alpha.
+    pub(crate) const OBJECT_AT_CHECKPOINT: AlphaFeatures = AlphaFeatures {
+        object_at_checkpoint: true,
+        protocol_configs_v2: false,
     };
 
     pub(crate) fn two_transaction_object_checkpoint() -> Checkpoint {
@@ -433,6 +486,142 @@ pub(crate) mod test_utils {
         );
     }
 
+    /// A kv-rpc server over the mock BigTable at `addr`, serving `alpha_features`, with every
+    /// watermark it serves at checkpoint 10 and its service info loaded.
+    pub(crate) async fn start_kv_rpc(
+        addr: SocketAddr,
+        stages: StagesConfig,
+        alpha_features: AlphaFeatures,
+    ) -> KvRpcServer {
+        start_kv_rpc_at_heights(addr, stages, alpha_features, |_| 10).await
+    }
+
+    /// [`start_kv_rpc`], with the watermark of each pipeline it serves at `height(pipeline)`.
+    pub(crate) async fn start_kv_rpc_at_heights(
+        addr: SocketAddr,
+        stages: StagesConfig,
+        alpha_features: AlphaFeatures,
+        height: impl Fn(&str) -> u64,
+    ) -> KvRpcServer {
+        let request_bigtable_concurrency = KvRpcConfig::default().request_bigtable_concurrency();
+        start_kv_rpc_with(
+            addr,
+            stages,
+            alpha_features,
+            request_bigtable_concurrency,
+            height,
+        )
+        .await
+    }
+
+    /// [`start_kv_rpc`], with each request limited to `request_bigtable_concurrency` BigTable
+    /// reads at once.
+    pub(crate) async fn start_kv_rpc_with_request_concurrency(
+        addr: SocketAddr,
+        stages: StagesConfig,
+        alpha_features: AlphaFeatures,
+        request_bigtable_concurrency: usize,
+    ) -> KvRpcServer {
+        start_kv_rpc_with(
+            addr,
+            stages,
+            alpha_features,
+            request_bigtable_concurrency,
+            |_| 10,
+        )
+        .await
+    }
+
+    /// A kv-rpc server over the mock BigTable at `addr`, serving `alpha_features`, with each
+    /// request limited to `request_bigtable_concurrency` BigTable reads at once, the watermark of
+    /// each pipeline it serves at `height(pipeline)`, and its service info loaded.
+    pub(crate) async fn start_kv_rpc_with(
+        addr: SocketAddr,
+        stages: StagesConfig,
+        alpha_features: AlphaFeatures,
+        request_bigtable_concurrency: usize,
+        height: impl Fn(&str) -> u64,
+    ) -> KvRpcServer {
+        let mut client = sui_kvstore::BigTableClient::new_local(addr.to_string(), "test".into())
+            .await
+            .expect("connect to mock BigTable");
+        let pipelines = service_info_watermark_pipelines(
+            LedgerHistoryConfig::default().bitmap_schema(),
+            alpha_features,
+        );
+        seed_watermarks(&mut client, &pipelines, height).await;
+        let config = KvRpcConfig::default();
+        let kv_rpc = KvRpcServer::new_local_with_config(
+            addr.to_string(),
+            "test".to_string(),
+            None,
+            LedgerHistoryConfig::default(),
+            request_bigtable_concurrency,
+            config.monotonic_read_wait_timeout(),
+            stages,
+            config.watermark_source(),
+            alpha_features,
+        )
+        .await
+        .expect("start kv-rpc server");
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            kv_rpc.cache.subscribe().wait_for(Option::is_some),
+        )
+        .await
+        .expect("service info never refreshed")
+        .expect("service info sender dropped");
+        kv_rpc
+    }
+
+    pub(crate) fn mask(paths: &[&str]) -> prost_types::FieldMask {
+        prost_types::FieldMask {
+            paths: paths.iter().map(|path| path.to_string()).collect(),
+        }
+    }
+
+    /// Write `id`'s history, `(checkpoint, version, status)` for each change in order, to both
+    /// the `objects` table (a live row or a tombstone) and the `object_versions_by_checkpoint`
+    /// index.
+    pub(crate) async fn insert_history(
+        mock: &MockBigtableServer,
+        id: ObjectID,
+        history: &[(u64, u64, ObjectStatus)],
+    ) {
+        for &(checkpoint, version, status) in history {
+            let version = SequenceNumber::from_u64(version);
+            let cells = match status {
+                ObjectStatus::Live => objects::encode(&Object::with_id_owner_version_for_testing(
+                    id,
+                    version,
+                    Owner::AddressOwner(SuiAddress::ZERO),
+                ))
+                .unwrap()
+                .to_vec(),
+                // The status cell alone (`encode_tombstone`'s first cell): tests that want a
+                // removing transaction add the `t` cell themselves.
+                removed => objects::encode_tombstone(
+                    removed,
+                    &sui_types::digests::TransactionDigest::random(),
+                )
+                .unwrap()[..1]
+                    .to_vec(),
+            };
+            mock.insert_row(
+                objects::NAME,
+                objects::encode_key(&ObjectKey(id, version)),
+                cells,
+            )
+            .await;
+            mock.insert_row(
+                object_versions_by_checkpoint::NAME,
+                object_versions_by_checkpoint::encode_key(&id, checkpoint),
+                object_versions_by_checkpoint::encode(version, status),
+            )
+            .await;
+        }
+    }
+
     pub(super) fn ascending_options() -> QueryOptions {
         let mut options = QueryOptions::default();
         options.limit = Some(10);
@@ -519,6 +708,7 @@ pub(crate) mod test_utils {
             list_transactions: Some(method_config.clone()),
             list_events: Some(method_config.clone()),
             list_checkpoints: Some(method_config),
+            list_object_versions: None,
             bitmap_bucket_budget_tx: Some(10),
             bitmap_bucket_budget_event: Some(10),
             bitmap_drain_probe_rows: None,
@@ -561,25 +751,76 @@ pub(crate) mod test_utils {
             server,
         )
     }
+
+    /// Write the `protocol_configs_v2` row the indexer writes for protocol version `version` of
+    /// `Chain::Unknown`, rendered from the configs compiled into this binary.
+    pub(crate) async fn insert_protocol_configs_v2_row(mock: &MockBigtableServer, version: u64) {
+        let config = sui_protocol_config::ProtocolConfig::get_for_version(
+            version.into(),
+            sui_protocol_config::Chain::Unknown,
+        );
+        let attributes = config
+            .render::<prost_types::Value>(&mut mysten_common::rpc_format::Unmetered)
+            .expect("render protocol config");
+        mock.insert_row(
+            sui_kvstore::tables::protocol_configs_v2::NAME,
+            sui_kvstore::tables::protocol_configs_v2::encode_key(version),
+            sui_kvstore::tables::protocol_configs_v2::encode(attributes, config.feature_map()),
+        )
+        .await;
+    }
+
+    /// Write the `epochs` row of `epoch`, which runs protocol version `protocol_version`.
+    pub(crate) async fn insert_epoch_protocol_version(
+        mock: &MockBigtableServer,
+        epoch: u64,
+        protocol_version: u64,
+    ) {
+        use sui_kvstore::tables::epochs;
+        mock.insert_row(
+            epochs::NAME,
+            epochs::encode_key(epoch),
+            [
+                (
+                    epochs::col::EPOCH,
+                    bytes::Bytes::copy_from_slice(&epoch.to_be_bytes()),
+                ),
+                (
+                    epochs::col::PROTOCOL_VERSION,
+                    bytes::Bytes::copy_from_slice(&protocol_version.to_be_bytes()),
+                ),
+            ],
+        )
+        .await;
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
     use std::sync::Arc;
 
     use futures::TryStreamExt;
+    use prometheus::core::Collector;
+    use sui_kvstore::tables::protocol_configs_v2;
     use sui_kvstore::testing::MockBigtableServer;
     use sui_kvstore::testing::insert_checkpoint_rows;
+    use sui_protocol_config::ProtocolVersion;
     use sui_rpc::field::FieldMask;
     use sui_rpc::field::FieldMaskUtil;
     use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
     use super::*;
+    use crate::AlphaFeatures;
     use crate::KvRpcConfig;
     use crate::LedgerHistoryConfig;
     use crate::StagesConfig;
     use crate::WatermarkSource;
+    use crate::bigtable_client::stage;
+    use crate::v2::test_utils::insert_epoch_protocol_version;
+    use crate::v2::test_utils::insert_protocol_configs_v2_row;
+    use crate::v2::test_utils::start_kv_rpc;
 
     /// A replica over checkpoints 0 to 2 whose served height moves only when the test publishes
     /// one.
@@ -613,6 +854,7 @@ mod tests {
                 KvRpcConfig::default().monotonic_read_wait_timeout(),
                 StagesConfig::default(),
                 WatermarkSource::IndexerStreams(vec![]),
+                crate::AlphaFeatures::default(),
             )
             .await
             .expect("create kv-rpc server");
@@ -701,5 +943,138 @@ mod tests {
             terminal.watermark.as_ref().and_then(|w| w.checkpoint),
             Some(1)
         );
+    }
+
+    /// A replica serving `protocol_configs_v2` over epoch 0, which runs [`ProtocolVersion::MIN`]
+    /// and whose `protocol_configs_v2` row is present.
+    async fn protocol_configs_v2_replica() -> (
+        KvRpcServer,
+        MockBigtableServer,
+        tokio::task::JoinHandle<()>,
+        u64,
+    ) {
+        let mock = MockBigtableServer::new();
+        let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
+        let version = ProtocolVersion::MIN.as_u64();
+        insert_epoch_protocol_version(&mock, 0, version).await;
+        insert_protocol_configs_v2_row(&mock, version).await;
+        let server = start_kv_rpc(
+            addr,
+            StagesConfig::default(),
+            AlphaFeatures {
+                protocol_configs_v2: true,
+                ..AlphaFeatures::default()
+            },
+        )
+        .await;
+        mock.clear_read_rows_calls().await;
+        (server, mock, mock_server, version)
+    }
+
+    /// Every `(method, stage)` series of the server's request-limiter `reads_started` counter.
+    fn limited_reads_started(server: &KvRpcServer) -> BTreeMap<(String, String), u64> {
+        server
+            .metrics
+            .bigtable_limiter
+            .reads_started
+            .collect()
+            .iter()
+            .flat_map(|family| family.get_metric())
+            .map(|metric| {
+                let label = |name: &str| {
+                    metric
+                        .get_label()
+                        .iter()
+                        .find(|pair| pair.name() == name)
+                        .unwrap_or_else(|| panic!("reads_started series without {name}"))
+                        .value()
+                        .to_owned()
+                };
+                (
+                    (label("method"), label("stage")),
+                    metric.get_counter().value() as u64,
+                )
+            })
+            .collect()
+    }
+
+    /// The row keys of each `protocol_configs_v2` read the mock has seen.
+    async fn protocol_configs_v2_reads(mock: &MockBigtableServer) -> Vec<Vec<bytes::Bytes>> {
+        mock.read_rows_calls()
+            .await
+            .into_iter()
+            .filter(|call| call.table == protocol_configs_v2::NAME)
+            .map(|call| call.row_keys)
+            .collect()
+    }
+
+    fn series(method: &str, stage: &str) -> (String, String) {
+        (method.to_owned(), stage.to_owned())
+    }
+
+    /// `GetProtocolConfig` reads the served epoch's `epochs` row and the version's
+    /// `protocol_configs_v2` row through the request's limited client, under its own method.
+    #[tokio::test]
+    async fn get_protocol_config_reads_through_the_request_limiter() {
+        let (server, mock, mock_server, version) = protocol_configs_v2_replica().await;
+        let mut message = GetProtocolConfigRequest::default();
+        message.read_mask = Some(FieldMask::from_paths([
+            "protocol_version",
+            "feature_flags",
+            "attributes",
+            "configs",
+        ]));
+
+        let protocol_config =
+            LedgerService::get_protocol_config(&server, server.admitted_request(message))
+                .await
+                .expect("protocol config")
+                .into_inner()
+                .protocol_config
+                .expect("response carries a protocol config");
+        assert_eq!(protocol_config.protocol_version, Some(version));
+        assert!(!protocol_config.feature_flags.is_empty());
+
+        assert_eq!(
+            limited_reads_started(&server),
+            BTreeMap::from([
+                (series("GetProtocolConfig", stage::EPOCHS), 1),
+                (series("GetProtocolConfig", stage::PROTOCOL_CONFIGS), 1),
+            ])
+        );
+        let row_key = bytes::Bytes::from(protocol_configs_v2::encode_key(version));
+        assert_eq!(protocol_configs_v2_reads(&mock).await, [vec![row_key]]);
+        mock_server.abort();
+    }
+
+    /// `GetEpoch`'s `protocol_config`, served from the `protocol_configs_v2` table, reads the
+    /// epoch's `epochs` row and the version's row through the request's limited client, under its
+    /// own method.
+    #[tokio::test]
+    async fn get_epoch_protocol_config_reads_through_the_request_limiter() {
+        let (server, mock, mock_server, version) = protocol_configs_v2_replica().await;
+        let mut message = GetEpochRequest::default();
+        message.read_mask = Some(FieldMask::from_paths(["protocol_config"]));
+
+        let protocol_config = LedgerService::get_epoch(&server, server.admitted_request(message))
+            .await
+            .expect("epoch")
+            .into_inner()
+            .epoch
+            .and_then(|epoch| epoch.protocol_config)
+            .expect("response carries a protocol config");
+        assert_eq!(protocol_config.protocol_version, Some(version));
+        assert!(!protocol_config.feature_flags.is_empty());
+
+        assert_eq!(
+            limited_reads_started(&server),
+            BTreeMap::from([
+                (series("GetEpoch", stage::EPOCHS), 1),
+                (series("GetEpoch", stage::PROTOCOL_CONFIGS), 1),
+            ])
+        );
+        let row_key = bytes::Bytes::from(protocol_configs_v2::encode_key(version));
+        assert_eq!(protocol_configs_v2_reads(&mock).await, [vec![row_key]]);
+        mock_server.abort();
     }
 }

@@ -82,3 +82,41 @@ impl StateService for RpcService {
         .map_err(Into::into)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::reader::{NotServedHereCause, assert_not_served_here};
+    use crate::stub_store::StubStore;
+
+    /// Every `StateService` method reads the rpc indexes, so a node without them refuses each
+    /// call as not served here, before it looks at the request.
+    #[test]
+    fn every_method_is_not_served_without_indexes() {
+        let service = StubStore::new().into_service();
+        let no_rpc_indexes = NotServedHereCause::NoRpcIndexes;
+
+        assert_not_served_here(
+            get_balance::get_balance(&service, GetBalanceRequest::default()).unwrap_err(),
+            no_rpc_indexes,
+        );
+        assert_not_served_here(
+            get_coin_info::get_coin_info(&service, GetCoinInfoRequest::default()).unwrap_err(),
+            no_rpc_indexes,
+        );
+        assert_not_served_here(
+            list_balances::list_balances(&service, ListBalancesRequest::default()).unwrap_err(),
+            no_rpc_indexes,
+        );
+        assert_not_served_here(
+            list_dynamic_fields::list_dynamic_fields(&service, ListDynamicFieldsRequest::default())
+                .unwrap_err(),
+            no_rpc_indexes,
+        );
+        assert_not_served_here(
+            list_owned_objects::list_owned_objects(&service, ListOwnedObjectsRequest::default())
+                .unwrap_err(),
+            no_rpc_indexes,
+        );
+    }
+}

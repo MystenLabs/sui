@@ -13,13 +13,17 @@ use serde::Deserialize;
 use serde::Serialize;
 use sui_inverted_index::SkipPolicy;
 use sui_kvstore::BitmapSchema;
+use sui_kvstore::OBJECT_TOMBSTONES_PIPELINE;
+use sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE;
+use sui_kvstore::PROTOCOL_CONFIGS_V2_PIPELINE;
 use sui_kvstore::PoolConfig;
 use sui_kvstore::ReadRowsRetryConfig;
 
 use crate::WatermarkSource;
 
 const DEFAULT_LEDGER_HISTORY_METHOD_TIMEOUT_MS: u64 = 30_000;
-const DEFAULT_RENDER_AHEAD: usize = 4;
+/// Most render tasks one request runs at once, unless its endpoint configures `render_ahead`.
+pub(crate) const DEFAULT_RENDER_AHEAD: usize = 4;
 const DEFAULT_BITMAP_BUCKET_BUDGET_TX: u64 = 4_000;
 const DEFAULT_BITMAP_BUCKET_BUDGET_EVENT: u64 = 4_000;
 const DEFAULT_MAX_BITMAP_FILTER_LITERALS: usize = 10;
@@ -34,6 +38,13 @@ const DEFAULT_REQUEST_BIGTABLE_CONCURRENCY: usize = 50;
 // Largest `tx_seq_digest` read size measured: reads of up to 100 keys within
 // one or two buckets cost about one seek.
 const DEFAULT_MAX_KEYS_PER_READ: usize = 100;
+// BigTable channels kv-rpc opens at startup and keeps however idle it gets. Each channel is one
+// HTTP/2 connection, which BigTable's frontend limits to about 100 concurrent streams, and the pool
+// grows by only 2 channels a minute, so a burst larger than the open channels queues reads on the
+// client for minutes. Measured with the full read mix on a 16-core host at CPU saturation (about
+// 1,400 req/s): up to ~950 reads in flight; 40 channels served it as fast as 64, 20 added ~15%
+// latency, and 10 cut throughput 7% with kv's CPU still at 80% busy.
+const DEFAULT_BIGTABLE_CHANNEL_FLOOR: usize = 40;
 
 /// Built-in per-endpoint defaults. These differ per endpoint (e.g. checkpoints
 /// page smaller than transactions).
@@ -56,6 +67,11 @@ const LIST_EVENTS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMethodDef
 const LIST_CHECKPOINTS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMethodDefaults {
     default_limit_items: 10,
     max_limit_items: 50,
+    render_ahead: DEFAULT_RENDER_AHEAD,
+};
+const LIST_OBJECT_VERSIONS_DEFAULTS: LedgerHistoryMethodDefaults = LedgerHistoryMethodDefaults {
+    default_limit_items: 50,
+    max_limit_items: 1_000,
     render_ahead: DEFAULT_RENDER_AHEAD,
 };
 
@@ -283,6 +299,14 @@ pub struct StagesConfig {
     /// Multi-get reads of the `objects` table. A key the request has already
     /// read, or is reading, is not read again, so reads are sized on the object
     /// keys still to read. Defaults: `max-seeks-per-read` 100, `concurrency` 50.
+    ///
+    /// Before those multi-gets, `BatchGetObjects` scans: one reverse scan of
+    /// `objects` per latest lookup, which shares this stage's `objects` metric
+    /// label, and one `object_versions_by_checkpoint` read per `at_checkpoint`
+    /// lookup. The scans run in groups of `max-seeks-per-read` lookups, so that
+    /// knob also sets the scan group size, and every group starts at once:
+    /// `concurrency` does not bound the scans, only `request-bigtable-concurrency`
+    /// does. `GetObject`'s reads likewise use only `request-bigtable-concurrency`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub objects: Option<StageConfig>,
 
@@ -340,9 +364,8 @@ impl StagesConfig {
 }
 
 /// Tunables for the ledger-history list APIs. Per-endpoint knobs live in
-/// the three [`LedgerHistoryMethodConfig`] fields; the remaining knobs are
-/// global across all three. Every field is optional and falls back to a built-in
-/// default.
+/// the `list-*` fields; the remaining knobs are global across the filtered
+/// list APIs. Every field is optional and falls back to a built-in default.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct LedgerHistoryConfig {
@@ -357,6 +380,10 @@ pub struct LedgerHistoryConfig {
     /// Per-endpoint tunables for `list_checkpoints`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub list_checkpoints: Option<LedgerHistoryMethodConfig>,
+
+    /// Per-endpoint tunables for `list_object_versions`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub list_object_versions: Option<LedgerHistoryMethodConfig>,
 
     /// Per-request evaluated-bucket budget for filtered tx-bitmap scans, shared
     /// across all DNF dimensions of one query. A query with more unique leaves
@@ -454,6 +481,13 @@ impl LedgerHistoryConfig {
         )
     }
 
+    pub fn list_object_versions(&self) -> ResolvedLedgerHistoryMethodConfig {
+        LedgerHistoryMethodConfig::resolve(
+            self.list_object_versions.as_ref(),
+            LIST_OBJECT_VERSIONS_DEFAULTS,
+        )
+    }
+
     pub fn bitmap_bucket_budget_tx(&self) -> u64 {
         self.bitmap_bucket_budget_tx
             .unwrap_or(DEFAULT_BITMAP_BUCKET_BUDGET_TX)
@@ -497,12 +531,18 @@ impl LedgerHistoryConfig {
             ("list_transactions", self.list_transactions()),
             ("list_events", self.list_events()),
             ("list_checkpoints", self.list_checkpoints()),
+            ("list_object_versions", self.list_object_versions()),
         ] {
             anyhow::ensure!(
                 endpoint.render_ahead > 0,
                 "ledger_history.{name}.render_ahead must be greater than zero",
             );
         }
+        // A limit cannot be clamped into an empty range.
+        anyhow::ensure!(
+            self.list_object_versions().max_limit_items > 0,
+            "ledger_history.list_object_versions.max_limit_items must be greater than zero",
+        );
         anyhow::ensure!(
             self.max_bitmap_filter_literals() > 0,
             "ledger_history.max_bitmap_filter_literals must be greater than zero",
@@ -530,6 +570,49 @@ impl LedgerHistoryConfig {
 const DEFAULT_ADDRESS: &str = "[::1]:8000";
 const DEFAULT_METRICS_HOST: &str = "127.0.0.1";
 const DEFAULT_METRICS_PORT: u16 = 9184;
+
+/// Features served from alpha kvstore pipelines, which the indexer runs only when asked to.
+/// Operators enable each one with its `enable-*` setting once its pipelines have been backfilled
+/// from genesis. Each enabled feature adds its pipelines to the watermarks that bound the served
+/// checkpoint (see [`AlphaFeatures::watermark_pipelines`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AlphaFeatures {
+    /// Serve `at_checkpoint` and `max_version` object reads, every `ListObjectVersions` request,
+    /// and the running epoch's `GetEpoch.system_state` from the
+    /// [`OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE`] and [`OBJECT_TOMBSTONES_PIPELINE`] tables (see
+    /// [`KvRpcConfig::enable_object_at_checkpoint`]).
+    pub object_at_checkpoint: bool,
+    /// Serve `GetProtocolConfig`, and `GetEpoch`'s `protocol_config`, from the
+    /// [`PROTOCOL_CONFIGS_V2_PIPELINE`] table (see [`KvRpcConfig::enable_protocol_configs_v2`]).
+    pub protocol_configs_v2: bool,
+}
+
+impl AlphaFeatures {
+    /// Every feature enabled.
+    pub fn all() -> Self {
+        Self {
+            object_at_checkpoint: true,
+            protocol_configs_v2: true,
+        }
+    }
+
+    /// The pipelines of the enabled features. Bounding the served checkpoint by them makes a row
+    /// missing below it mean the chain has no such data, rather than that the pipeline has not
+    /// reached it yet.
+    pub fn watermark_pipelines(&self) -> impl Iterator<Item = &'static str> {
+        let Self {
+            object_at_checkpoint,
+            protocol_configs_v2,
+        } = *self;
+        [
+            (object_at_checkpoint, OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE),
+            (object_at_checkpoint, OBJECT_TOMBSTONES_PIPELINE),
+            (protocol_configs_v2, PROTOCOL_CONFIGS_V2_PIPELINE),
+        ]
+        .into_iter()
+        .filter_map(|(enabled, pipeline)| enabled.then_some(pipeline))
+    }
+}
 
 /// Root archival KV RPC config, deserialized from TOML by `--config`.
 ///
@@ -589,12 +672,17 @@ pub struct KvRpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub plaintext_address: Option<String>,
 
+    /// BigTable channels opened at startup. Defaults to the larger of 40 and
+    /// `bigtable-min-pool-size`, but at most `bigtable-max-pool-size`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bigtable_initial_pool_size: Option<usize>,
 
+    /// Fewest BigTable channels the pool keeps when load is low. Defaults to 40, or
+    /// `bigtable-initial-pool-size` or `bigtable-max-pool-size` if either is lower.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bigtable_min_pool_size: Option<usize>,
 
+    /// Most BigTable channels the pool grows to. Defaults to 200.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bigtable_max_pool_size: Option<usize>,
 
@@ -632,10 +720,70 @@ pub struct KvRpcConfig {
     pub bigtable_http2_connection_window_bytes: Option<u32>,
 
     /// Deprecated and ignored: the `GetServiceInfo` watermark set always
-    /// includes the List API pipelines and cannot be chosen per pipeline.
+    /// includes the List API pipelines, adds the object versions index and the
+    /// object tombstones when `enable-object-at-checkpoint` is on and the
+    /// protocol configs v2 pipeline when `enable-protocol-configs-v2` is on, and
+    /// cannot be chosen per pipeline.
     /// Still parsed so existing config files keep loading.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub watermark_pipeline: Option<Vec<String>>,
+
+    /// Serve `GetObject` and `BatchGetObjects` requests that set `at_checkpoint` or
+    /// `max_version`, every `ListObjectVersions` request (bounded by `end_checkpoint - 1`, or by
+    /// the served height when it is unset), and the running epoch's `GetEpoch.system_state`, and
+    /// fold the alpha `kvstore_object_versions_by_checkpoint` and `kvstore_object_tombstones`
+    /// pipelines into the `GetServiceInfo` checkpoint height. Defaults to `false`, which rejects
+    /// those requests with `Unimplemented` (`NOT_SERVED_HERE`, cause `disabled_by_config`).
+    ///
+    /// Enable this only after both pipelines have been backfilled from genesis. The versions
+    /// index has no restore floor, so an object unchanged since before the pipeline's first
+    /// checkpoint would wrongly read as `NotFound`. The tombstones must also come from a build
+    /// that records each removal's transaction (column `t`), since `ListObjectVersions` fails
+    /// with `Internal` on a tombstone without one when the request asks for it. `GetObject` and
+    /// `BatchGetObjects` describe removals with `OBJECT_REMOVED` only
+    /// while this is on. A read that resolves to the object's version at its checkpoint (for
+    /// `max_version` alone, the served height) reads it from the versions index, so when that
+    /// version is a removal its tombstone is required: the read answers `Internal` when the
+    /// tombstone is missing or records another removal than the index.
+    /// Other reads find tombstones by reading `objects` alone and cannot tell a missing one:
+    /// latest and `max_version` reads resolve to the version before it, and exact-version reads
+    /// answer `NotFound` without the detail. While this is off, reads answer `NotFound` without
+    /// the detail. The server cannot check this: a backfill run as a separate task writes its own
+    /// watermark row, so a main pipeline's `reader_lo` does not say whether history is complete.
+    /// Setting this flag is the operator's statement that it is.
+    ///
+    /// If this is on but either pipeline is not running, that pipeline has no watermark and the
+    /// `GetServiceInfo` height cannot be computed: `/health` reports this replica not ready, and
+    /// every request bounded by the served height fails with `Unavailable`. Requests that do not
+    /// use the served height, such as latest and exact-version `GetObject` reads, are still
+    /// served.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enable_object_at_checkpoint: Option<bool>,
+
+    /// Serve `GetProtocolConfig`, and the `protocol_config` of `GetEpoch`, from the alpha
+    /// `kvstore_protocol_configs_v2` pipeline's table, and fold that pipeline into the
+    /// `GetServiceInfo` checkpoint height. Defaults to `false`, which rejects `GetProtocolConfig`
+    /// with `Unimplemented` (`NOT_SERVED_HERE`, cause `disabled_by_config`) and computes
+    /// `GetEpoch`'s `protocol_config` from the protocol configs compiled into this binary.
+    ///
+    /// Enable this only after `kvstore_protocol_configs_v2` has been backfilled from genesis. A
+    /// protocol version below the one in force without a row is answered as one the chain never
+    /// ran (`NotFound` from `GetProtocolConfig`). The version in force without a row fails
+    /// `GetProtocolConfig` with `Internal`, and so does `GetEpoch` for an epoch whose version has
+    /// no row when its `protocol_config.feature_flags`, `attributes` or `configs` are requested;
+    /// `protocol_config.protocol_version` alone comes from the `epochs` row. Setting this flag is
+    /// the operator's statement that the table is complete.
+    ///
+    /// If this is on but the pipeline is not running, the pipeline has no watermark and the
+    /// `GetServiceInfo` height cannot be computed: `/health` reports this replica not ready, and
+    /// every request bounded by the served height fails with `Unavailable`.
+    ///
+    /// The kvstore indexer must run a binary that supports the next protocol version before the
+    /// epoch that adopts it. Otherwise the pipeline cannot write that version's row at the
+    /// end-of-epoch checkpoint that decides it, and the `GetServiceInfo` height, which bounds
+    /// every request, stops at the checkpoint before it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enable_protocol_configs_v2: Option<bool>,
 
     /// Tunables for the ledger-history list APIs.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -743,6 +891,14 @@ impl KvRpcConfig {
         self.bigtable_channel_timeout_ms.map(Duration::from_millis)
     }
 
+    /// The alpha-pipeline features the `enable-*` settings turn on.
+    pub fn alpha_features(&self) -> AlphaFeatures {
+        AlphaFeatures {
+            object_at_checkpoint: self.enable_object_at_checkpoint.unwrap_or(false),
+            protocol_configs_v2: self.enable_protocol_configs_v2.unwrap_or(false),
+        }
+    }
+
     /// TLS identity, when both cert and key are set and non-empty.
     pub fn tls_identity(&self) -> anyhow::Result<Option<tonic::transport::Identity>> {
         let (Some(cert), Some(key)) = (self.tls_cert.as_deref(), self.tls_key.as_deref()) else {
@@ -759,12 +915,18 @@ impl KvRpcConfig {
 
     pub fn pool_config(&self) -> PoolConfig {
         let base = PoolConfig::default();
+        let max_pool_size = self.bigtable_max_pool_size.unwrap_or(base.max_pool_size);
+        let channel_floor = DEFAULT_BIGTABLE_CHANNEL_FLOOR.min(max_pool_size);
+        let min_pool_size = self.bigtable_min_pool_size.unwrap_or_else(|| {
+            self.bigtable_initial_pool_size
+                .map_or(channel_floor, |initial| initial.min(channel_floor))
+        });
         PoolConfig {
             initial_pool_size: self
                 .bigtable_initial_pool_size
-                .unwrap_or(base.initial_pool_size),
-            min_pool_size: self.bigtable_min_pool_size.unwrap_or(base.min_pool_size),
-            max_pool_size: self.bigtable_max_pool_size.unwrap_or(base.max_pool_size),
+                .unwrap_or(channel_floor.max(min_pool_size).min(max_pool_size)),
+            min_pool_size,
+            max_pool_size,
             health_check: base
                 .health_check
                 .filter(|_| self.bigtable_channel_health_check.unwrap_or(true)),
@@ -1132,6 +1294,52 @@ plaintext-address = "127.0.0.1:8001"
     }
 
     #[test]
+    fn bigtable_channel_floor_defaults_yield_to_configured_sizes() {
+        let pool = KvRpcConfig::default().pool_config();
+        assert_eq!((pool.initial_pool_size, pool.min_pool_size), (40, 40));
+        assert_eq!(pool.max_pool_size, 200);
+
+        let config_toml = r#"
+bigtable-initial-pool-size = 8
+bigtable-min-pool-size = 4
+"#;
+        let pool = toml::from_str::<KvRpcConfig>(config_toml)
+            .unwrap()
+            .pool_config();
+        assert_eq!((pool.initial_pool_size, pool.min_pool_size), (8, 4));
+
+        // A minimum above the default floor also sets where the pool starts.
+        let pool = toml::from_str::<KvRpcConfig>("bigtable-min-pool-size = 60")
+            .unwrap()
+            .pool_config();
+        assert_eq!((pool.initial_pool_size, pool.min_pool_size), (60, 60));
+
+        // A smaller starting size also sets the minimum, and a smaller minimum leaves the start
+        // at the floor.
+        let pool = toml::from_str::<KvRpcConfig>("bigtable-initial-pool-size = 8")
+            .unwrap()
+            .pool_config();
+        assert_eq!((pool.initial_pool_size, pool.min_pool_size), (8, 8));
+        let pool = toml::from_str::<KvRpcConfig>("bigtable-min-pool-size = 4")
+            .unwrap()
+            .pool_config();
+        assert_eq!((pool.initial_pool_size, pool.min_pool_size), (40, 4));
+
+        // A pool capped below the default floor starts and stays at its cap.
+        let pool = toml::from_str::<KvRpcConfig>("bigtable-max-pool-size = 16")
+            .unwrap()
+            .pool_config();
+        assert_eq!(
+            (
+                pool.initial_pool_size,
+                pool.min_pool_size,
+                pool.max_pool_size
+            ),
+            (16, 16, 16)
+        );
+    }
+
+    #[test]
     fn partial_toml_falls_back_to_defaults() {
         // Only one endpoint is customized; everything else must resolve to defaults.
         let config_toml = r#"
@@ -1164,15 +1372,23 @@ render-ahead = 3
     fn bitmap_schema_selects_the_bitmap_pipelines_that_bound_the_height() {
         let v1 = KvRpcConfig::default();
         v1.validate().unwrap();
-        let v1_pipelines = service_info_watermark_pipelines(v1.ledger_history().bitmap_schema());
+        let v1_pipelines = service_info_watermark_pipelines(
+            v1.ledger_history().bitmap_schema(),
+            AlphaFeatures::default(),
+        );
 
         let v2: KvRpcConfig =
             serde_yaml::from_str("ledger-history:\n  bitmap-schema: v2\n").unwrap();
         v2.validate().unwrap();
-        let v2_pipelines = service_info_watermark_pipelines(v2.ledger_history().bitmap_schema());
+        let v2_pipelines = service_info_watermark_pipelines(
+            v2.ledger_history().bitmap_schema(),
+            AlphaFeatures::default(),
+        );
 
         for (pipeline, in_v1, in_v2) in [
             ("kvstore_tx_seq_digest", true, true),
+            // `ListSystemPackages` reads the `system_packages` table.
+            (sui_kvstore::SYSTEM_PACKAGES_PIPELINE, true, true),
             ("kvstore_transaction_dimensions", true, false),
             ("kvstore_event_dimensions", true, false),
             ("kvstore_transaction_dimensions_v2", false, true),
@@ -1181,6 +1397,73 @@ render-ahead = 3
             assert_eq!(v1_pipelines.contains(&pipeline), in_v1, "{pipeline} in v1");
             assert_eq!(v2_pipelines.contains(&pipeline), in_v2, "{pipeline} in v2");
         }
+    }
+
+    #[test]
+    fn object_at_checkpoint_off_by_default_and_bounds_the_watermark_set() {
+        let object_pipelines = [
+            sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE,
+            sui_kvstore::OBJECT_TOMBSTONES_PIPELINE,
+        ];
+        let cfg = KvRpcConfig::default();
+        assert!(!cfg.alpha_features().object_at_checkpoint);
+        let pipelines = service_info_watermark_pipelines(
+            cfg.ledger_history().bitmap_schema(),
+            cfg.alpha_features(),
+        );
+        for pipeline in object_pipelines {
+            assert!(!pipelines.contains(&pipeline), "{pipeline}");
+        }
+
+        let yaml = "enable-object-at-checkpoint: true\n";
+        let cfg: KvRpcConfig = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(
+            cfg.alpha_features(),
+            AlphaFeatures {
+                object_at_checkpoint: true,
+                ..Default::default()
+            }
+        );
+        let pipelines = service_info_watermark_pipelines(
+            cfg.ledger_history().bitmap_schema(),
+            cfg.alpha_features(),
+        );
+        for pipeline in object_pipelines {
+            assert!(
+                pipelines.contains(&pipeline),
+                "{pipeline} must bound the height"
+            );
+        }
+    }
+
+    #[test]
+    fn protocol_configs_v2_off_by_default_and_bounds_the_watermark_set() {
+        let cfg = KvRpcConfig::default();
+        assert_eq!(cfg.alpha_features(), AlphaFeatures::default());
+        assert!(
+            !service_info_watermark_pipelines(
+                cfg.ledger_history().bitmap_schema(),
+                cfg.alpha_features()
+            )
+            .contains(&PROTOCOL_CONFIGS_V2_PIPELINE)
+        );
+
+        let cfg: KvRpcConfig = toml::from_str("enable-protocol-configs-v2 = true\n").unwrap();
+        assert_eq!(
+            cfg.alpha_features(),
+            AlphaFeatures {
+                protocol_configs_v2: true,
+                ..Default::default()
+            }
+        );
+        assert!(
+            service_info_watermark_pipelines(
+                cfg.ledger_history().bitmap_schema(),
+                cfg.alpha_features()
+            )
+            .contains(&PROTOCOL_CONFIGS_V2_PIPELINE),
+            "the protocol configs v2 pipeline must bound the height",
+        );
     }
 
     #[test]

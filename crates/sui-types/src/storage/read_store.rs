@@ -20,7 +20,7 @@ use crate::messages_checkpoint::{
     VersionedFullCheckpointContents,
 };
 use crate::object::Object;
-use crate::storage::{BackingPackageStore, ObjectKey};
+use crate::storage::{BackingPackageStore, ObjectKey, ObjectOrTombstone};
 use crate::transaction::{TransactionData, VerifiedTransaction};
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
@@ -28,12 +28,51 @@ use mysten_common::ZipDebugEqIteratorExt;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::{BTreeSet, HashMap};
+use std::ops::Bound;
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 use typed_store_error::TypedStoreError;
 
 pub type BalanceIterator<'a> = Box<dyn Iterator<Item = Result<(StructTag, BalanceInfo)>> + 'a>;
 pub type PackageVersionsIterator<'a> =
-    Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + 'a>;
+    Box<dyn Iterator<Item = Result<IndexedPackageVersion, TypedStoreError>> + 'a>;
+pub type PackagesByCheckpointIterator<'a> =
+    Box<dyn Iterator<Item = Result<(PackagePublishKey, ObjectID), TypedStoreError>> + 'a>;
+
+/// One published version of a package, as listed by
+/// [`RpcIndexes::package_versions_iter`].
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct IndexedPackageVersion {
+    pub version: u64,
+    /// The storage id under which this version lives.
+    pub storage_id: ObjectID,
+    /// The checkpoint this version was published in, or `None` when the
+    /// index holds no history that far back: a store restored from a
+    /// live-object snapshot (or seeded at a fork checkpoint) records no
+    /// publish checkpoint for the versions it loaded, nor for a version it
+    /// first saw as an input to an in-place upgrade inside its history. Such a
+    /// version was published before that history begins, which a
+    /// checkpoint-pinned read must check (see
+    /// [`RpcStateReader::get_lowest_checkpoint_with_index_history`]). Until a
+    /// post-restore backfill finishes
+    /// ([`RpcIndexes::is_history_backfill_pending`]), versions published in
+    /// the part of its window it has not reached are also `None`.
+    pub checkpoint: Option<CheckpointSequenceNumber>,
+}
+
+/// A package version's position in [`RpcIndexes::packages_by_checkpoint_iter`],
+/// which lists the versions of every package by the checkpoint each was
+/// published in, then by the package's original id, then by version. The
+/// derived ordering is that order.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct PackagePublishKey {
+    /// The checkpoint the version was published in.
+    pub checkpoint: CheckpointSequenceNumber,
+    /// The storage id of the package's first version, shared by every
+    /// version in its upgrade lineage.
+    pub original_id: ObjectID,
+    pub version: u64,
+}
 
 pub trait ReadStore: ObjectStore {
     //
@@ -720,10 +759,110 @@ pub trait RpcStateReader: ReadStore + super::RuntimeObjectResolver + Send + Sync
     /// available.
     fn get_lowest_available_checkpoint_objects(&self) -> Result<CheckpointSequenceNumber>;
 
+    /// Whether this store keeps an object's versions after later transactions replace them, up
+    /// to [`Self::get_lowest_available_checkpoint_objects`]. `false` on nodes that run the
+    /// tidehunter objects compactor, which keeps only each object's latest version and never
+    /// raises that lower bound.
+    fn retains_object_version_history(&self) -> bool {
+        true
+    }
+
+    /// The first checkpoint the rpc indexes have history for.
+    ///
+    /// The indexes record each change made at or above this checkpoint with the checkpoint that
+    /// made it. Rows a store loads from a live-object snapshot instead (an object's restore
+    /// floor, or a package version with no publish checkpoint) hold the state at the end of the
+    /// checkpoint before this one, with no record of when that state began. So a listing of
+    /// indexed changes is complete only from this checkpoint, and a read of the indexes as of a
+    /// checkpoint is exact only from the checkpoint before it.
+    ///
+    /// Defaults to `0`, for indexes built from genesis and for a node that backfills index
+    /// history down to its lowest available checkpoint: the availability floors already bound
+    /// reads there. A store that never backfills, such as a fork seeded at a checkpoint, reports
+    /// the first checkpoint it indexed itself.
+    fn get_lowest_checkpoint_with_index_history(&self) -> Result<CheckpointSequenceNumber> {
+        Ok(0)
+    }
+
     fn get_chain_identifier(&self) -> Result<ChainIdentifier>;
 
     // Get a handle to an instance of the RpcIndexes
     fn indexes(&self) -> Option<&dyn RpcIndexes>;
+
+    /// The object's newest version at or below `version`, like the execution cache's
+    /// `find_object_lt_or_eq_version`. `None` if the object has no version at or below
+    /// `version`, or if it was deleted or wrapped at that newest version. On a store whose object
+    /// lower bound ([`Self::get_lowest_available_checkpoint_objects`]) is above 0, also `None`
+    /// if the version found may be one the store pruned, which readers answer as possibly pruned.
+    ///
+    /// Fails by default. Stores that serve `GetObject`'s `max_version` override it, and
+    /// `GetObject` refuses `max_version` on stores without rpc indexes ([`Self::indexes`]) before
+    /// reading.
+    fn get_object_lt_or_eq_version(
+        &self,
+        _object_id: &ObjectID,
+        _version: SequenceNumber,
+    ) -> Result<Option<Object>> {
+        Err(super::error::Error::custom(
+            "this store does not serve version-bounded object reads",
+        ))
+    }
+
+    /// The object's latest state: its newest version, or the tombstone (see
+    /// [`ObjectOrTombstone`]) if it was deleted or wrapped there. `None` if the object has no
+    /// version, and always `None` by default, for stores that cannot tell a removal from absence.
+    /// `GetObject` reads the live object with [`ObjectStore::get_object`] first, and this only
+    /// when there is none.
+    fn get_latest_object_or_tombstone(
+        &self,
+        _object_id: &ObjectID,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        Ok(None)
+    }
+
+    /// [`Self::get_object_lt_or_eq_version`], but the newest version at or below `version` is
+    /// returned as a tombstone if the object was deleted or wrapped there, rather than as
+    /// `None`. It must see the same versions that method does, including those not yet committed
+    /// to a store behind a cache, so that both select the same version, and it answers `None`
+    /// for the same entries that may have been pruned. In particular, it never returns a
+    /// tombstone that may have a pruned version after it: `GetObject` answers a read that
+    /// resolves to the returned tombstone with that removal. A store without rpc indexes cannot
+    /// tell those apart and may return them: `GetObject` reads it there only for exact `version`
+    /// reads (see [`Self::get_object_or_tombstone_by_key`]), keeping only an entry at the
+    /// requested version.
+    ///
+    /// Defaults to [`Self::get_object_lt_or_eq_version`], for stores that cannot tell a removal
+    /// from absence: a removal reads as `None`, and a store that serves neither method fails.
+    fn get_object_or_tombstone_lt_or_eq_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        Ok(self
+            .get_object_lt_or_eq_version(object_id, version)?
+            .map(ObjectOrTombstone::Object))
+    }
+
+    /// Exactly `version` of the object: the object, or the tombstone if it was deleted or
+    /// wrapped at `version`. `None` if the object has no entry at `version`, or if
+    /// [`Self::get_object_or_tombstone_lt_or_eq_version`] would answer `None` for the entry at
+    /// `version` as one that may have been pruned.
+    ///
+    /// Defaults to that method's entry, kept only if it is at `version`. Stores that check the
+    /// entry against their object lower bound override it, so that they check only an entry at
+    /// `version`, never an older one this read discards.
+    fn get_object_or_tombstone_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<ObjectOrTombstone>> {
+        Ok(self
+            .get_object_or_tombstone_lt_or_eq_version(object_id, version)?
+            .filter(|item| match item {
+                ObjectOrTombstone::Object(object) => object.version() == version,
+                ObjectOrTombstone::Tombstone((_, removed_at, _)) => *removed_at == version,
+            }))
+    }
 
     /// The sequence number of the highest executed checkpoint, independent of
     /// how far any embedded index has caught up.
@@ -749,6 +888,7 @@ pub trait RpcStateReader: ReadStore + super::RuntimeObjectResolver + Send + Sync
 pub type DynamicFieldIteratorItem = Result<DynamicFieldKey, TypedStoreError>;
 pub type LedgerTxSeqDigestIterator<'a> =
     Box<dyn Iterator<Item = Result<LedgerTxSeqDigest, TypedStoreError>> + 'a>;
+pub type ObjectVersionsIterator<'a> = Box<dyn Iterator<Item = Result<ObjectOrTombstone>> + 'a>;
 /// Iterator over ledger bitmap buckets that can skip directly to a bucket.
 pub trait LedgerBitmapBucketIter:
     Iterator<Item = Result<LedgerBitmapBucket, TypedStoreError>>
@@ -810,11 +950,36 @@ pub trait RpcIndexes: Send + Sync {
         cursor: Option<(SuiAddress, StructTag)>,
     ) -> Result<BalanceIterator<'_>>;
 
+    /// Iterate the versions of the package originally published at
+    /// `original_id` in `[start_version, end_version_exclusive)`, in ascending
+    /// version order, or descending when `descending` is set. Versions with no
+    /// recorded publish checkpoint are the lowest, and recorded publish
+    /// checkpoints are non-decreasing in version, once
+    /// [`Self::is_history_backfill_pending`] is `false`.
     fn package_versions_iter(
         &self,
         original_id: ObjectID,
-        cursor: Option<u64>,
+        start_version: u64,
+        end_version_exclusive: u64,
+        descending: bool,
     ) -> Result<PackageVersionsIterator<'_>>;
+
+    /// Iterate the versions of every package whose keys lie between `lower`
+    /// and `upper`, in [`PackagePublishKey`] order, or in reverse when
+    /// `descending` is set. Each item is a version's key and the storage id
+    /// under which the version lives. A range with `lower` above `upper`
+    /// lists nothing.
+    ///
+    /// Only versions with a recorded publish checkpoint are listed (see
+    /// [`IndexedPackageVersion::checkpoint`]), so the versions published at a
+    /// checkpoint are complete only from where the indexes' history begins,
+    /// and once [`Self::is_history_backfill_pending`] is `false`.
+    fn packages_by_checkpoint_iter(
+        &self,
+        lower: Bound<PackagePublishKey>,
+        upper: Bound<PackagePublishKey>,
+        descending: bool,
+    ) -> Result<PackagesByCheckpointIterator<'_>>;
 
     /// Resolve the storage id holding the exact `version` of the package
     /// originally published at `original_id`.
@@ -832,8 +997,66 @@ pub trait RpcIndexes: Send + Sync {
         checkpoint: CheckpointSequenceNumber,
     ) -> Result<Option<(u64, ObjectID)>>;
 
+    /// Resolve the version `object_id` had as of the end of `checkpoint`:
+    /// the version recorded by the latest checkpoint at or before
+    /// `checkpoint` that changed the object. That version may be a
+    /// deletion or wrapping tombstone, which has no live object behind it.
+    /// `None` if the object did not exist as of `checkpoint`.
+    ///
+    /// The caller must confirm `checkpoint` is within the index's available
+    /// range, and that [`Self::is_history_backfill_pending`] is `false`; this
+    /// method assumes both.
+    fn get_object_version_at_checkpoint(
+        &self,
+        object_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Option<SequenceNumber>>;
+
+    /// The first checkpoint in `checkpoints` at whose end `object_id` has a version, as
+    /// [`Self::get_object_version_at_checkpoint`] resolves it, with that version. `None` if it has
+    /// none by the end of the range. A version at the end of a checkpoint stays at every later
+    /// one, so this is the range's start when the object has a version there, and otherwise the
+    /// first checkpoint in the range that changed the object.
+    ///
+    /// The caller must confirm the range is within the index's available range, and that
+    /// [`Self::is_history_backfill_pending`] is `false`; this method assumes both.
+    fn first_checkpoint_with_object_version(
+        &self,
+        object_id: ObjectID,
+        checkpoints: RangeInclusive<CheckpointSequenceNumber>,
+    ) -> Result<Option<(CheckpointSequenceNumber, SequenceNumber)>>;
+
+    /// Iterate the versions of `object_id` within `versions`, oldest first, or newest first if
+    /// `descending`, each a live object or the tombstone marking a version at which the object
+    /// was deleted or wrapped (an object reference whose digest is
+    /// [`crate::digests::ObjectDigest::OBJECT_DIGEST_DELETED`] or
+    /// [`crate::digests::ObjectDigest::OBJECT_DIGEST_WRAPPED`]).
+    ///
+    /// Only versions at or below the object's version at the end of a checkpoint the indexes
+    /// have committed are complete. Below the object's version at the end of the lowest
+    /// checkpoint whose object state is intact (see
+    /// [`RpcStateReader::get_lowest_available_checkpoint_objects`] and
+    /// [`RpcStateReader::get_lowest_checkpoint_with_index_history`]), versions are pruned or
+    /// about to be, and what remains there is no history: callers that read there must tell
+    /// those versions apart themselves.
+    fn object_versions_iter(
+        &self,
+        object_id: ObjectID,
+        versions: RangeInclusive<SequenceNumber>,
+        descending: bool,
+    ) -> Result<ObjectVersionsIterator<'_>>;
+
     fn get_highest_indexed_checkpoint_seq_number(&self)
     -> Result<Option<CheckpointSequenceNumber>>;
+
+    /// Whether a restore left the checkpoint-pinned indexes behind
+    /// [`Self::get_object_version_at_checkpoint`] and
+    /// [`Self::get_package_at_checkpoint`] still backfilling history below the
+    /// restore checkpoint. While it has, those reads can be wrong at any
+    /// checkpoint the indexes cover, not just above the indexed tip, or the
+    /// indexed tip lies far below the restored live state, so callers must not
+    /// serve them.
+    fn is_history_backfill_pending(&self) -> Result<bool>;
 
     /// The highest checkpoint the live-object cohort -- the indexes derivable
     /// from the live object set (owned objects, types, and balances) -- has
@@ -874,6 +1097,10 @@ pub trait RpcIndexes: Send + Sync {
     }
 
     fn ledger_tx_seq_digest(&self, tx_seq: u64) -> Result<Option<LedgerTxSeqDigest>>;
+
+    /// The sequence number of transaction `digest`, or `None` if the indexes have not committed
+    /// it or it is pruned.
+    fn ledger_tx_seq_by_digest(&self, digest: &TransactionDigest) -> Result<Option<u64>>;
 
     fn ledger_tx_seq_digest_multi_get(
         &self,
@@ -995,7 +1222,7 @@ impl TransactionInfo {
     }
 }
 
-#[derive(Clone, Default, Serialize, Deserialize, Eq, PartialEq, Debug)]
+#[derive(Clone, Default, Eq, PartialEq, Debug)]
 pub struct EpochInfo {
     pub epoch: u64,
     pub protocol_version: Option<u64>,
@@ -1004,8 +1231,22 @@ pub struct EpochInfo {
     pub start_checkpoint: Option<u64>,
     pub end_checkpoint: Option<u64>,
     pub reference_gas_price: Option<u64>,
-    // System State as of the start of the epoch
+    /// System state as of the start of the epoch.
     pub system_state: Option<crate::sui_system_state::SuiSystemState>,
-    // pub end_of_epoch_transaction: Option<TransactionDigest>,
-    // pub epoch_commitments: Vec<sui_types::messages_checkpoint::CheckpointCommitment>,
+    /// `network_total_transactions` at the epoch's last checkpoint: one past the sequence number
+    /// of the epoch's last transaction.
+    pub tx_hi: Option<u64>,
+    pub safe_mode: Option<bool>,
+    pub epoch_commitments: Option<Vec<crate::messages_checkpoint::CheckpointCommitment>>,
+    // Counters from the epoch's `SystemEpochInfoEvent`, left `None` when the epoch ended in safe
+    // mode, which emits no such event.
+    pub total_stake: Option<u64>,
+    pub storage_fund_balance: Option<u64>,
+    pub storage_fund_reinvestment: Option<u64>,
+    pub storage_charge: Option<u64>,
+    pub storage_rebate: Option<u64>,
+    pub stake_subsidy_amount: Option<u64>,
+    pub total_gas_fees: Option<u64>,
+    pub total_stake_rewards_distributed: Option<u64>,
+    pub leftover_storage_fund_inflow: Option<u64>,
 }

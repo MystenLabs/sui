@@ -45,8 +45,28 @@ async fn test_get_function_not_found() {
     request.name = Some("non_existent_function".to_string());
 
     let error = service.get_function(request).await.unwrap_err();
-    assert_eq!(error.code(), tonic::Code::Internal);
+    assert_eq!(error.code(), tonic::Code::NotFound);
     assert!(error.message().contains("Function not found"));
+}
+
+#[sim_test]
+async fn test_get_function_module_not_found() {
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+
+    let mut request = GetFunctionRequest::default();
+    request.package_id = Some("0x3".to_string());
+    request.module_name = Some("non_existent_module".to_string());
+    request.name = Some("some_function".to_string());
+
+    let error = service.get_function(request).await.unwrap_err();
+    assert_eq!(error.code(), tonic::Code::NotFound);
+    assert!(error.message().contains("Module not found"));
 }
 
 #[sim_test]

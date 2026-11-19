@@ -25,7 +25,9 @@
 //! acquisition count are recorded once on `BigTableClientContext` drop.
 
 use std::collections::HashMap;
+use std::ops::Bound;
 use std::ops::Range;
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -51,18 +53,28 @@ use sui_inverted_index::eval_bitmap_query_stream;
 use sui_kvstore::BigTableBitmapSource;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::CheckpointData;
+use sui_kvstore::EpochData;
+use sui_kvstore::KeyValueStoreReader;
+use sui_kvstore::ObjectStatus;
+use sui_kvstore::PackageData;
+use sui_kvstore::ProtocolConfigV2Data;
 use sui_kvstore::RowFilter;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxCheckpointPosition;
 use sui_kvstore::TxSeqDigestData;
+use sui_kvstore::tables::objects::ObjectVersionRow;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::cursor::LedgerPoint;
 use sui_rpc_api::ledger_history::query_options::IntraTxCoordinate;
 use sui_rpc_api::ledger_history::row_placement::RowPlacement;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
+use sui_types::committee::EpochId;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
+use sui_types::storage::PackagePublishKey;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 
@@ -71,14 +83,18 @@ use tokio::sync::Semaphore;
 pub(crate) mod stage {
     pub const TRANSACTIONS: &str = "transactions";
     pub const OBJECTS: &str = "objects";
+    pub const OBJECT_VERSIONS_BY_CHECKPOINT: &str = "object_versions_by_checkpoint";
     pub const TX_SEQ_DIGEST: &str = "tx_seq_digest";
     pub const TX_CP_RESOLVE: &str = "tx_cp_resolve";
     pub const CHECKPOINTS: &str = "checkpoints";
+    pub const PACKAGES: &str = "packages";
+    pub const EPOCHS: &str = "epochs";
+    pub const PROTOCOL_CONFIGS: &str = "protocol_configs";
 }
 
 /// Metrics for the request-scoped `BigTableClient` limiter and the reads it
-/// gates. Cardinality is bounded: per method, 5 stages for `permit_wait_ms`,
-/// `permit_hold_ms`, and `reads_started`, 5 stages × 3 outcomes for
+/// gates. Cardinality is bounded: per method, 9 stages for `permit_wait_ms`,
+/// `permit_hold_ms`, and `reads_started`, 9 stages × 3 outcomes for
 /// `reads_finished`, and one series each for the request-end `permits_peak`
 /// and `ops_total` histograms.
 #[derive(Clone)]
@@ -262,6 +278,50 @@ impl BigTableClient {
             .await
     }
 
+    /// Multi-get `object_keys` from the `objects` table, live or removed, each
+    /// with its row, read without live objects' contents unless
+    /// `with_contents`. One multi-get, holding its permit until the stream is
+    /// dropped.
+    pub(crate) async fn get_object_rows_stream(
+        &self,
+        object_keys: Vec<ObjectKey>,
+        with_contents: bool,
+    ) -> Result<BoxStream<'static, Result<(ObjectKey, ObjectVersionRow), anyhow::Error>>, RpcError>
+    {
+        let mut inner = self.inner.clone();
+        self.open_gated_stream(
+            stage::OBJECTS,
+            inner.get_object_rows_stream(object_keys, with_contents),
+        )
+        .await
+    }
+
+    /// Stream up to `limit` versions of `object_id` in `versions`, live or
+    /// removed, in ascending version order or descending if `descending`,
+    /// each with its row, read without live objects' contents unless
+    /// `with_contents`. One range scan of the `objects` table, holding its
+    /// permit until the stream is dropped. BigTable sends at most `limit`
+    /// rows, so the read is complete once the `limit`th arrives.
+    pub(crate) async fn object_versions_stream(
+        &self,
+        object_id: ObjectID,
+        versions: RangeInclusive<SequenceNumber>,
+        limit: usize,
+        descending: bool,
+        with_contents: bool,
+    ) -> Result<
+        BoxStream<'static, Result<(SequenceNumber, ObjectVersionRow), anyhow::Error>>,
+        RpcError,
+    > {
+        let mut inner = self.inner.clone();
+        self.open_gated_stream_with_rows_limit(
+            stage::OBJECTS,
+            inner.object_versions_stream(object_id, versions, limit, descending, with_contents),
+            Some(limit),
+        )
+        .await
+    }
+
     pub(crate) async fn resolve_tx_digests_stream(
         &self,
         tx_sequence_numbers: Vec<u64>,
@@ -354,6 +414,152 @@ impl BigTableClient {
         .await
     }
 
+    /// The version and status `object_id` had at the end of `checkpoint`, from
+    /// the `object_versions_by_checkpoint` index. One single-row forward scan,
+    /// under one permit.
+    pub(crate) async fn get_object_version_at_checkpoint(
+        &self,
+        object_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Option<(SequenceNumber, ObjectStatus)>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(
+            stage::OBJECT_VERSIONS_BY_CHECKPOINT,
+            inner.get_object_version_at_checkpoint(object_id, checkpoint),
+        )
+        .await
+    }
+
+    /// The newest version of `object_id`, unless the object was deleted or wrapped at it. One
+    /// reverse range scan of the `objects` table, under one permit.
+    pub(crate) async fn get_latest_object(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<Option<Object>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(stage::OBJECTS, inner.get_latest_object(&object_id))
+            .await
+    }
+
+    /// The objects at `object_keys` that exist, in one multi-get of the `objects` table, under
+    /// one permit.
+    pub(crate) async fn get_objects(
+        &self,
+        object_keys: &[ObjectKey],
+    ) -> Result<Vec<Object>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(stage::OBJECTS, inner.get_objects(object_keys))
+            .await
+    }
+
+    /// The original package ID of each of `package_ids` that has a `packages_by_id` row, as
+    /// `(storage ID, original ID)` pairs, under one permit.
+    pub(crate) async fn get_package_original_ids(
+        &self,
+        package_ids: &[ObjectID],
+    ) -> Result<Vec<(ObjectID, ObjectID)>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(stage::PACKAGES, inner.get_package_original_ids(package_ids))
+            .await
+    }
+
+    /// The `packages` rows for `(original ID, version)` `keys`, in one multi-get, under one
+    /// permit.
+    pub(crate) async fn get_packages_by_version(
+        &self,
+        keys: &[(ObjectID, u64)],
+    ) -> Result<Vec<PackageData>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(stage::PACKAGES, inner.get_packages_by_version(keys))
+            .await
+    }
+
+    /// The newest version of the package `original_id` published at or before `cp_bound`,
+    /// under one permit.
+    pub(crate) async fn get_package_latest(
+        &self,
+        original_id: ObjectID,
+        cp_bound: u64,
+    ) -> Result<Option<PackageData>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(
+            stage::PACKAGES,
+            inner.get_package_latest(original_id, cp_bound),
+        )
+        .await
+    }
+
+    /// One page of the versions of the package `original_id` published at or before
+    /// `cp_bound`, from one `packages` range scan, under one permit.
+    pub(crate) async fn get_package_versions(
+        &self,
+        original_id: ObjectID,
+        cp_bound: u64,
+        versions: Range<u64>,
+        limit: usize,
+        descending: bool,
+    ) -> Result<Vec<PackageData>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(
+            stage::PACKAGES,
+            inner.get_package_versions(original_id, cp_bound, versions, limit, descending),
+        )
+        .await
+    }
+
+    /// Read the versions of every package whose `packages_by_checkpoint` keys
+    /// lie between `lower` and `upper` under one `packages` permit, held
+    /// through both the index scan and the `packages` multi-get behind it (see
+    /// [`KeyValueStoreReader::get_packages_by_checkpoint_range`]).
+    pub(crate) async fn get_packages_by_checkpoint_range(
+        &self,
+        lower: Bound<PackagePublishKey>,
+        upper: Bound<PackagePublishKey>,
+        limit: usize,
+        descending: bool,
+    ) -> Result<Vec<PackageData>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(
+            stage::PACKAGES,
+            inner.get_packages_by_checkpoint_range(lower, upper, limit, descending),
+        )
+        .await
+    }
+
+    /// Read the original IDs in the `system_packages` table under a
+    /// `packages` permit (see [`KeyValueStoreReader::get_system_package_ids`]).
+    pub(crate) async fn get_system_package_ids(&self) -> Result<Vec<ObjectID>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(stage::PACKAGES, inner.get_system_package_ids())
+            .await
+    }
+
+    /// The `epochs` rows for `epoch_ids`, reading only `columns` (every column if `None`). One
+    /// multi-get, under one permit.
+    pub(crate) async fn get_epochs_filtered(
+        &self,
+        epoch_ids: &[EpochId],
+        columns: Option<&[&str]>,
+    ) -> Result<Vec<EpochData>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(stage::EPOCHS, inner.get_epochs_filtered(epoch_ids, columns))
+            .await
+    }
+
+    /// The `protocol_configs_v2` row of `protocol_version`, `None` if the table has none. One
+    /// point read, under one permit.
+    pub(crate) async fn get_protocol_configs_v2(
+        &self,
+        protocol_version: u64,
+    ) -> Result<Option<ProtocolConfigV2Data>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(
+            stage::PROTOCOL_CONFIGS,
+            inner.get_protocol_configs_v2(protocol_version),
+        )
+        .await
+    }
+
     /// Stream the checkpoint of each of `tx_sequence_numbers`, reading only the
     /// checkpoint-number column of `tx_seq_digest`. The permit is held for the
     /// stream's lifetime (see `gate_stream`); rows arrive in BigTable order.
@@ -432,9 +638,25 @@ impl BigTableClient {
         T: Send + 'static,
         S: Stream<Item = anyhow::Result<T>> + Send + 'static,
     {
+        self.open_gated_stream_with_rows_limit(stage, open, None)
+            .await
+    }
+
+    /// [`Self::open_gated_stream`] for a read that BigTable ends after
+    /// `rows_limit` rows, when set (see [`gate_stream`]).
+    async fn open_gated_stream_with_rows_limit<T, S>(
+        &self,
+        stage: &'static str,
+        open: impl Future<Output = anyhow::Result<S>>,
+        rows_limit: Option<usize>,
+    ) -> Result<BoxStream<'static, Result<T, anyhow::Error>>, RpcError>
+    where
+        T: Send + 'static,
+        S: Stream<Item = anyhow::Result<T>> + Send + 'static,
+    {
         let mut permit = self.acquire(stage).await?;
         match open.await {
-            Ok(inner) => Ok(gate_stream(permit, inner.boxed())),
+            Ok(inner) => Ok(gate_stream(permit, inner.boxed(), rows_limit)),
             Err(error) => {
                 permit.finish(ReadOutcome::Failed);
                 Err(RpcError::from(error))
@@ -630,21 +852,32 @@ fn record_release(context: &BigTableClientContext) {
 /// by full drain, early termination by the consumer, or cancellation
 /// propagating through `Drop`). Items and errors pass through unchanged; the
 /// permit records the read as completed when the inner stream ends, failed
-/// when it yields an error, and cancelled if dropped before either.
+/// when it yields an error, and cancelled if dropped before either. A read
+/// that BigTable ends after `rows_limit` rows also records completed when the
+/// `rows_limit`th row arrives, before the consumer takes it: BigTable sends
+/// nothing after it, so a consumer that stops there has read the whole
+/// response.
 fn gate_stream<T>(
     mut permit: LimitedPermit,
     inner: BoxStream<'static, Result<T, anyhow::Error>>,
+    rows_limit: Option<usize>,
 ) -> BoxStream<'static, Result<T, anyhow::Error>>
 where
     T: Send + 'static,
 {
     async_stream::try_stream! {
         futures::pin_mut!(inner);
+        let mut rows = 0;
         while let Some(row) = inner.next().await {
             if row.is_err() {
                 permit.finish(ReadOutcome::Failed);
             }
-            yield row?;
+            let row = row?;
+            rows += 1;
+            if rows_limit == Some(rows) {
+                permit.finish(ReadOutcome::Completed);
+            }
+            yield row;
         }
         permit.finish(ReadOutcome::Completed);
     }
@@ -703,7 +936,7 @@ mod tests {
 
         let inner: BoxStream<'static, Result<u64, anyhow::Error>> =
             stream::iter(vec![Ok(1u64), Ok(2), Ok(3)]).boxed();
-        let mut wrapped = gate_stream(permit, inner);
+        let mut wrapped = gate_stream(permit, inner, None);
 
         for expected in 1u64..=3 {
             let item = wrapped.try_next().await.unwrap().unwrap();
@@ -740,7 +973,7 @@ mod tests {
                 Ok(n as u64)
             })
             .boxed();
-        let mut wrapped = gate_stream(permit, inner);
+        let mut wrapped = gate_stream(permit, inner, None);
 
         let _ = wrapped.try_next().await.unwrap().unwrap();
         let _ = wrapped.try_next().await.unwrap().unwrap();
@@ -766,7 +999,7 @@ mod tests {
 
         let inner: BoxStream<'static, Result<u64, anyhow::Error>> =
             stream::iter(vec![Ok::<u64, anyhow::Error>(1u64), Err(anyhow!("boom"))]).boxed();
-        let mut wrapped = gate_stream(permit, inner);
+        let mut wrapped = gate_stream(permit, inner, None);
 
         assert_eq!(wrapped.try_next().await.unwrap().unwrap(), 1);
         let err = wrapped.try_next().await.unwrap_err();

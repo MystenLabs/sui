@@ -6,13 +6,14 @@ use super::*;
 use crate::authority::epoch_marker_key::EPOCH_MARKER_KEY_SIZE;
 use crate::authority::epoch_marker_key::EpochMarkerKey;
 use serde::{Deserialize, Serialize};
+use std::ops::RangeInclusive;
 use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use sui_types::base_types::SequenceNumber;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::messages_consensus::SharedTransactionDenyConfig;
-use sui_types::storage::MarkerValue;
+use sui_types::storage::{MarkerValue, ObjectOrTombstone};
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::{DBBatch, DBMap, MetricConf};
 #[cfg(not(tidehunter))]
@@ -523,6 +524,62 @@ impl AuthorityPerpetualTables {
         }
     }
 
+    /// The newest row of `object_id` at or below `version`: the object, or the tombstone if it
+    /// was deleted or wrapped there. Reads the table directly, so it sees only versions the
+    /// writeback cache has committed.
+    ///
+    /// The pruner deletes the versions it prunes with range deletes, which the table's read
+    /// options ignore, so a range-deleted version stays readable until compaction drops it.
+    /// Compaction can drop a newer one before an older one, so this can return a pruned version
+    /// older than the one that replaced it. Callers tell a pruned version apart.
+    pub fn find_object_or_tombstone_lt_or_eq_version(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> SuiResult<Option<ObjectOrTombstone>> {
+        let mut iter = self.objects.reversed_safe_iter_with_bounds(
+            Some(ObjectKey::min_for_id(&object_id)),
+            Some(ObjectKey(object_id, version)),
+        )?;
+        let Some((key, value)) = iter.next().transpose()? else {
+            return Ok(None);
+        };
+        if let Some(tombstone) = self.tombstone_reference(&key, &value)? {
+            return Ok(Some(ObjectOrTombstone::Tombstone(tombstone)));
+        }
+        Ok(self.object(&key, value)?.map(ObjectOrTombstone::Object))
+    }
+
+    /// Iterate the versions of `object_id` within `versions`, oldest first, or newest first if
+    /// `descending`, each a live object or the tombstone at which the object was deleted or
+    /// wrapped. Reads the table directly, so it sees only versions the writeback cache has
+    /// committed.
+    pub fn object_versions_iter(
+        &self,
+        object_id: ObjectID,
+        versions: RangeInclusive<SequenceNumber>,
+        descending: bool,
+    ) -> SuiResult<impl Iterator<Item = SuiResult<ObjectOrTombstone>> + '_> {
+        let low = ObjectKey(object_id, *versions.start());
+        let high = ObjectKey(object_id, *versions.end());
+        let rows = if descending {
+            self.objects
+                .reversed_safe_iter_with_bounds(Some(low), Some(high))?
+        } else {
+            self.objects.safe_range_iter(low..=high)
+        };
+        Ok(rows.map(|row| {
+            let (key, value) = row?;
+            if let Some(tombstone) = self.tombstone_reference(&key, &value)? {
+                return Ok(ObjectOrTombstone::Tombstone(tombstone));
+            }
+            let object = self
+                .object(&key, value)?
+                .expect("Non tombstone store object could not be converted to object");
+            Ok(ObjectOrTombstone::Object(object))
+        }))
+    }
+
     fn construct_object(
         &self,
         object_key: &ObjectKey,
@@ -1011,8 +1068,12 @@ fn effects_table_config(db_options: DBOptions) -> DBOptions {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::AuthorityPerpetualTablesOptions;
+pub(crate) mod tests {
+    use super::*;
+    #[cfg(not(tidehunter))]
+    use sui_types::base_types::SuiAddress;
+    #[cfg(not(tidehunter))]
+    use sui_types::object::Owner;
 
     #[test]
     fn objects_compactor_enabled_only_on_tidehunter() {
@@ -1022,5 +1083,67 @@ mod tests {
         assert_eq!(enabled(true, 2), cfg!(tidehunter));
         // Full nodes that retain old object versions keep the object pruner.
         assert!(!enabled(false, 2));
+    }
+
+    /// Version `version` of `id`, written by `previous_transaction`.
+    #[cfg(not(tidehunter))]
+    pub(crate) fn object_version(
+        id: ObjectID,
+        version: u64,
+        previous_transaction: TransactionDigest,
+    ) -> Object {
+        let mut object = Object::with_id_owner_version_for_testing(
+            id,
+            SequenceNumber::from_u64(version),
+            Owner::AddressOwner(SuiAddress::ZERO),
+        )
+        .into_inner();
+        object.previous_transaction = previous_transaction;
+        object.into()
+    }
+
+    /// Write `versions` of one object, oldest first, and range-delete all but the newest, as the
+    /// pruner does once the newest replaces them. The oldest is flushed to an SST file first; the
+    /// others share the range delete's memtable, so the flush after it drops them while the
+    /// oldest survives until compaction. The table's scans, which ignore range deletions, then
+    /// read the oldest for a bound between the second one and the newest. `flush_dir` is a
+    /// directory the two database checkpoints that flush the memtables are written under.
+    #[cfg(not(tidehunter))]
+    pub(crate) fn write_and_prune_all_but_newest(
+        tables: &AuthorityPerpetualTables,
+        flush_dir: &Path,
+        versions: &[Object],
+    ) {
+        let [oldest, rest @ ..] = versions else {
+            panic!("no versions to write");
+        };
+        let newest = rest.last().expect("one version cannot be pruned");
+        let insert = |object: &Object| {
+            tables
+                .objects
+                .insert(
+                    &ObjectKey(object.id(), object.version()),
+                    &get_store_object(object.clone()),
+                )
+                .unwrap();
+        };
+        // A database checkpoint flushes every column family's memtable; `DBMap::flush` flushes
+        // only the default one.
+        let flush = |name: &str| {
+            tables.objects.checkpoint_db(&flush_dir.join(name)).unwrap();
+        };
+        insert(oldest);
+        flush("first");
+        rest.iter().for_each(insert);
+        let mut batch = tables.objects.batch();
+        batch
+            .schedule_delete_range(
+                &tables.objects,
+                &ObjectKey(oldest.id(), oldest.version()),
+                &ObjectKey(newest.id(), newest.version()),
+            )
+            .unwrap();
+        batch.write().unwrap();
+        flush("second");
     }
 }
