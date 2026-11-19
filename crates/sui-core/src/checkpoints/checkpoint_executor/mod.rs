@@ -568,14 +568,32 @@ impl CheckpointExecutor {
                 .await;
         };
 
-        self.metrics.checkpoint_executor_validator_path.inc();
-
         // Check for fork
         assert_checkpoint_not_forked(
             &locally_built_checkpoint,
             &checkpoint,
             &self.checkpoint_store,
         );
+
+        // A crash between writing the locally computed summary and recording it in the epoch
+        // store leaves a summary that the builder has not yet rebuilt since restart. The state
+        // hash for it arrives only after the consensus handler reprocesses the commits that
+        // produce it, and backpressure can pause the handler until this checkpoint executes.
+        if self
+            .epoch_store
+            .get_built_checkpoint_summary(sequence_number)
+            .expect("db error")
+            .is_none()
+        {
+            self.metrics
+                .checkpoint_executor_validator_sync_fallback_path
+                .inc();
+            return self
+                .execute_transactions_from_synced_checkpoint(checkpoint, pipeline_handle)
+                .await;
+        }
+
+        self.metrics.checkpoint_executor_validator_path.inc();
 
         // Checkpoint builder triggers accumulation of the checkpoint, so this is guaranteed to finish.
         let state_hasher = {

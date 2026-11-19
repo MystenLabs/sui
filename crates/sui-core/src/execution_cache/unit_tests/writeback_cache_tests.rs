@@ -1379,3 +1379,69 @@ async fn test_get_consistent_latest_account_amount_race_with_pending_settlement(
     assert_eq!(version, v);
     assert_eq!(balance, expected_balance as u128);
 }
+
+fn set_byte_threshold_cache(s: &mut Scenario, threshold_bytes: u64) -> Arc<BackpressureManager> {
+    let mut config = ExecutionCacheConfig::default();
+    let ExecutionCacheConfig::WritebackCache {
+        backpressure_threshold_bytes,
+        ..
+    } = &mut config
+    else {
+        unreachable!("default config is a writeback cache");
+    };
+    *backpressure_threshold_bytes = Some(threshold_bytes);
+    let manager = BackpressureManager::new_for_tests();
+    s.cache = Arc::new(WritebackCache::new(
+        &config,
+        s.store.clone(),
+        s.cache.metrics.clone(),
+        manager.clone(),
+    ));
+    manager
+}
+
+#[tokio::test]
+async fn test_backpressure_on_pending_bytes() {
+    telemetry_subscribers::init_for_testing();
+    let mut s = Scenario::new(None, Arc::new(AtomicU32::new(0))).await;
+    let manager = set_byte_threshold_cache(&mut s, 1);
+    let subscriber = manager.subscribe();
+
+    s.with_created(&[1, 2]);
+    let tx = s.do_tx().await;
+    assert!(s.cache.dirty.pending_transaction_bytes() > 1);
+    assert!(subscriber.is_backpressure_active());
+
+    s.commit(tx).await.unwrap();
+    assert_eq!(s.cache.dirty.pending_transaction_bytes(), 0);
+    assert!(!subscriber.is_backpressure_active());
+}
+
+#[tokio::test]
+async fn test_no_backpressure_below_pending_bytes_threshold() {
+    telemetry_subscribers::init_for_testing();
+    let mut s = Scenario::new(None, Arc::new(AtomicU32::new(0))).await;
+    let manager = set_byte_threshold_cache(&mut s, u64::MAX);
+    let subscriber = manager.subscribe();
+
+    s.with_created(&[1, 2]);
+    s.do_tx().await;
+    assert!(s.cache.dirty.pending_transaction_bytes() > 0);
+    assert!(!subscriber.is_backpressure_active());
+}
+
+#[tokio::test]
+async fn test_backpressure_cleared_at_end_of_epoch() {
+    telemetry_subscribers::init_for_testing();
+    let mut s = Scenario::new(None, Arc::new(AtomicU32::new(0))).await;
+    let manager = set_byte_threshold_cache(&mut s, 1);
+    let subscriber = manager.subscribe();
+
+    s.with_created(&[1, 2]);
+    s.do_tx().await;
+    assert!(subscriber.is_backpressure_active());
+
+    s.clear_state_end_of_epoch();
+    assert_eq!(s.cache.dirty.pending_transaction_bytes(), 0);
+    assert!(!subscriber.is_backpressure_active());
+}
