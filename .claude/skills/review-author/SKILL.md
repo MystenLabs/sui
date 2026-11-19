@@ -170,6 +170,11 @@ If such a test is infeasible or unnecessary, write a short explanation of why. A
 deterministic simulation test reaches, or an optimization with no observable behavior change, are
 examples of acceptable explanations.
 
+For a test-only, CI, or harness change, distinguish product behavior from test discovery or helper
+behavior. If no standalone regression test is needed, name the harness behavior that changes, the
+relevant CI, layout, or targeted validation, and why an additional test is unnecessary. "No behavior
+changes" alone is not an explanation when a helper changes.
+
 Add a few bullets to the `## Test plan` section of the PR description. They name the regression
 test and the bug it reproduces, and say that the test failed with the fix reverted. If there is
 no regression test, they give the explanation instead.

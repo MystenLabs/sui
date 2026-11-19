@@ -114,6 +114,12 @@ Read the bullets in `## Test plan` and confirm one of these:
 - They explain why a regression test is infeasible or unnecessary, and the reason holds for this
   change.
 
+For test-only, CI, or harness changes, do not require a test solely because test discovery or a
+helper changes. Assess whether the specific exemption and CI, layout, or targeted validation address
+the concrete risk; an intentionally failing negative control may be valid evidence. If risk remains,
+state it and request a targeted test or a specific explanation. Do not list an accepted exemption
+as an unmet requirement.
+
 ### Tier 2
 
 - Confirm that new code has tests for its main behavior and its error paths.
