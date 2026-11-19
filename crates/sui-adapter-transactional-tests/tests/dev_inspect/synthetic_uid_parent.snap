@@ -1,0 +1,43 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+// Dev-inspect can build objects from BCS bytes. Their UIDs, including wrapped ones, can be dynamic
+// field parents.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-40:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1031000000, storage_cost: 7706400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 42-43:
+//# programmable --sender A --inputs struct(@0x1000000000000000000000000000000000000000000000000000000000001234,0) --dev-inspect
+//> 0: test::m::has_field(Input(0));
+mutated: object(_)
+gas summary: computation_cost: 500000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 45-46:
+//# programmable --sender A --inputs struct(@0x1000000000000000000000000000000000000000000000000000000000001234,0) --dev-inspect
+//> 0: test::m::add_field(Input(0));
+created: object(_)
+mutated: object(_)
+gas summary: computation_cost: 500000, storage_cost: 2454800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, lines 48-49:
+//# programmable --sender A --inputs struct(@0x1000000000000000000000000000000000000000000000000000000000001234,0) --dev-inspect
+//> 0: test::m::add_object_field(Input(0));
+created: object(_), object(_)
+mutated: object(_)
+gas summary: computation_cost: 500000, storage_cost: 4712000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 5, lines 51-52:
+//# programmable --sender A --inputs struct(@0x1000000000000000000000000000000000000000000000000000000000001234,struct(@0x1000000000000000000000000000000000000000000000000000000000005678,0)) --dev-inspect
+//> 0: test::m::inner_add_field(Input(0));
+created: object(_)
+mutated: object(_)
+gas summary: computation_cost: 500000, storage_cost: 2454800,  storage_rebate: 0, non_refundable_storage_fee: 0

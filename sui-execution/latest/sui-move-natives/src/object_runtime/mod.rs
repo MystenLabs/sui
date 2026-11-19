@@ -686,6 +686,17 @@ impl<'a> ObjectRuntime<'a> {
         Ok(())
     }
 
+    /// WARNING! Only for values built from bytes, which only dev inspect with checks disabled
+    /// allows. Recording a UID exempts it from the parent check, and its dynamic fields are read at
+    /// the latest version in storage.
+    pub fn record_synthetic_uids_for_arbitrary_values(
+        &mut self,
+        ids: impl IntoIterator<Item = ObjectID>,
+    ) {
+        self.child_object_store
+            .record_synthetic_uids_for_arbitrary_values(ids)
+    }
+
     /// Fails if `parent` has no root version and is not new, meaning a UID was missed when walking
     /// the objects read from storage. System objects are exempt, since their hard-coded UIDs are
     /// never marked as new.

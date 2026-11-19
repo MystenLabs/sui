@@ -439,6 +439,13 @@ mod parent_checks {
     }
 
     #[test]
+    fn synthetic_uid_parent_is_allowed() {
+        let p = random_id();
+        assert!(parent_allowed(vec![], p, |rt| rt
+            .record_synthetic_uids_for_arbitrary_values([p])));
+    }
+
+    #[test]
     fn system_object_parent_is_allowed() {
         assert!(parent_allowed(
             vec![],

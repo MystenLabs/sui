@@ -866,6 +866,17 @@ where
             } => {
                 if local.is_invalid()? {
                     let v = load_pure_value(self.gas_meter, self.env, bytes, metadata)?;
+                    if Mode::allow_arbitrary_values() {
+                        let layout = self.env.fully_annotated_layout(&metadata.ty)?;
+                        let uids = object_runtime::walk_contents(&layout, bytes, false)
+                            .map_err(|e| {
+                                make_invariant_violation!(
+                                    "Unable to find UIDs in a pure value: {e}"
+                                )
+                            })?
+                            .uids;
+                        object_runtime_mut!(self)?.record_synthetic_uids_for_arbitrary_values(uids);
+                    }
                     local.store(v)?;
                 }
                 local
