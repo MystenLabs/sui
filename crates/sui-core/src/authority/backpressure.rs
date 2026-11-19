@@ -14,14 +14,19 @@ use crate::checkpoints::CheckpointStore;
 struct Watermarks {
     executed: CheckpointSequenceNumber,
     certified: CheckpointSequenceNumber,
+    verified: CheckpointSequenceNumber,
 }
 
 impl Watermarks {
-    // we can only permit backpressure if the certified checkpoint is ahead of the executed
+    // We can only permit backpressure if a certified checkpoint is ahead of the executed
     // checkpoint. Otherwise, backpressure might prevent construction of the next checkpoint,
     // because it could stop consensus commits from being processed.
+    //
+    // A verified checkpoint summary ahead of the executed checkpoint also counts: the rest of
+    // the committee has already certified it, so state sync can download its contents and the
+    // checkpoint executor can execute it without this node processing more consensus commits.
     fn should_suppress_backpressure(&self) -> bool {
-        self.certified <= self.executed
+        self.certified.max(self.verified) <= self.executed
     }
 }
 
@@ -66,15 +71,32 @@ impl BackpressureManager {
             .get_highest_synced_checkpoint_seq_number()
             .expect("read cannot fail")
             .unwrap_or_default();
+        let mut verified_rx = store.subscribe_highest_verified_checkpoint();
+        let verified = *verified_rx.borrow_and_update();
         info!(
             ?executed,
             ?certified,
+            ?verified,
             "initializing backpressure manager from checkpoint store"
         );
-        Self::new_from_watermarks(Watermarks {
+        let manager = Self::new_from_watermarks(Watermarks {
             executed,
             certified,
-        })
+            verified,
+        });
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            let weak = Arc::downgrade(&manager);
+            handle.spawn(async move {
+                while verified_rx.changed().await.is_ok() {
+                    let seq = *verified_rx.borrow_and_update();
+                    let Some(manager) = weak.upgrade() else {
+                        return;
+                    };
+                    manager.update_highest_verified_checkpoint(seq);
+                }
+            });
+        }
+        manager
     }
 
     pub fn update_highest_certified_checkpoint(&self, seq: CheckpointSequenceNumber) {
@@ -82,6 +104,18 @@ impl BackpressureManager {
             if seq > watermarks.certified {
                 watermarks.certified = seq;
                 debug!(?watermarks, "updating highest certified checkpoint");
+                true
+            } else {
+                false
+            }
+        });
+    }
+
+    pub fn update_highest_verified_checkpoint(&self, seq: CheckpointSequenceNumber) {
+        self.watermarks_sender.send_if_modified(|watermarks| {
+            if seq > watermarks.verified {
+                watermarks.verified = seq;
+                debug!(?watermarks, "updating highest verified checkpoint");
                 true
             } else {
                 false
@@ -196,6 +230,25 @@ mod tests {
         let subscriber = manager.subscribe();
 
         // backpressure should be suppressed because of watermarks.
+        subscriber.await_no_backpressure().now_or_never().unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_backpressure_applies_when_verified_ahead() {
+        let manager = Arc::new(BackpressureManager::new_for_tests());
+
+        // A verified summary ahead of the executed checkpoint means the rest of the committee
+        // has certified it, so backpressure is not suppressed.
+        manager.update_highest_verified_checkpoint(5);
+        manager.set_backpressure(true);
+
+        let subscriber = manager.subscribe();
+        assert!(subscriber.await_no_backpressure().now_or_never().is_none());
+
+        // Once execution catches up to the verified checkpoint, backpressure is suppressed again.
+        for seq in 1..=5 {
+            manager.update_highest_executed_checkpoint(seq);
+        }
         subscriber.await_no_backpressure().now_or_never().unwrap();
     }
 

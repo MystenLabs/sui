@@ -699,6 +699,10 @@ pub enum ExecutionCacheConfig {
         /// Number of uncommitted transactions at which to pause consensus handler.
         backpressure_threshold: Option<u64>,
 
+        /// Approximate size in bytes of uncommitted transaction outputs at which to pause
+        /// consensus handler. Defaults to 8 GiB.
+        backpressure_threshold_bytes: Option<u64>,
+
         /// Number of uncommitted transactions at which to refuse new transaction
         /// submissions. Defaults to backpressure_threshold if unset.
         backpressure_threshold_for_rpc: Option<u64>,
@@ -710,6 +714,7 @@ impl Default for ExecutionCacheConfig {
         ExecutionCacheConfig::WritebackCache {
             max_cache_size: None,
             backpressure_threshold: None,
+            backpressure_threshold_bytes: None,
             backpressure_threshold_for_rpc: None,
             package_cache_size: None,
             object_cache_size: None,
@@ -859,6 +864,19 @@ impl ExecutionCacheConfig {
                     backpressure_threshold,
                     ..
                 } => backpressure_threshold.unwrap_or(100_000),
+            })
+    }
+
+    pub fn backpressure_threshold_bytes(&self) -> u64 {
+        std::env::var("SUI_BACKPRESSURE_THRESHOLD_BYTES")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    backpressure_threshold_bytes,
+                    ..
+                } => backpressure_threshold_bytes.unwrap_or(8 << 30),
             })
     }
 

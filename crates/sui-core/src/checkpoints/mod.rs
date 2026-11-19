@@ -379,6 +379,7 @@ pub struct CheckpointStore {
     pub(crate) tables: CheckpointStoreTables,
     synced_checkpoint_notify_read: NotifyRead<CheckpointSequenceNumber, VerifiedCheckpoint>,
     executed_checkpoint_notify_read: NotifyRead<CheckpointSequenceNumber, VerifiedCheckpoint>,
+    highest_verified_checkpoint_tx: watch::Sender<CheckpointSequenceNumber>,
     /// The running binary's version, set once at node startup. Embedded in fork markers so
     /// recovery can refuse to clear a fork with the same binary version that produced it.
     binary_version: OnceLock<String>,
@@ -387,10 +388,21 @@ pub struct CheckpointStore {
 impl CheckpointStore {
     pub fn new(path: &Path, pruner_watermarks: Arc<PrunerWatermarks>) -> Arc<Self> {
         let tables = CheckpointStoreTables::new(path, "checkpoint", pruner_watermarks);
+        Self::from_tables(tables)
+    }
+
+    fn from_tables(tables: CheckpointStoreTables) -> Arc<Self> {
+        let highest_verified = tables
+            .watermarks
+            .get(&CheckpointWatermark::HighestVerified)
+            .expect("db error")
+            .map(|(seq, _)| seq)
+            .unwrap_or_default();
         Arc::new(Self {
             tables,
             synced_checkpoint_notify_read: NotifyRead::new(),
             executed_checkpoint_notify_read: NotifyRead::new(),
+            highest_verified_checkpoint_tx: watch::channel(highest_verified).0,
             binary_version: OnceLock::new(),
         })
     }
@@ -406,12 +418,15 @@ impl CheckpointStore {
             "db_checkpoint",
             Arc::new(PrunerWatermarks::default()),
         );
-        Arc::new(Self {
-            tables,
-            synced_checkpoint_notify_read: NotifyRead::new(),
-            executed_checkpoint_notify_read: NotifyRead::new(),
-            binary_version: OnceLock::new(),
-        })
+        Self::from_tables(tables)
+    }
+
+    /// Watches the sequence number of the highest checkpoint whose summary is verified, which
+    /// can run ahead of the checkpoints whose contents are synced or executed.
+    pub fn subscribe_highest_verified_checkpoint(
+        &self,
+    ) -> watch::Receiver<CheckpointSequenceNumber> {
+        self.highest_verified_checkpoint_tx.subscribe()
     }
 
     pub fn set_binary_version(&self, version: &str) {
@@ -885,6 +900,15 @@ impl CheckpointStore {
                 &CheckpointWatermark::HighestVerified,
                 &(*checkpoint.sequence_number(), *checkpoint.digest()),
             )?;
+            self.highest_verified_checkpoint_tx
+                .send_if_modified(|highest| {
+                    if *checkpoint.sequence_number() > *highest {
+                        *highest = *checkpoint.sequence_number();
+                        true
+                    } else {
+                        false
+                    }
+                });
         }
 
         Ok(())
