@@ -150,6 +150,9 @@ pub struct ObjectRuntime<'a> {
     clock: Option<GlobalValue>,
     // inventories for test scenario
     pub(crate) test_inventories: TestInventories,
+    /// Set once a test scenario ends a transaction, which clears `new_ids` but keeps the child
+    /// objects.
+    pub(crate) test_scenario_reset: bool,
     // the internal state
     pub(crate) state: ObjectRuntimeState,
     // whether or not this TX is gas metered
@@ -205,7 +208,7 @@ impl<'a> ObjectRuntime<'a> {
         metrics: Arc<ExecutionMetrics>,
         epoch_id: EpochId,
         track_balances: bool,
-    ) -> Self {
+    ) -> PartialVMResult<Self> {
         let mut input_object_owners = BTreeMap::new();
         let mut root_version = BTreeMap::new();
         let mut wrapped_object_containers = BTreeMap::new();
@@ -218,7 +221,12 @@ impl<'a> ObjectRuntime<'a> {
                 owner,
             } = input_object;
             input_object_owners.insert(id, owner);
-            debug_assert!(contained_uids.contains(&id));
+            if !contained_uids.contains(&id) {
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Input {id} does not contain its own UID"
+                ));
+            }
             if let Some(before) = &mut balances_before {
                 before.record(
                     id,
@@ -229,14 +237,25 @@ impl<'a> ObjectRuntime<'a> {
                 );
             }
             for contained_uid in contained_uids {
-                root_version.insert(contained_uid, version);
+                let prev = root_version.insert(contained_uid, version);
+                if prev.is_some() {
+                    return Err(partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "UID {contained_uid} found in more than one input"
+                    ));
+                }
                 if contained_uid != id {
                     let prev = wrapped_object_containers.insert(contained_uid, id);
-                    debug_assert!(prev.is_none());
+                    if let Some(prev) = prev {
+                        return Err(partial_vm_error!(
+                            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                            "UID {contained_uid} found in both inputs {prev} and {id}"
+                        ));
+                    }
                 }
             }
         }
-        Self {
+        Ok(Self {
             child_object_store: ChildObjectStore::new(
                 object_resolver,
                 root_version,
@@ -250,6 +269,7 @@ impl<'a> ObjectRuntime<'a> {
             system_object_resolver,
             clock: None,
             test_inventories: TestInventories::new(),
+            test_scenario_reset: false,
             state: ObjectRuntimeState {
                 input_objects: input_object_owners,
                 new_ids: Set::new(),
@@ -270,7 +290,7 @@ impl<'a> ObjectRuntime<'a> {
             is_metered,
             protocol_config,
             metrics,
-        }
+        })
     }
 
     pub fn borrow_clock(&mut self, layout: &R::MoveTypeLayout) -> PartialVMResult<Value> {
@@ -666,11 +686,29 @@ impl<'a> ObjectRuntime<'a> {
         Ok(())
     }
 
+    /// Fails if `parent` has no root version and is not new, meaning a UID was missed when walking
+    /// the objects read from storage. System objects are exempt, since their hard-coded UIDs are
+    /// never marked as new.
+    fn check_parent_is_tracked(&self, parent: ObjectID) -> PartialVMResult<()> {
+        if !self.test_scenario_reset
+            && !parent.is_system_object()
+            && !self.child_object_store.has_root_version(&parent)
+            && !self.state.new_ids.contains(&parent)
+        {
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Parent {parent} has no root version and is not new"
+            ));
+        }
+        Ok(())
+    }
+
     pub(crate) fn child_object_exists(
         &mut self,
         parent: ObjectID,
         child: ObjectID,
     ) -> PartialVMResult<CacheMetadata<bool>> {
+        self.check_parent_is_tracked(parent)?;
         self.child_object_store.object_exists(parent, child)
     }
 
@@ -680,6 +718,7 @@ impl<'a> ObjectRuntime<'a> {
         child: ObjectID,
         child_type: &MoveObjectType,
     ) -> PartialVMResult<CacheMetadata<bool>> {
+        self.check_parent_is_tracked(parent)?;
         self.child_object_store
             .object_exists_and_has_type(parent, child, child_type)
     }
@@ -735,6 +774,7 @@ impl<'a> ObjectRuntime<'a> {
         child_fully_annotated_layout: &MoveTypeLayout,
         child_move_type: MoveObjectType,
     ) -> PartialVMResult<ObjectResult<CacheMetadata<&mut GlobalValue>>> {
+        self.check_parent_is_tracked(parent)?;
         let res = self.child_object_store.get_or_fetch_object(
             parent,
             child,

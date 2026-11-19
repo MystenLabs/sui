@@ -519,7 +519,13 @@ async fn test_dev_inspect_unowned_object() {
     assert!(return_values.is_empty());
 }
 
-#[sim_test]
+// Objects built from bytes have UIDs that were never read or created, so using one as a dynamic
+// field parent is an invariant violation, which panics in debug builds.
+#[tokio::test]
+#[cfg_attr(
+    debug_assertions,
+    should_panic(expected = "has no root version and is not new")
+)]
 async fn test_dev_inspect_dynamic_field() {
     let (test_object1_bytes, test_object2_bytes) = {
         let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
@@ -591,19 +597,16 @@ async fn test_dev_inspect_dynamic_field() {
         TransactionChecks::Disabled,
     )
     .unwrap();
-    // produces an error
     let err = sim.execution_result.unwrap_err().to_string();
     assert!(
-        err.contains("kind: CircularObjectOwnership"),
+        err.contains("has no root version and is not new"),
         "unexpected error: {}",
         err
     );
 
     // add a dynamic field to an object
     let SimulateTransactionResult {
-        effects,
-        execution_result,
-        ..
+        execution_result, ..
     } = call_dev_inspect(
         &fullnode,
         &sender,
@@ -618,18 +621,12 @@ async fn test_dev_inspect_dynamic_field() {
     )
     .await
     .unwrap();
-    let mut results = execution_result.unwrap();
-    assert_eq!(effects.created().len(), 1);
-    // random gas is mutated
-    assert_eq!(effects.mutated().len(), 1);
-    // nothing is deleted
-    assert!(effects.deleted().is_empty());
-    assert!(effects.gas_cost_summary().computation_cost > 0);
-    assert_eq!(results.len(), 1);
-    let exec_results = results.pop().unwrap();
-    let (mutable_reference_outputs, return_values) = exec_results;
-    assert_eq!(mutable_reference_outputs.len(), 1);
-    assert!(return_values.is_empty());
+    let err = execution_result.unwrap_err().to_string();
+    assert!(
+        err.contains("has no root version and is not new"),
+        "unexpected error: {}",
+        err
+    );
 }
 
 #[sim_test]

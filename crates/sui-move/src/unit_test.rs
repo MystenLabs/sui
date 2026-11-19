@@ -221,16 +221,19 @@ impl VMTestSetup for SuiVMTestSetup {
         let metrics = Arc::new(ExecutionMetrics::new(&registry));
 
         let protocol_config = builder.protocol_config;
-        ext.add(ObjectRuntime::new(
-            &builder.store,
-            &builder.store,
-            BTreeMap::new(),
-            false,
-            protocol_config,
-            metrics,
-            0, // epoch id
-            false,
-        ));
+        ext.add(
+            ObjectRuntime::new(
+                &builder.store,
+                &builder.store,
+                BTreeMap::new(),
+                false,
+                protocol_config,
+                metrics,
+                0, // epoch id
+                false,
+            )
+            .expect("No inputs to validate"),
+        );
         ext.add(NativesCostTable::from_protocol_config(protocol_config));
         ext.add(ScratchRuntime::new(protocol_config));
         let tx_context = TxContext::new_from_components(

@@ -30,6 +30,8 @@ pub(crate) struct ObjectData<'a> {
     pub results: &'a ExecutionResultsV2,
 }
 
+/// Fails if an object is written or deleted without being read or created, since its UID was then
+/// missed when walking the objects read.
 pub(crate) fn finish(
     before: BalanceTotals,
     after: BalanceTotals,
@@ -43,6 +45,25 @@ pub(crate) fn finish(
         generated_ids,
         results,
     } = objects;
+    let mut seen: BTreeSet<ObjectID> = inputs.iter().map(|(id, _)| *id).collect();
+    seen.extend(
+        contained_uids
+            .iter()
+            .chain(&loaded_runtime_objects)
+            .chain(&generated_ids),
+    );
+    let unseen = results
+        .written_objects
+        .iter()
+        .filter(|(_, object)| !object.is_package())
+        .map(|(id, _)| id)
+        .chain(&results.deleted_object_ids)
+        .find(|id| !seen.contains(id));
+    if let Some(id) = unseen {
+        return Err(make_invariant_violation!(
+            "Object {id} was written or deleted without being read or created"
+        ));
+    }
     let mut addresses: BTreeSet<SuiAddress> = transaction_addresses.into_iter().collect();
     let mut packages = BTreeSet::new();
     for (id, owner) in &inputs {
