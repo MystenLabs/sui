@@ -172,7 +172,7 @@ const DEFAULT_SIGNAL_BANDS: [SignalBand; NUM_SIGNAL_BANDS] = [
 /// below the active band's exit ratio, or the window stays low-volume, for
 /// `exit_dwell_commits` consecutive commits. This wait is the exit dwell. The signal
 /// then drops to the highest band whose exit ratio the ratio still meets, or to off. A
-/// low-volume window always drops it to off.
+/// dwell that ends on a low-volume window drops it to off.
 ///
 /// The inputs come from the commit history and the protocol config, so all validators
 /// compute the same level. A restarted validator starts at level 0. It catches up
