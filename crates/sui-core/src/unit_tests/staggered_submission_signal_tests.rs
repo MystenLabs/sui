@@ -20,10 +20,24 @@ use crate::{
     },
 };
 
+/// Sets up a handler without the copies floor, so that a few copies can move the signal.
 async fn setup(
     gas_price: u64,
     proposer_epoch: Option<u64>,
     defer_unpaid_amplification: bool,
+) -> (
+    Arc<AuthorityState>,
+    TestConsensusHandlerSetup<CheckpointServiceNoop>,
+    ConsensusTransaction,
+) {
+    setup_with_min_copies_per_commit(gas_price, proposer_epoch, defer_unpaid_amplification, 0).await
+}
+
+async fn setup_with_min_copies_per_commit(
+    gas_price: u64,
+    proposer_epoch: Option<u64>,
+    defer_unpaid_amplification: bool,
+    min_copies_per_commit: u64,
 ) -> (
     Arc<AuthorityState>,
     TestConsensusHandlerSetup<CheckpointServiceNoop>,
@@ -35,6 +49,7 @@ async fn setup(
     config.set_allowed_proposers_for_testing(true);
     config.set_staggered_submission_signal_for_testing(true);
     config.set_defer_unpaid_amplification_for_testing(defer_unpaid_amplification);
+    config.set_staggered_submission_signal_min_copies_per_commit_for_testing(min_copies_per_commit);
     let state = TestAuthorityBuilder::new()
         .with_starting_objects(std::slice::from_ref(&gas))
         .with_reference_gas_price(1)
@@ -118,27 +133,73 @@ async fn cross_commit_copies_share_one_free_or_paid_allowance() {
 #[tokio::test]
 async fn late_copies_activate_band_two() {
     let (state, mut setup, transaction) = setup(1, None, false).await;
+    let epoch_store = state.epoch_store_for_testing();
+    let min_excess_copies = epoch_store
+        .staggered_submission()
+        .config()
+        .min_excess_copies;
     commit_copies(&mut setup, &transaction, 1, 1).await;
     assert_eq!(setup.metrics.staggered_submission_active.get(), 0);
 
-    // The first commit used one of the three free copies. Two remain, so 600 of
-    // these copies are excess.
-    commit_copies(&mut setup, &transaction, 2, 602).await;
+    // The first commit used one of the three free copies. Two remain, so all but two
+    // of these copies are excess.
+    commit_copies(&mut setup, &transaction, 2, min_excess_copies as usize + 2).await;
     assert_eq!(
         setup
             .metrics
             .staggered_submission_excess_copies
             .get_sample_sum(),
-        600.0,
+        min_excess_copies as f64,
     );
     assert_eq!(setup.metrics.staggered_submission_signal_band.get(), 2);
     assert_eq!(setup.metrics.staggered_submission_active.get(), 1);
-    assert!(
-        state
-            .epoch_store_for_testing()
-            .staggered_submission()
-            .is_active()
+    assert!(epoch_store.staggered_submission().is_active());
+}
+
+#[tokio::test]
+async fn copies_floor_delays_activation_until_the_window_has_enough_copies() {
+    let min_copies_per_commit = 3;
+    let (state, mut setup, transaction) =
+        setup_with_min_copies_per_commit(1, None, false, min_copies_per_commit).await;
+    let epoch_store = state.epoch_store_for_testing();
+    let config = epoch_store.staggered_submission().config().clone();
+    assert_eq!(
+        config.min_copies,
+        min_copies_per_commit
+            * epoch_store
+                .protocol_config()
+                .staggered_submission_signal_window_commits()
     );
+
+    // The excess copies pass the excess floor and band 2's ratio. The window holds
+    // three more copies than that, which is below the copies floor.
+    commit_copies(&mut setup, &transaction, 1, 1).await;
+    commit_copies(
+        &mut setup,
+        &transaction,
+        2,
+        config.min_excess_copies as usize + 2,
+    )
+    .await;
+    assert_eq!(
+        setup
+            .metrics
+            .staggered_submission_excess_copies
+            .get_sample_sum(),
+        config.min_excess_copies as f64,
+    );
+    assert_eq!(setup.metrics.staggered_submission_signal_band.get(), 0);
+    assert_eq!(setup.metrics.staggered_submission_active.get(), 0);
+
+    // The first copy and the two free duplicates count towards the copies floor.
+    let window_copies = config.min_excess_copies + 3;
+    assert!(window_copies < config.min_copies);
+    let missing = (config.min_copies - window_copies) as usize;
+    commit_copies(&mut setup, &transaction, 3, missing - 1).await;
+    assert_eq!(setup.metrics.staggered_submission_signal_band.get(), 0);
+    commit_copies(&mut setup, &transaction, 4, 1).await;
+    assert_eq!(setup.metrics.staggered_submission_signal_band.get(), 2);
+    assert_eq!(setup.metrics.staggered_submission_active.get(), 1);
 }
 
 #[tokio::test]

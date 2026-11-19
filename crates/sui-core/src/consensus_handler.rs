@@ -950,9 +950,11 @@ struct StaggeringCommitCounts {
     excess_copies: u64,
     /// The number of distinct user transactions. This is the signal's denominator.
     unique_user_txns: u64,
-    /// Duplicates the transaction paid for. The signal ignores them.
+    /// Duplicates the transaction paid for. The signal's ratio ignores them. They
+    /// count towards its copies floor.
     paid_duplicate_copies: u64,
-    /// Duplicates of transactions that restrict their proposers. The signal ignores them.
+    /// Duplicates of transactions that restrict their proposers. The signal's ratio
+    /// ignores them. They count towards its copies floor.
     restricted_duplicate_copies: u64,
 }
 
@@ -965,6 +967,14 @@ impl StaggeringCommitCounts {
             ("paid_duplicate", self.paid_duplicate_copies),
             ("restricted_duplicate", self.restricted_duplicate_copies),
         ]
+    }
+
+    /// Every user transaction copy in the commit: first copies and all duplicates.
+    fn copies(&self) -> u64 {
+        self.unique_user_txns
+            + self.excess_copies
+            + self.paid_duplicate_copies
+            + self.restricted_duplicate_copies
     }
 }
 
@@ -1895,6 +1905,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let outcome = staggered.record_commit(
             state.staggering_counts.excess_copies,
             state.staggering_counts.unique_user_txns,
+            state.staggering_counts.copies(),
         );
         let transition = outcome.transition;
         self.metrics
