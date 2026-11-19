@@ -2988,7 +2988,7 @@ async fn build_http_servers(
             build_validator_rpc_router(state, store, config, prometheus_registry, server_version)
                 .await;
         return Ok((
-            serve_rpc_router(config, rpc_router)?,
+            serve_rpc_router(config, rpc_config.http_address, rpc_router)?,
             None,
             Some(locally_built_checkpoint_sender),
         ));
@@ -3062,15 +3062,19 @@ async fn build_http_servers(
     };
 
     Ok((
-        serve_rpc_router(config, rpc_router)?,
+        serve_rpc_router(config, Some(config.json_rpc_address), rpc_router)?,
         Some(subscription_service_checkpoint_sender),
         None,
     ))
 }
 
-/// Serves `rpc_router` over plain HTTP on `json-rpc-address`, and over TLS on
-/// `rpc.https-address` when `rpc.tls` is set.
-fn serve_rpc_router(config: &NodeConfig, rpc_router: axum::Router) -> Result<HttpServers> {
+/// Serves `rpc_router` over plain HTTP on `http_address` when it is given, and
+/// over TLS on `rpc.https-address` when `rpc.tls` is set.
+fn serve_rpc_router(
+    config: &NodeConfig,
+    http_address: Option<std::net::SocketAddr>,
+    rpc_router: axum::Router,
+) -> Result<HttpServers> {
     let router = with_rpc_http_layers(rpc_router);
     let server_config = rpc_server_config(config);
 
@@ -3096,21 +3100,24 @@ fn serve_rpc_router(config: &NodeConfig, rpc_router: axum::Router) -> Result<Htt
         None
     };
 
-    let http = sui_http::Builder::new()
-        .config(server_config)
-        .serve(&config.json_rpc_address, router)
-        .map_err(|e| anyhow::anyhow!(e))?;
+    let http = http_address
+        .map(|http_address| -> Result<_> {
+            let http = sui_http::Builder::new()
+                .config(server_config)
+                .serve(http_address, router)
+                .map_err(|e| anyhow::anyhow!(e))?;
 
-    info!(
-        http_address =? http.local_addr(),
-        "HTTP rpc server listening on {}",
-        http.local_addr()
-    );
+            info!(
+                http_address =? http.local_addr(),
+                "HTTP rpc server listening on {}",
+                http.local_addr()
+            );
 
-    Ok(HttpServers {
-        http: Some(http),
-        https,
-    })
+            Ok(http)
+        })
+        .transpose()?;
+
+    Ok(HttpServers { http, https })
 }
 
 /// Builds the RPC router a validator serves, which streams each checkpoint as

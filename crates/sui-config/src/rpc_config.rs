@@ -19,6 +19,13 @@ pub struct RpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enable_indexing: Option<bool>,
 
+    /// Address to listen on for plaintext gRPC on a validator with
+    /// `enable-validator-rpc` set. Unset, the validator serves no plaintext.
+    ///
+    /// Not allowed on fullnodes, which serve plaintext on `json-rpc-address`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub http_address: Option<SocketAddr>,
+
     /// Configure the address to listen on for https
     ///
     /// Defaults to `0.0.0.0:9443` if not specified.
@@ -125,13 +132,11 @@ pub struct RpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grpc_timeout_ms: Option<u64>,
 
-    /// Serve gRPC from a validator, without rpc indexes, on the listeners a
-    /// fullnode uses: plaintext on `json-rpc-address`, and TLS on
-    /// `https-address` when `tls` is set. Every validator config carries a
-    /// `json-rpc-address` (default `0.0.0.0:9000`) that nothing binds until
-    /// this is set, so check it before enabling. When clients connect over
-    /// networks the operator does not control, set `tls` and bind
-    /// `json-rpc-address` to `127.0.0.1`.
+    /// Serve gRPC from a validator, without rpc indexes: plaintext on
+    /// `http-address` when it is set, and TLS on `https-address` when `tls` is
+    /// set. At least one of the two is required. When clients connect over
+    /// networks the operator does not control, set `tls` and either leave
+    /// `http-address` unset or bind it to `127.0.0.1`.
     ///
     /// A request names the least settled data it accepts in the
     /// `x-sui-finality-level` header. Served today:
@@ -237,6 +242,18 @@ impl RpcConfig {
     /// Validate cross-field invariants. Call once at startup to fail fast on a
     /// misconfiguration rather than surfacing it per-request.
     pub fn validate(&self) -> anyhow::Result<()> {
+        if self.enable_validator_rpc() {
+            anyhow::ensure!(
+                self.http_address.is_some() || self.tls.is_some(),
+                "rpc.enable-validator-rpc needs rpc.http-address, rpc.tls, or both"
+            );
+        } else {
+            anyhow::ensure!(
+                self.http_address.is_none(),
+                "rpc.http-address applies only with rpc.enable-validator-rpc; \
+                 fullnodes serve plaintext on json-rpc-address"
+            );
+        }
         self.ledger_history().validate()
     }
 
@@ -423,6 +440,43 @@ mod connection_lifecycle_tests {
         assert_eq!(config.max_connection_age(), Some(Duration::from_secs(60)));
         assert_eq!(config.max_connection_age_grace(), Duration::from_secs(5));
         assert_eq!(config.grpc_timeout(), Some(Duration::from_millis(1_500)));
+    }
+}
+
+#[cfg(test)]
+mod validator_rpc_tests {
+    use super::*;
+
+    #[test]
+    fn validator_rpc_needs_a_listener_and_http_address_needs_validator_rpc() {
+        let address = SocketAddr::from(([127, 0, 0, 1], 9000));
+        let tls = RpcTlsConfig {
+            cert: "cert.pem".to_owned(),
+            key: "key.pem".to_owned(),
+        };
+        let config = |enable, http_address, tls| RpcConfig {
+            enable_validator_rpc: enable,
+            http_address,
+            tls,
+            ..Default::default()
+        };
+
+        assert!(config(Some(true), None, None).validate().is_err());
+        assert!(config(Some(true), Some(address), None).validate().is_ok());
+        assert!(
+            config(Some(true), None, Some(tls.clone()))
+                .validate()
+                .is_ok()
+        );
+        assert!(
+            config(Some(true), Some(address), Some(tls.clone()))
+                .validate()
+                .is_ok()
+        );
+
+        assert!(config(None, Some(address), None).validate().is_err());
+        assert!(config(Some(false), Some(address), None).validate().is_err());
+        assert!(config(None, None, Some(tls)).validate().is_ok());
     }
 }
 
