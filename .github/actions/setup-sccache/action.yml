@@ -7,6 +7,12 @@ description: >
   On Linux runners: installs upstream mold and configures RUSTFLAGS to use it.
   On any runner: configures sccache with S3 backend (graceful degradation if
   AWS credentials are empty, e.g. fork PRs).
+  On any runner: limits dev-profile debuginfo (inherited by test and simulator)
+  to `limited`, and drops it for the RocksDB C++ build. Full debuginfo made test
+  binaries about 1 GiB each, and linking them dominated CI build time. To restore
+  it, pass `--config profile.dev.debug=true --config
+  profile.dev.package.librocksdb-sys.debug=true` after the cargo subcommand, or
+  set the matching CARGO_PROFILE_* env vars for tools that start cargo themselves.
 
 inputs:
   aws-access-key-id:
@@ -137,3 +143,13 @@ runs:
       if: steps.sccache.outcome == 'success'
       shell: bash
       run: echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+
+    # Cargo reads .cargo/config.toml in every ancestor of its working directory, so this file in
+    # the checkout's parent applies below the repo's own config. CARGO_PROFILE_* env vars would
+    # also work, but sccache hashes every CARGO_* env var, which would change release cache keys.
+    # Build scripts get DEBUG=true for any debuginfo level, so cc-built C++ needs `debug = false`.
+    - name: Limit debuginfo
+      shell: bash
+      run: |
+        mkdir -p ../.cargo
+        printf '[profile.dev]\ndebug = "limited"\n\n[profile.dev.package.librocksdb-sys]\ndebug = false\n' > ../.cargo/config.toml

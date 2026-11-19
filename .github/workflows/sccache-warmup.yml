@@ -73,7 +73,11 @@ jobs:
           [ -f ~/.cargo/env ] && source ~/.cargo/env
           cargo build --release
           cargo build --release --features tracing --bin sui
-          cargo build --profile=dev --bin sui --features tracing
+          debug_flags=""
+          if [ "$RUNNER_OS" = Linux ]; then
+            debug_flags="--config profile.dev.debug=true --config profile.dev.package.librocksdb-sys.debug=true"
+          fi
+          cargo build --profile=dev --bin sui --features tracing $debug_flags
 
       # Windows: all-features build (matches rust.yml windows-build job)
       - name: Build with all features (Windows)

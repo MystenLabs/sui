@@ -348,7 +348,6 @@ opt-level = 2
 
 [profile.simulator]
 inherits = "test"
-debug = true
 debug-assertions = true
 overflow-checks = true
 # opt-level 1 gives >5x speedup for simulator tests without slowing down build times very much.
