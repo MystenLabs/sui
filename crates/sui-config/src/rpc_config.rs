@@ -142,8 +142,9 @@ pub struct RpcConfig {
     ///
     /// A method requested at a level it is not served at is refused with
     /// `UNIMPLEMENTED` / `NOT_SERVED_HERE` (`uncertified_live_state`), and
-    /// every other method with `UNIMPLEMENTED`, with `NOT_SERVED_HERE`
-    /// (`no_rpc_indexes`) if the method needs rpc indexes.
+    /// every other `sui.rpc` method with `UNIMPLEMENTED` / `NOT_SERVED_HERE`
+    /// (`no_rpc_indexes`). `TransactionExecutionService` is not mounted, so
+    /// its methods get a bare `UNIMPLEMENTED`.
     ///
     /// The full design adds `ordered` streams of transactions as soon as
     /// consensus assigns them a checkpoint, before execution; `executed`
