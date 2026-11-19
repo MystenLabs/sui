@@ -6,6 +6,7 @@ use std::str::FromStr;
 
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::EncodeDecodeBase64;
+use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 use sui_keys::key_derive::generate_new_key;
 use tempfile::TempDir;
 
@@ -13,7 +14,7 @@ use sui_keys::keystore::{
     ALIASES_FILE_EXTENSION, AccountKeystore, Alias, FileBasedKeystore, GenerateOptions,
     GeneratedKey, InMemKeystore, Keystore,
 };
-use sui_types::crypto::{DefaultHash, SignatureScheme, SuiSignatureInner};
+use sui_types::crypto::{DefaultHash, SignatureScheme, SuiSignature, SuiSignatureInner};
 use sui_types::{
     base_types::{SUI_ADDRESS_LENGTH, SuiAddress},
     crypto::Ed25519SuiSignature,
@@ -442,4 +443,44 @@ async fn mldsa65_mnemonic_derivation() -> Result<(), anyhow::Error> {
     }
 
     Ok(())
+}
+
+#[tokio::test]
+async fn encrypted_keystore_test() {
+    let temp_dir = TempDir::new().unwrap();
+    let keystore_path = temp_dir.path().join("sui.keystore");
+    let mut keystore = FileBasedKeystore::load_or_create(&keystore_path).unwrap();
+    let GeneratedKey { address, .. } = keystore
+        .generate(Some("my_alias".to_string()), GenerateOptions::default())
+        .await
+        .unwrap();
+    keystore.encrypt("my password").await.unwrap();
+
+    // A new process sees the addresses and aliases, but needs the password for the private keys.
+    let mut keystore = FileBasedKeystore::load_or_create(&keystore_path).unwrap();
+    assert!(keystore.is_encrypted());
+    assert_eq!(vec![address], keystore.addresses());
+    assert_eq!(vec!["my_alias"], alias_names(keystore.aliases()));
+    assert!(keystore.unlock("wrong password").is_err());
+    keystore.unlock("my password").unwrap();
+
+    let message = PersonalMessage {
+        message: b"hello".to_vec(),
+    };
+    let signature = keystore
+        .sign_secure(&address, &message, Intent::personal_message())
+        .await
+        .unwrap();
+    signature
+        .verify_secure(
+            &IntentMessage::new(Intent::personal_message(), message),
+            address,
+            SignatureScheme::ED25519,
+        )
+        .unwrap();
+
+    keystore.decrypt().await.unwrap();
+    let keystore = FileBasedKeystore::load_or_create(&keystore_path).unwrap();
+    assert!(!keystore.is_encrypted());
+    assert_eq!(vec![address], keystore.addresses());
 }

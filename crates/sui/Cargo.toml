@@ -47,6 +47,7 @@ tokio = { workspace = true, features = ["full"] }
 tokio-stream.workspace = true
 tracing.workspace = true
 url.workspace = true
+zeroize.workspace = true
 
 sui-rpc-api.workspace = true
 sui-rpc.workspace = true

@@ -28,8 +28,15 @@ struct Args {
     quiet: bool,
 }
 
+fn main() {
+    // The processes that the CLI starts, such as `git`, do not receive the keystore passwords.
+    // SAFETY: no other thread exists yet, because the runtime and its threads start in `run`.
+    unsafe { sui_keys::encryption::remove_password_env_vars() };
+    run();
+}
+
 #[tokio::main]
-async fn main() {
+async fn run() {
     #[cfg(windows)]
     colored::control::set_virtual_terminal(true).unwrap();
 
@@ -44,5 +51,6 @@ async fn main() {
 
     let _guard = builder.init();
     debug!("Sui CLI version: {VERSION}");
+    sui_keys::encryption::set_password_prompt(sui::keytool::prompt_for_keystore_password);
     exit_main!(args.command.execute().await);
 }

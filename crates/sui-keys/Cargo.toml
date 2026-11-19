@@ -11,6 +11,7 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
+argon2 = { workspace = true, features = ["zeroize"] }
 bcs.workspace = true
 colored.workspace = true
 serde.workspace = true
@@ -20,18 +21,22 @@ rand.workspace = true
 tiny-bip39.workspace = true
 bip32.workspace = true
 slip10_ed25519.workspace = true
-fastcrypto = { workspace = true, features = ["copy_key"] }
+fastcrypto = { workspace = true, features = ["aes", "copy_key"] }
 fastcrypto-pq.workspace = true
 mysten-common.workspace = true
+once_cell.workspace = true
 shared-crypto.workspace = true
 sui-types.workspace = true
 regex.workspace = true
 mockall.workspace = true
 base64.workspace = true
 jsonrpc.workspace = true
-tokio = { workspace = true, features = ["process"] }
+tokio = { workspace = true, features = ["process", "sync"] }
 async-trait.workspace = true
 thiserror.workspace = true
+typenum.workspace = true
+unicode-normalization.workspace = true
+zeroize = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
 tempfile.workspace = true
