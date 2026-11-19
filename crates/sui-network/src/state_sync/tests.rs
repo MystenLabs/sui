@@ -1910,6 +1910,9 @@ impl HedgeTestClient {
     ) -> super::ContentFetch<'a> {
         super::ContentFetch {
             network: &self.network,
+            max_timeout: Duration::from_secs(20),
+            failed_requests: std::sync::atomic::AtomicU32::new(0),
+            congestion: None,
             peer_heights: &self.peer_heights,
             checkpoint,
             use_get_checkpoint_contents_v2: true,
@@ -3335,4 +3338,45 @@ async fn paginated_checkpoints_exceeding_transaction_budget_keep_syncing() {
         store.get_highest_synced_checkpoint().unwrap().digest(),
         checkpoints[2].digest()
     );
+}
+
+#[test]
+fn content_congestion_grows_halves_and_respects_bounds() {
+    let congestion = super::ContentCongestion::new(4, 2, 10, std::time::Duration::from_secs(3600));
+    assert_eq!(congestion.limit(), 4);
+
+    // Before the first timeout, each success adds one.
+    for _ in 0..4 {
+        congestion.on_success();
+    }
+    assert_eq!(congestion.limit(), 8);
+
+    // A timeout halves the limit.
+    congestion.on_timeout();
+    assert_eq!(congestion.limit(), 4);
+
+    // A second timeout within the decrease interval does not halve it again.
+    congestion.on_timeout();
+    assert_eq!(congestion.limit(), 4);
+
+    // After the first timeout the limit grows by about one per round of successes.
+    for _ in 0..4 {
+        congestion.on_success();
+    }
+    assert_eq!(congestion.limit(), 4);
+    for _ in 0..4 {
+        congestion.on_success();
+    }
+    assert_eq!(congestion.limit(), 5);
+
+    // The limit never exceeds the maximum or drops below the minimum.
+    for _ in 0..1000 {
+        congestion.on_success();
+    }
+    assert_eq!(congestion.limit(), 10);
+    let fast_decrease = super::ContentCongestion::new(3, 2, 10, std::time::Duration::ZERO);
+    for _ in 0..5 {
+        fast_decrease.on_timeout();
+    }
+    assert_eq!(fast_decrease.limit(), 2);
 }
