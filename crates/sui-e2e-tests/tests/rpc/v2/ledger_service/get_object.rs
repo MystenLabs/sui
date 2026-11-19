@@ -34,11 +34,11 @@ use test_cluster::TestClusterBuilder;
 use super::list_object_versions::is_stored;
 use super::list_object_versions::is_tombstone_stored;
 use super::list_object_versions::prune_through;
-use crate::v2::RpcStatusExt;
-use crate::v2::assert_above_latest_available;
-use crate::v2::assert_below_earliest_available;
-use crate::v2::fullnode_highest_executed;
-use crate::v2::halt_chain;
+use crate::rpc::v2::RpcStatusExt;
+use crate::rpc::v2::assert_above_latest_available;
+use crate::rpc::v2::assert_below_earliest_available;
+use crate::rpc::v2::fullnode_highest_executed;
+use crate::rpc::v2::halt_chain;
 
 #[sim_test]
 async fn get_object() {

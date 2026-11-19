@@ -6,7 +6,7 @@ use sui_rpc::proto::sui::rpc::v2::GetFunctionRequest;
 use sui_rpc::proto::sui::rpc::v2::move_package_service_client::MovePackageServiceClient;
 use test_cluster::TestClusterBuilder;
 
-use crate::v2::move_package_service::system_package_expectations::validate_new_unverified_validator_operation_cap_and_transfer_function;
+use crate::rpc::v2::move_package_service::system_package_expectations::validate_new_unverified_validator_operation_cap_and_transfer_function;
 
 #[sim_test]
 async fn test_get_function_validator_cap() {

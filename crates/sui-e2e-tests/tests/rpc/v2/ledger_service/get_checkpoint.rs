@@ -10,7 +10,7 @@ use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2::{Checkpoint, ExecutedTransaction, GetCheckpointRequest, Object};
 use test_cluster::TestClusterBuilder;
 
-use crate::{stake_with_validator, transfer_coin};
+use crate::rpc::{stake_with_validator, transfer_coin};
 
 #[sim_test]
 async fn get_checkpoint() {

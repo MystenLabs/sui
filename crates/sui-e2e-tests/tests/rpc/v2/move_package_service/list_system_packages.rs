@@ -12,12 +12,12 @@ use sui_types::{
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
 
-use crate::v2::RpcStatusExt;
-use crate::v2::assert_above_latest_available;
-use crate::v2::assert_below_earliest_available;
-use crate::v2::error_info;
-use crate::v2::halt_chain;
-use crate::v2::prune_objects_below_tip;
+use crate::rpc::v2::RpcStatusExt;
+use crate::rpc::v2::assert_above_latest_available;
+use crate::rpc::v2::assert_below_earliest_available;
+use crate::rpc::v2::error_info;
+use crate::rpc::v2::halt_chain;
+use crate::rpc::v2::prune_objects_below_tip;
 
 /// The fullnode's live system packages, ordered by package id. Once the chain is halted, this is
 /// the expected answer at its tip. These clusters never upgrade their system packages, so each

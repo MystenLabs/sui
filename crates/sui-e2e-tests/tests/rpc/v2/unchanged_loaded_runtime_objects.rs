@@ -23,7 +23,7 @@ use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionKind;
 use test_cluster::TestClusterBuilder;
 
-use crate::{stake_with_validator, transfer_coin};
+use crate::rpc::{stake_with_validator, transfer_coin};
 
 #[sim_test]
 async fn test_unchanged_loaded_runtime_objects() {

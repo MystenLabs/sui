@@ -24,12 +24,12 @@ use sui_types::{
 use test_cluster::{TestCluster, TestClusterBuilder};
 use tonic::transport::Channel;
 
-use crate::v2::RpcStatusExt;
-use crate::v2::assert_above_latest_available;
-use crate::v2::assert_below_earliest_available;
-use crate::v2::error_info;
-use crate::v2::halt_chain;
-use crate::v2::prune_objects_below_tip;
+use crate::rpc::v2::RpcStatusExt;
+use crate::rpc::v2::assert_above_latest_available;
+use crate::rpc::v2::assert_below_earliest_available;
+use crate::rpc::v2::error_info;
+use crate::rpc::v2::halt_chain;
+use crate::rpc::v2::prune_objects_below_tip;
 
 #[sim_test]
 async fn test_list_package_versions_system_package() {

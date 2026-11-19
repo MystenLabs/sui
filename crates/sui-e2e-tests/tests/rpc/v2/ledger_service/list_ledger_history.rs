@@ -55,8 +55,8 @@ use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 use tonic::transport::Channel;
 
-use crate::v2::assert_above_latest_available;
-use crate::v2::assert_below_earliest_available;
+use crate::rpc::v2::assert_above_latest_available;
+use crate::rpc::v2::assert_below_earliest_available;
 
 const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;
 const DEFAULT_CHECKPOINT_RANGE_END: u64 = 3_000_000;

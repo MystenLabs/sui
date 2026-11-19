@@ -43,12 +43,12 @@ use super::get_object::output_ref;
 use super::get_object::owned_arg;
 use super::get_object::pure_arg;
 use super::get_object::tx_builder;
-use crate::v2::RpcStatusExt;
-use crate::v2::assert_above_latest_available;
-use crate::v2::assert_below_earliest_available;
-use crate::v2::error_info;
-use crate::v2::fullnode_highest_executed;
-use crate::v2::halt_chain;
+use crate::rpc::v2::RpcStatusExt;
+use crate::rpc::v2::assert_above_latest_available;
+use crate::rpc::v2::assert_below_earliest_available;
+use crate::rpc::v2::error_info;
+use crate::rpc::v2::fullnode_highest_executed;
+use crate::rpc::v2::halt_chain;
 
 /// An object's items through creation, mutation, wrapping, unwrapping, a second mutation and
 /// deletion, its live versions and the removals at the wrap and the deletion, each removal with
