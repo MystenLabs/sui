@@ -308,7 +308,8 @@ impl UncommittedData {
                         .load(std::sync::atomic::Ordering::Relaxed)
                         == self
                             .total_transaction_commits
-                            .load(std::sync::atomic::Ordering::Relaxed),
+                            .load(std::sync::atomic::Ordering::Relaxed)
+                    && self.pending_transaction_bytes() == 0,
             );
         }
         empty
@@ -1422,6 +1423,7 @@ impl WritebackCache {
         }
 
         self.dirty.clear();
+        self.set_backpressure(0, 0);
 
         info!("clearing old transaction locks");
         self.object_locks.clear();
@@ -2616,6 +2618,7 @@ impl StateSyncAPI for WritebackCache {
 }
 
 /// Approximate memory held by uncommitted outputs: the transaction and the objects it wrote.
+/// Effects, events and markers are not counted, so the value undercounts the memory held.
 /// Must return the same value when the outputs are written and when they are committed.
 fn approximate_outputs_size(outputs: &TransactionOutputs) -> u64 {
     let transaction_size = bcs::serialized_size(outputs.transaction.data()).unwrap_or_default();

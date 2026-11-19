@@ -868,16 +868,13 @@ impl ExecutionCacheConfig {
     }
 
     pub fn backpressure_threshold_bytes(&self) -> u64 {
-        std::env::var("SUI_BACKPRESSURE_THRESHOLD_BYTES")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or_else(|| match self {
-                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
-                ExecutionCacheConfig::WritebackCache {
-                    backpressure_threshold_bytes,
-                    ..
-                } => backpressure_threshold_bytes.unwrap_or(8 << 30),
-            })
+        match self {
+            ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+            ExecutionCacheConfig::WritebackCache {
+                backpressure_threshold_bytes,
+                ..
+            } => backpressure_threshold_bytes.unwrap_or(8 << 30),
+        }
     }
 
     pub fn backpressure_threshold_for_rpc(&self) -> u64 {
