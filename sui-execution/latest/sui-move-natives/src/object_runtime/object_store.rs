@@ -97,6 +97,8 @@ struct Inner<'a> {
     current_epoch_id: EpochId,
     // Set only when balances are tracked.
     balances_before: Option<BalancesBefore>,
+    // Set once a test scenario ends a transaction, after which an object can be received again.
+    test_scenario_reset: bool,
 }
 
 // maintains the runtime GlobalValues for child objects and manages the fetching of objects
@@ -123,22 +125,12 @@ pub(crate) enum ObjectResult<V> {
 type LoadedWithMetadataResult<V> = Option<(V, DynamicallyLoadedObjectMetadata)>;
 
 macro_rules! fetch_child_object_unbounded {
-    ($inner:ident, $parent:ident, $child:ident, $parents_root_version:expr, $had_parent_root_version:expr) => {{
+    ($inner:ident, $parent:ident, $child:ident, $parents_root_version:expr) => {{
         let child_opt = $inner
             .resolver
             .read_child_object(&$parent, &$child, $parents_root_version)
             .map_err(|msg| partial_vm_error!(STORAGE_ERROR, "{msg}"))?;
         if let Some(object) = child_opt {
-            // if there was no root version, guard against reading a child object. A newly
-            // created parent should not have a child in storage
-            if !$had_parent_root_version {
-                return Err(partial_vm_error!(
-                    STORAGE_ERROR,
-                    "A new parent {} should not have a child object {}.",
-                    $parent,
-                    $child
-                ));
-            }
             // guard against bugs in `read_child_object`: if it returns a child object such that
             // C.parent != parent, we raise an invariant violation
             match &object.owner {
@@ -187,15 +179,59 @@ macro_rules! fetch_child_object_unbounded {
 
 impl Inner<'_> {
     /// Returns the contained UIDs, keeping the contents if balances are tracked.
-    fn record_contents(&mut self, id: ObjectID, contents: TrackedContents) -> BTreeSet<ObjectID> {
+    fn record_contents(
+        &mut self,
+        id: ObjectID,
+        contents: TrackedContents,
+    ) -> PartialVMResult<BTreeSet<ObjectID>> {
         match &mut self.balances_before {
             Some(before) => {
                 let uids = contents.uids.clone();
-                before.record(id, contents);
-                uids
+                before.record(id, contents)?;
+                Ok(uids)
             }
-            None => contents.uids,
+            None => Ok(contents.uids),
         }
+    }
+
+    /// Records `version` as the root version of `object` and of every UID it contains, failing if
+    /// a contained UID is already recorded in another object.
+    fn record_root_version(
+        &mut self,
+        object: ObjectID,
+        contained_uids: BTreeSet<ObjectID>,
+        version: SequenceNumber,
+    ) -> PartialVMResult<()> {
+        if !contained_uids.contains(&object) {
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Object {object} does not contain its own UID"
+            ));
+        }
+        for id in contained_uids {
+            let prev = self.root_version.insert(id, version);
+            if let Some(prev) = prev
+                && !self.test_scenario_reset
+            {
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "UID {id} in {object} already has root version {prev}"
+                ));
+            }
+            if id == object {
+                continue;
+            }
+            let prev = self.wrapped_object_containers.insert(id, object);
+            if let Some(prev) = prev
+                && prev != object
+            {
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "UID {id} found in both {prev} and {object}"
+                ));
+            }
+        }
+        Ok(())
     }
 
     fn receive_object_from_store(
@@ -267,18 +303,13 @@ impl Inner<'_> {
     ) -> PartialVMResult<CacheMetadata<Option<&MoveObject>>> {
         let cached_objects_count = self.cached_objects.len() as u64;
         let parents_root_version = self.root_version.get(&parent).copied();
-        let had_parent_root_version = parents_root_version.is_some();
-        // if not found, it must be new so it won't have any child objects, thus
-        // we can return SequenceNumber(0) as no child object will be found
-        let parents_root_version = parents_root_version.unwrap_or(SequenceNumber::new());
         let cache_info = if let btree_map::Entry::Vacant(e) = self.cached_objects.entry(child) {
-            let obj_opt = fetch_child_object_unbounded!(
-                self,
-                parent,
-                child,
-                parents_root_version,
-                had_parent_root_version
-            );
+            // A parent without a root version descends from a UID created in this transaction, so
+            // it has no children in storage.
+            let obj_opt = match parents_root_version {
+                Some(v) => fetch_child_object_unbounded!(self, parent, child, v),
+                None => None,
+            };
 
             if let LimitThresholdCrossed::Hard(_, lim) = check_limit_by_meter!(
                 self.is_metered,
@@ -414,18 +445,11 @@ impl Inner<'_> {
                 "Failed to find UIDs. ERROR: {e}"
             )
         })?;
-        let contained_uids = self.record_contents(child, contents);
+        let contained_uids = self.record_contents(child, contents)?;
         self.loaded_child_value_size = loaded_size;
         let parents_root_version = self.root_version.get(&parent).copied();
         if let Some(v) = parents_root_version {
-            debug_assert!(contained_uids.contains(&child));
-            for id in contained_uids {
-                self.root_version.insert(id, v);
-                if id != child {
-                    let prev = self.wrapped_object_containers.insert(id, child);
-                    debug_assert!(prev.is_none())
-                }
-            }
+            self.record_root_version(child, contained_uids, v)?;
         }
         Ok(ObjectResult::Loaded((
             cache_info,
@@ -490,6 +514,7 @@ impl<'a> ChildObjectStore<'a> {
                 metrics,
                 current_epoch_id,
                 balances_before,
+                test_scenario_reset: false,
             },
             store: BTreeMap::new(),
             config_setting_cache: BTreeMap::new(),
@@ -509,6 +534,26 @@ impl<'a> ChildObjectStore<'a> {
             self.inner.root_version.entry(id).or_insert(v);
         }
         Ok(())
+    }
+
+    /// WARNING! Only for values built from bytes. Recording a UID exempts it from the parent check,
+    /// and its dynamic fields are read at `version`.
+    pub(super) fn record_synthetic_uids_for_arbitrary_values(
+        &mut self,
+        ids: impl IntoIterator<Item = ObjectID>,
+        version: SequenceNumber,
+    ) {
+        for id in ids {
+            self.inner.root_version.entry(id).or_insert(version);
+        }
+    }
+
+    pub(super) fn mark_test_scenario_reset(&mut self) {
+        self.inner.test_scenario_reset = true;
+    }
+
+    pub(super) fn has_root_version(&self, id: &ObjectID) -> bool {
+        self.inner.root_version.contains_key(id)
     }
 
     pub(super) fn receive_object(
@@ -543,14 +588,9 @@ impl<'a> ChildObjectStore<'a> {
                                     "Failed to find UIDs for receiving object. ERROR: {e}"
                                 )
                             })?;
-                    let contained_uids = self.inner.record_contents(child, contents);
-                    for id in contained_uids {
-                        self.inner.root_version.insert(id, child_version);
-                        if id != child {
-                            let prev = self.inner.wrapped_object_containers.insert(id, child);
-                            debug_assert!(prev.is_none())
-                        }
-                    }
+                    let contained_uids = self.inner.record_contents(child, contents)?;
+                    self.inner
+                        .record_root_version(child, contained_uids, child_version)?;
                     (ObjectResult::Loaded((cache_info, v)), obj_meta)
                 }
             },
@@ -745,7 +785,7 @@ impl<'a> ChildObjectStore<'a> {
                 let child_move_type = field_setting_object_type;
                 let inner = &self.inner;
                 let obj_opt =
-                    fetch_child_object_unbounded!(inner, parent, child, SequenceNumber::MAX, true);
+                    fetch_child_object_unbounded!(inner, parent, child, SequenceNumber::MAX);
                 let Some(move_obj) = obj_opt.as_ref().map(|obj| obj.data.try_as_move().unwrap())
                 else {
                     return Ok(ObjectResult::Loaded(None));

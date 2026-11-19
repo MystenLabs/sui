@@ -261,7 +261,8 @@ fn sponsor_and_contained_generated_and_deleted_ids_are_involved() {
         transaction_addresses: vec![sender, sponsor],
         inputs: vec![],
         loaded_runtime_objects: BTreeSet::new(),
-        contained_uids: [contained].into(),
+        // A deleted object must have been read, here as a wrapped UID.
+        contained_uids: [contained, deleted].into(),
         generated_ids: [generated].into(),
         results: &results,
     };
@@ -279,4 +280,48 @@ fn sponsor_and_contained_generated_and_deleted_ids_are_involved() {
         ]
         .into()
     );
+}
+
+/// Whether `finish` succeeds on a PTB with no inputs that writes `written` and deletes `deleted`.
+fn finishes_unread(written: Vec<Object>, deleted: BTreeSet<ObjectID>) -> bool {
+    let results = results(written, deleted);
+    let objects = ObjectData {
+        transaction_addresses: vec![SuiAddress::random_for_testing_only()],
+        inputs: vec![],
+        loaded_runtime_objects: BTreeSet::new(),
+        contained_uids: BTreeSet::new(),
+        generated_ids: BTreeSet::new(),
+        results: &results,
+    };
+    finish(BalanceTotals::new(), BalanceTotals::new(), objects).is_ok()
+}
+
+#[test]
+#[cfg_attr(
+    debug_assertions,
+    should_panic(expected = "without being read or created")
+)]
+fn writing_an_unread_object_is_an_error() {
+    let owner = Owner::AddressOwner(SuiAddress::random_for_testing_only());
+    assert!(!finishes_unread(
+        vec![object(ObjectID::random(), owner)],
+        BTreeSet::new()
+    ));
+}
+
+#[test]
+#[cfg_attr(
+    debug_assertions,
+    should_panic(expected = "without being read or created")
+)]
+fn deleting_an_unread_object_is_an_error() {
+    assert!(!finishes_unread(vec![], [ObjectID::random()].into()));
+}
+
+#[test]
+fn writing_a_package_needs_no_read() {
+    assert!(finishes_unread(
+        vec![package(ObjectID::random())],
+        BTreeSet::new()
+    ));
 }

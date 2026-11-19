@@ -242,18 +242,20 @@ mod balance_tracking {
         let x = ObjectID::from_single_byte(1);
         let y = ObjectID::from_single_byte(2);
         let mut before = BalancesBefore::new();
-        before.record(
-            x,
-            TrackedContents {
-                uids: BTreeSet::from([x, y]),
-                balances: totals(&[
-                    (x, &a, u64::MAX as u128),
-                    (x, &a, u64::MAX as u128),
-                    (y, &a, 1),
-                    (x, &b, 2),
-                ]),
-            },
-        );
+        before
+            .record(
+                x,
+                TrackedContents {
+                    uids: BTreeSet::from([x, y]),
+                    balances: totals(&[
+                        (x, &a, u64::MAX as u128),
+                        (x, &a, u64::MAX as u128),
+                        (y, &a, 1),
+                        (x, &b, 2),
+                    ]),
+                },
+            )
+            .unwrap();
         let (totals, uids) = before.finish().unwrap();
         assert_eq!(uids, BTreeSet::from([x, y]));
         assert_eq!(totals[&SuiAddress::from(x)][&a], 2 * (u64::MAX as u128));
@@ -262,7 +264,7 @@ mod balance_tracking {
     }
 
     #[test]
-    fn repeated_read_of_an_object_replaces_it() {
+    fn repeated_read_of_an_object_is_an_error() {
         let a = coin_type("A");
         let x = ObjectID::from_single_byte(1);
         let contents = TrackedContents {
@@ -270,10 +272,8 @@ mod balance_tracking {
             balances: totals(&[(x, &a, 5)]),
         };
         let mut before = BalancesBefore::new();
-        before.record(x, contents.clone());
-        before.record(x, contents);
-        let (totals, _) = before.finish().unwrap();
-        assert_eq!(totals[&SuiAddress::from(x)][&a], 5);
+        before.record(x, contents.clone()).unwrap();
+        assert!(before.record(x, contents).is_err());
     }
 
     #[test]
@@ -285,5 +285,182 @@ mod balance_tracking {
         add_to_totals(&mut totals, owner, &a, 1).unwrap();
         assert!(add_to_totals(&mut totals, owner, &a, 1).is_err());
         assert_eq!(totals[&owner][&a], u128::MAX);
+    }
+}
+
+mod parent_checks {
+    use crate::object_runtime::{InputObject, ObjectRuntime};
+    use move_binary_format::errors::PartialVMResult;
+    use std::{collections::BTreeMap, sync::Arc};
+    use sui_protocol_config::ProtocolConfig;
+    use sui_types::{
+        TypeTag,
+        base_types::{ObjectID, SequenceNumber, SuiAddress},
+        committee::EpochId,
+        error::SuiResult,
+        metrics::ExecutionMetrics,
+        object::{Object, Owner},
+        storage::{
+            BackingPackageStore, ImplicitSystemObjectResolver, PackageObject, RuntimeObjectResolver,
+        },
+    };
+
+    struct EmptyStore;
+
+    impl BackingPackageStore for EmptyStore {
+        fn get_package_object(&self, _: &ObjectID) -> SuiResult<Option<PackageObject>> {
+            Ok(None)
+        }
+    }
+
+    impl RuntimeObjectResolver for EmptyStore {
+        fn read_child_object(
+            &self,
+            _: &ObjectID,
+            _: &ObjectID,
+            _: SequenceNumber,
+        ) -> SuiResult<Option<Object>> {
+            Ok(None)
+        }
+
+        fn get_object_received_at_version(
+            &self,
+            _: &ObjectID,
+            _: &ObjectID,
+            _: SequenceNumber,
+            _: EpochId,
+        ) -> SuiResult<Option<Object>> {
+            Ok(None)
+        }
+    }
+
+    impl ImplicitSystemObjectResolver for EmptyStore {
+        fn object_available_balance(&self, _: SuiAddress, _: &TypeTag) -> SuiResult<u128> {
+            Ok(0)
+        }
+
+        fn clock(&self) -> SuiResult<Object> {
+            unreachable!("Parent checks never read the clock")
+        }
+    }
+
+    /// An input that contains its own UID and `wrapped`.
+    fn input(id: ObjectID, wrapped: &[ObjectID]) -> (ObjectID, InputObject) {
+        let input = InputObject {
+            contained_uids: [id].into_iter().chain(wrapped.iter().copied()).collect(),
+            balances: BTreeMap::new(),
+            version: SequenceNumber::from_u64(1),
+            owner: Owner::AddressOwner(SuiAddress::ZERO),
+        };
+        (id, input)
+    }
+
+    fn runtime<'a>(
+        store: &'a EmptyStore,
+        config: &'a ProtocolConfig,
+        inputs: Vec<(ObjectID, InputObject)>,
+    ) -> PartialVMResult<ObjectRuntime<'a>> {
+        let metrics = Arc::new(ExecutionMetrics::new(&prometheus::Registry::new()));
+        ObjectRuntime::new(
+            store,
+            store,
+            inputs.into_iter().collect(),
+            true,
+            config,
+            metrics,
+            0,
+            true,
+        )
+    }
+
+    /// Whether `parent` can be used to check for a child in a runtime with `inputs`, after
+    /// `setup`.
+    fn parent_allowed(
+        inputs: Vec<(ObjectID, InputObject)>,
+        parent: ObjectID,
+        setup: impl FnOnce(&mut ObjectRuntime),
+    ) -> bool {
+        let config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let mut rt = runtime(&EmptyStore, &config, inputs).unwrap();
+        setup(&mut rt);
+        rt.child_object_exists(parent, ObjectID::random()).is_ok()
+    }
+
+    fn random_id() -> ObjectID {
+        let id = ObjectID::random();
+        assert!(!id.is_system_object());
+        id
+    }
+
+    #[test]
+    fn uid_wrapped_in_another_input_is_an_error() {
+        let (a, x) = (random_id(), random_id());
+        let config = ProtocolConfig::get_for_max_version_UNSAFE();
+        assert!(runtime(&EmptyStore, &config, vec![input(a, &[x]), input(x, &[])]).is_err());
+    }
+
+    #[test]
+    fn uid_wrapped_in_two_inputs_is_an_error() {
+        let (a, b, x) = (random_id(), random_id(), random_id());
+        let config = ProtocolConfig::get_for_max_version_UNSAFE();
+        assert!(runtime(&EmptyStore, &config, vec![input(a, &[x]), input(b, &[x])]).is_err());
+    }
+
+    #[test]
+    fn input_without_its_own_uid_is_an_error() {
+        let (a, x) = (random_id(), random_id());
+        let (_, mut bad) = input(a, &[x]);
+        bad.contained_uids.remove(&a);
+        let config = ProtocolConfig::get_for_max_version_UNSAFE();
+        assert!(runtime(&EmptyStore, &config, vec![(a, bad)]).is_err());
+    }
+
+    #[test]
+    fn untracked_parent_is_an_error() {
+        assert!(!parent_allowed(vec![], random_id(), |_| ()));
+    }
+
+    #[test]
+    fn input_parent_is_allowed() {
+        let a = random_id();
+        assert!(parent_allowed(vec![input(a, &[])], a, |_| ()));
+    }
+
+    #[test]
+    fn uid_wrapped_in_an_input_is_allowed() {
+        let (a, x) = (random_id(), random_id());
+        assert!(parent_allowed(vec![input(a, &[x])], x, |_| ()));
+    }
+
+    #[test]
+    fn new_parent_is_allowed() {
+        let p = random_id();
+        assert!(parent_allowed(vec![], p, |rt| rt.new_id(p).unwrap()));
+    }
+
+    #[test]
+    fn synthetic_uid_parent_is_allowed() {
+        let p = random_id();
+        assert!(parent_allowed(vec![], p, |rt| rt
+            .record_synthetic_uids_for_arbitrary_values(
+                [p],
+                SequenceNumber::from_u64(1)
+            )));
+    }
+
+    #[test]
+    fn system_object_parent_is_allowed() {
+        assert!(parent_allowed(
+            vec![],
+            ObjectID::from_single_byte(6),
+            |_| ()
+        ));
+    }
+
+    #[test]
+    fn untracked_parent_is_allowed_after_a_test_scenario_transaction() {
+        assert!(parent_allowed(vec![], random_id(), |rt| {
+            rt.mark_test_scenario_reset()
+        }));
     }
 }

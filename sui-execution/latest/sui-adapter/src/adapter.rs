@@ -96,16 +96,19 @@ mod checked {
                 "Failed to mutably borrow native extensions to populate them right after creating them"
             )
         })?;
-        exts.add(ObjectRuntime::new(
-            child_resolver,
-            system_object_resolver,
-            input_objects,
-            is_metered,
-            protocol_config,
-            metrics,
-            current_epoch_id,
-            track_balances,
-        ));
+        exts.add(
+            ObjectRuntime::new(
+                child_resolver,
+                system_object_resolver,
+                input_objects,
+                is_metered,
+                protocol_config,
+                metrics,
+                current_epoch_id,
+                track_balances,
+            )
+            .map_err(|e| make_invariant_violation!("Failed to create the object runtime: {e}"))?,
+        );
         exts.add(NativesCostTable::from_protocol_config(protocol_config));
         exts.add(ScratchRuntime::new(protocol_config));
         exts.add(TransactionContext::new(tx_context));

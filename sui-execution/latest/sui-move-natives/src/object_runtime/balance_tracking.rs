@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_binary_format::{errors::PartialVMResult, partial_vm_error};
 use move_core_types::{
     account_address::AccountAddress,
     annotated_value::{MoveStructLayout, MoveTypeLayout, MoveValue},
@@ -96,13 +97,16 @@ impl BalancesBefore {
         }
     }
 
-    /// Records the contents of `id` as read from storage. A repeated read must match the earlier one.
-    pub fn record(&mut self, id: ObjectID, contents: TrackedContents) {
-        debug_assert!(
-            self.walked.get(&id).is_none_or(|prev| *prev == contents),
-            "Object {id} read twice with different contents"
-        );
-        self.walked.insert(id, contents);
+    /// Records the contents of `id` as read from storage. Each object is read at most once.
+    pub fn record(&mut self, id: ObjectID, contents: TrackedContents) -> PartialVMResult<()> {
+        let prev = self.walked.insert(id, contents);
+        if prev.is_some() {
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Object {id} read more than once"
+            ));
+        }
+        Ok(())
     }
 
     /// Returns the before totals and every UID found in the walked objects.
