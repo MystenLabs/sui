@@ -441,6 +441,7 @@ const MAINNET_USDB: &str =
 //              Charge a MIST-denominated amount for publish and upgrade commands before execution.
 //              Enable ML-DSA-65 account signatures on testnet.
 // Version 144: Enable timestamp-based transaction expiration on devnet.
+//              Allow allowance spends in gasless transactions on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1410,6 +1411,12 @@ struct FeatureFlags {
     // `TransactionExpired`.
     #[serde(skip_serializing_if = "is_false")]
     enable_timestamp_transaction_expiration: bool,
+
+    // Allow `sui::allowance::balance_spend` in gasless transactions. The spent allowance is
+    // written without storage charges or rebates. Requires `enable_gasless` and `enable_allowances`.
+    #[serde(skip_serializing_if = "is_false")]
+    #[skip_protocol_config_accessor]
+    gasless_allowance_spend: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2555,6 +2562,12 @@ impl ProtocolConfig {
 
     pub fn enable_allowances(&self) -> bool {
         self.feature_flags.enable_allowances && self.enable_accumulators()
+    }
+
+    pub fn gasless_allowance_spend(&self) -> bool {
+        self.feature_flags.gasless_allowance_spend
+            && self.enable_gasless()
+            && self.enable_allowances()
     }
 
     pub fn enable_coin_reservation_obj_refs(&self) -> bool {
@@ -5074,6 +5087,7 @@ impl ProtocolConfig {
                 144 => {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_timestamp_transaction_expiration = true;
+                        cfg.feature_flags.gasless_allowance_spend = true;
                     }
                     cfg.object_runtime_max_loaded_child_value_size = Some(5_000_000);
                 }
