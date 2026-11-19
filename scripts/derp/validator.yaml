@@ -1,0 +1,30 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Merged into each validator's config from `sui genesis`: sui-operations'
+# overlays/common.yaml, with paths relative to the host's directory
+# instead of the container's /opt/sui.
+network-address: /ip4/0.0.0.0/tcp/8080/http
+metrics-address: 0.0.0.0:9184
+json-rpc-address: 0.0.0.0:9000
+admin-interface-port: 1337
+genesis:
+  genesis-file-location: genesis.blob
+db-path: db/authorities_db
+consensus-config:
+  db-path: db/consensus_db
+  parameters:
+    observer:
+      server_port: 8085
+expensive-safety-check-config:
+  enable-epoch-sui-conservation-check: false
+  enable-deep-per-tx-sui-conservation-check: false
+  force-disable-epoch-sui-conservation-check: false
+  enable-state-consistency-check: false
+  force-disable-state-consistency-check: false
+  enable-move-vm-paranoid-checks: false
+# Every node reconnects from one source address per host; anemo's default
+# per-address connection rate limit would drop peers.
+p2p-config:
+  anemo-config:
+    inbound-connection-rate-limit-per-ip: 0
