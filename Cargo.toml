@@ -340,9 +340,6 @@ opt-level = 2
 [profile.test.package.fastcrypto-zkp]
 opt-level = 2
 
-[profile.test.package.fastcrypto-tbls]
-opt-level = 2
-
 [profile.test.package.fastcrypto-vdf]
 opt-level = 2
 
@@ -356,6 +353,12 @@ debug-assertions = true
 overflow-checks = true
 # opt-level 1 gives >5x speedup for simulator tests without slowing down build times very much.
 opt-level = 1
+
+# sui-core's unit-test build is the last unit to finish in a simtest build, running nearly alone.
+# Non-incremental builds such as CI's default to 16 codegen units; more let it use the idle cores.
+# This also applies to the sui-core library; simtest runtime did not measurably change.
+[profile.simulator.package.sui-core]
+codegen-units = 256
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [
