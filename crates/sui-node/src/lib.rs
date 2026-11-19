@@ -3123,8 +3123,9 @@ async fn build_http_servers(
 }
 
 /// Serves RPC from this validator, streaming each checkpoint as soon as it
-/// builds it; see `RpcConfig::enable_validator_rpc` for what it serves.
-/// Returns the server and the sender that feeds it locally built checkpoints.
+/// builds it; see `RpcConfig::enable_validator_rpc` for what it serves. The
+/// server speaks TLS when `rpc.tls` is set. Returns the server and the sender
+/// that feeds it locally built checkpoints.
 async fn build_validator_rpc_server(
     state: Arc<AuthorityState>,
     store: RocksDbStore,
@@ -3138,6 +3139,10 @@ async fn build_validator_rpc_server(
 )> {
     let rpc_config = config.rpc().cloned().unwrap_or_default();
     info!("starting validator rpc service with config: {rpc_config:?}");
+    let tls_server_config = rpc_config
+        .tls_config()
+        .map(|tls| https_rustls_config(tls.cert(), tls.key()))
+        .transpose()?;
 
     let (locally_built_checkpoint_sender, subscription_service_handle) =
         SubscriptionService::build_for_locally_built_checkpoints(
@@ -3155,18 +3160,23 @@ async fn build_validator_rpc_server(
     rpc_service.with_validator_role();
     let router = with_rpc_http_layers(rpc_service.into_router().await);
 
-    let http = sui_http::Builder::new()
-        .config(rpc_server_config(config))
+    let tls = tls_server_config.is_some();
+    let mut builder = sui_http::Builder::new().config(rpc_server_config(config));
+    if let Some(tls_server_config) = tls_server_config {
+        builder = builder.tls_config(tls_server_config);
+    }
+    let server = builder
         .serve(address, router)
         .map_err(|e| anyhow::anyhow!(e))?;
 
     info!(
-        http_address =? http.local_addr(),
+        address =? server.local_addr(),
+        tls,
         "validator rpc server listening on {}",
-        http.local_addr()
+        server.local_addr()
     );
 
-    Ok((http, locally_built_checkpoint_sender))
+    Ok((server, locally_built_checkpoint_sender))
 }
 
 fn with_rpc_http_layers(router: axum::Router) -> axum::Router {

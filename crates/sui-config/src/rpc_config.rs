@@ -19,7 +19,8 @@ pub struct RpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enable_indexing: Option<bool>,
 
-    /// Configure the address to listen on for https
+    /// Configure the address to listen on for https. Fullnodes only: a
+    /// validator serves TLS on `validator-rpc-address`.
     ///
     /// Defaults to `0.0.0.0:9443` if not specified.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -27,7 +28,9 @@ pub struct RpcConfig {
 
     /// TLS configuration to use for https.
     ///
-    /// If not provided then the node will not create an https service.
+    /// On a fullnode, if not provided then the node will not create an https
+    /// service. On a validator serving RPC, the validator RPC server speaks TLS
+    /// with it, and plaintext without it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tls: Option<RpcTlsConfig>,
 
@@ -125,9 +128,10 @@ pub struct RpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grpc_timeout_ms: Option<u64>,
 
-    /// Serve RPC from a validator, without rpc indexes, on
-    /// `validator-rpc-address` over plain HTTP (`tls` and `https-address` do
-    /// not apply).
+    /// Serve gRPC from a validator, without rpc indexes, on
+    /// `validator-rpc-address`: over TLS when `tls` is set, and plaintext
+    /// otherwise. Set `tls` when clients connect over networks the operator
+    /// does not control. `https-address` does not apply.
     ///
     /// A request names the least settled data it accepts in the
     /// `x-sui-finality-level` header. Served today:
