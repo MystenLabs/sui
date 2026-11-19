@@ -139,6 +139,13 @@ fn main() {
         }
     }
 
+    // `fs::read_dir` returns entries in filesystem-dependent order, which would make
+    // `embedded.rs`, and the bytes of every binary that links this crate, differ
+    // from one build machine to the next. Sort so the output is reproducible. The
+    // runtime already sorts at print time, so this does not change any output.
+    skill_entries.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
+    category_entries.sort_by(|a, b| a.0.cmp(&b.0));
+
     // 3. Emit `embedded.rs` with the two static slices, side by side. Both use
     //    `include_str!(r"<abs path>")` so the actual file content is pulled in by rustc
     //    at compile time — `build.rs` never sees the bytes itself for skills, and only
