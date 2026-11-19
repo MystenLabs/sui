@@ -143,5 +143,5 @@ runs:
       shell: bash
       run: |
         mkdir -p ../.cargo
-        printf '[profile.dev]\ndebug = "line-tables-only"\n\n[profile.simulator]\ndebug = "line-tables-only"\n\n[profile.dev.package.librocksdb-sys]\ndebug = false\n' > ../.cargo/config.toml
+        printf '[profile.dev]\ndebug = "limited"\n\n[profile.simulator]\ndebug = "limited"\n\n[profile.dev.package.librocksdb-sys]\ndebug = false\n' > ../.cargo/config.toml
         cat ../.cargo/config.toml
