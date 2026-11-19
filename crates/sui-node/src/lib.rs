@@ -1583,6 +1583,25 @@ impl SuiNode {
             node_role,
         );
 
+        // The checkpoint executor waits for checkpoints built before the restart to be rebuilt,
+        // and rebuilding them requires the consensus handler to reprocess commits. Backpressure
+        // must not pause the handler until the rebuild completes.
+        backpressure_manager.set_checkpoint_rebuild_pending(true);
+        {
+            let checkpoint_service = checkpoint_service.clone();
+            let backpressure_manager = backpressure_manager.clone();
+            let epoch_store = epoch_store.clone();
+            spawn_monitored_task!(async move {
+                epoch_store
+                    .within_alive_epoch(async move {
+                        checkpoint_service.wait_for_rebuilt_checkpoints().await;
+                        backpressure_manager.set_checkpoint_rebuild_pending(false);
+                    })
+                    .await
+                    .ok();
+            });
+        }
+
         // Clear the VSS public key from the previous epoch so any randomness round
         // signatures buffer in the channel until the new DKG completes.
         randomness_receiver_handle.clear_public_key();
