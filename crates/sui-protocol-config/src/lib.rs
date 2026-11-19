@@ -441,8 +441,10 @@ const MAINNET_USDB: &str =
 //              Charge a MIST-denominated amount for publish and upgrade commands before execution.
 //              Enable ML-DSA-65 account signatures on testnet.
 // Version 144: Enable timestamp-based transaction expiration on devnet.
-//              Enable the staggered-submission signal on all networks. Double its window
-//              and add a minimum number of transaction copies per commit that it requires.
+//              Enable the staggered-submission signal on all networks. Double its window,
+//              which doubles its excess floor to 1,200 copies and makes the exit dwell ten
+//              windows. Add a minimum number of transaction copies per commit that it
+//              requires.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);

@@ -969,7 +969,8 @@ impl StaggeringCommitCounts {
         ]
     }
 
-    /// Every user transaction copy in the commit: first copies and all duplicates.
+    /// Returns the number of user transaction copies in the commit, first copies and
+    /// all duplicates.
     fn copies(&self) -> u64 {
         self.unique_user_txns
             + self.excess_copies
@@ -1911,6 +1912,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         self.metrics
             .staggered_submission_duplication_ratio
             .set(outcome.duplication_ratio);
+        self.metrics
+            .staggered_submission_window_copies
+            .set(outcome.window_copies as i64);
         // The gauges are set on every commit so they reset when a new epoch starts.
         self.metrics
             .staggered_submission_signal_band

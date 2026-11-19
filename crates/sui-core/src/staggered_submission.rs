@@ -102,10 +102,11 @@ pub fn proposers_metric_label(
 
 const DEFAULT_SIGNAL_WINDOW_COMMITS: usize = 300;
 const DEFAULT_SIGNAL_MIN_EXCESS_COPIES_PER_COMMIT: u64 = 2;
-/// Twenty windows, about 7 minutes on mainnet. Mainnet duplication is continuous, so
-/// each de-escalation lets a burst of copies through before the signal escalates again.
-/// A long dwell makes this rare. Its cost is that staggering stays on for the dwell
-/// after an attack stops.
+/// The dwell is about 7 minutes on mainnet. It equals twenty default windows, and ten
+/// windows of the 600-commit window that protocol version 144 sets. Mainnet duplication
+/// is continuous, so each de-escalation lets a burst of copies through before the signal
+/// escalates again. A long dwell makes this rare. Its cost is that staggering stays on
+/// for the dwell after an attack stops.
 const DEFAULT_SIGNAL_EXIT_DWELL_COMMITS: usize = 20 * DEFAULT_SIGNAL_WINDOW_COMMITS;
 
 /// Number of signal bands above "off".
@@ -182,7 +183,8 @@ const DEFAULT_SIGNAL_BANDS: [SignalBand; NUM_SIGNAL_BANDS] = [
 pub struct SignalConfig {
     pub window_commits: usize,
     pub min_excess_copies: u64,
-    /// Total over the window, like `min_excess_copies`. Zero disables the check.
+    /// The window must hold this many user transaction copies. Like
+    /// `min_excess_copies`, it is a total over the window. Zero disables the check.
     pub min_copies: u64,
     pub exit_dwell_commits: usize,
     /// The bands, weakest first. `assert_valid` checks the order.
@@ -310,6 +312,8 @@ pub struct CommitSignal {
     /// Commits spent at `previous_band`, including this one.
     pub commits_in_previous_band: u64,
     pub duplication_ratio: f64,
+    /// User transaction copies in the window, compared against `min_copies`.
+    pub window_copies: u64,
 }
 
 impl CommitSignal {
@@ -368,6 +372,11 @@ struct SignalState {
     /// `(excess copies, unique user transactions, all copies)` for each commit in the
     /// window, newest last.
     window: VecDeque<(u64, u64, u64)>,
+    /// Sums of the three fields of `window`. `record_commit` updates them as commits
+    /// enter and leave the window.
+    window_excess: u64,
+    window_unique: u64,
+    window_copies: u64,
     /// The signal level: 0 is off, and `b > 0` is `SignalConfig::bands[b - 1]`.
     band: usize,
     /// Consecutive commits with the ratio below the active band's exit ratio or with a
@@ -386,6 +395,9 @@ impl StaggeredSubmission {
             enabled,
             signal: Mutex::new(SignalState {
                 window: VecDeque::new(),
+                window_excess: 0,
+                window_unique: 0,
+                window_copies: 0,
                 band: 0,
                 below_exit_commits: 0,
                 commits_in_band: 0,
@@ -437,35 +449,41 @@ impl StaggeredSubmission {
         copies: u64,
     ) -> CommitSignal {
         let config = &self.config;
-        let mut signal = self.signal.lock();
+        let mut guard = self.signal.lock();
+        let signal = &mut *guard;
         signal.commits_in_band += 1;
         signal
             .window
             .push_back((excess_copies, unique_user_txns, copies));
+        signal.window_excess += excess_copies;
+        signal.window_unique += unique_user_txns;
+        signal.window_copies += copies;
         while signal.window.len() > config.window_commits {
-            signal.window.pop_front();
+            let (e, u, c) = signal.window.pop_front().expect("window is not empty");
+            signal.window_excess -= e;
+            signal.window_unique -= u;
+            signal.window_copies -= c;
         }
-        let (excess, total, window_copies) = signal
-            .window
-            .iter()
-            .fold((0u64, 0u64, 0u64), |(excess, total, copies), (e, t, c)| {
-                (excess + e, total + t, copies + c)
-            });
+        let (excess, total, window_copies) = (
+            signal.window_excess,
+            signal.window_unique,
+            signal.window_copies,
+        );
         let low_volume = window_copies < config.min_copies;
         // First copies can leave the window while late copies keep arriving. A window
         // with no unique transactions uses a denominator of one so that the late copies
         // still count.
         let duplication_ratio = excess as f64 / total.max(1) as f64;
+        // A low-volume window counts as a ratio of zero for every band decision. Every
+        // exit ratio is positive, so such a window does not escalate, counts towards the
+        // exit dwell, and drops the signal to off when the dwell ends.
+        let band_ratio = if low_volume { 0.0 } else { duplication_ratio };
 
-        let target_band = if low_volume {
-            0
-        } else {
-            config
-                .bands
-                .iter()
-                .take_while(|band| duplication_ratio >= band.enter_ratio)
-                .count()
-        };
+        let target_band = config
+            .bands
+            .iter()
+            .take_while(|band| band_ratio >= band.enter_ratio)
+            .count();
         let current_band = signal.band;
         // Leaving level 0 also requires `min_excess_copies`.
         let escalate =
@@ -473,8 +491,7 @@ impl StaggeredSubmission {
         // De-escalation drops to the highest band whose exit ratio the ratio still meets,
         // not one band down. Dropping one band at a time would make a collapsed ratio
         // wait out a second dwell in a lower band.
-        let below_exit = current_band > 0
-            && (low_volume || duplication_ratio < config.bands[current_band - 1].exit_ratio);
+        let below_exit = current_band > 0 && band_ratio < config.bands[current_band - 1].exit_ratio;
         signal.below_exit_commits = if below_exit {
             signal.below_exit_commits + 1
         } else {
@@ -483,13 +500,11 @@ impl StaggeredSubmission {
         let de_escalate = signal.below_exit_commits >= config.exit_dwell_commits;
         let new_band = if escalate {
             target_band
-        } else if de_escalate && low_volume {
-            0
         } else if de_escalate {
             config
                 .bands
                 .iter()
-                .take_while(|band| duplication_ratio >= band.exit_ratio)
+                .take_while(|band| band_ratio >= band.exit_ratio)
                 .count()
                 .min(current_band - 1)
         } else {
@@ -516,11 +531,18 @@ impl StaggeredSubmission {
                 self.set_active(band > 0);
             }
             info!(
-                "Duplication signal moved to {} (from {}): window duplication ratio \
+                "Duplication signal moved to {} (from {}){}: window duplication ratio \
                  {duplication_ratio:.4} ({excess} excess copies over {total} unique user \
-                 transactions, {window_copies} copies in total in the window){}",
+                 transactions, {window_copies} copies in total in the window, floor \
+                 {}){}",
                 signal_band_label(band),
                 signal_band_label(current_band),
+                if low_volume {
+                    " because the window is below the copies floor"
+                } else {
+                    ""
+                },
+                config.min_copies,
                 if self.enabled {
                     ""
                 } else {
@@ -533,12 +555,28 @@ impl StaggeredSubmission {
             previous_band: current_band,
             commits_in_previous_band,
             duplication_ratio,
+            window_copies,
         }
     }
 
     #[cfg(test)]
     pub fn set_params_for_testing(&self, params: StaggerParams) {
         *self.params.write() = params;
+    }
+
+    /// Calls `record_commit` for a commit whose only copies are its unique
+    /// transactions and its excess copies.
+    #[cfg(test)]
+    fn record_commit_without_free_duplicates(
+        &self,
+        excess_copies: u64,
+        unique_user_txns: u64,
+    ) -> CommitSignal {
+        self.record_commit(
+            excess_copies,
+            unique_user_txns,
+            excess_copies + unique_user_txns,
+        )
     }
 
     /// Returns `(transition, duplication_ratio)` from `record_commit`.
@@ -548,12 +586,8 @@ impl StaggeredSubmission {
         excess_copies: u64,
         unique_user_txns: u64,
     ) -> (Option<usize>, f64) {
-        self.record_commit(
-            excess_copies,
-            unique_user_txns,
-            excess_copies + unique_user_txns,
-        )
-        .pair()
+        self.record_commit_without_free_duplicates(excess_copies, unique_user_txns)
+            .pair()
     }
 
     /// What this validator does with a group of user transactions — a single transaction
@@ -1022,7 +1056,7 @@ mod tests {
         }
     }
 
-    /// 100 copies per window commit.
+    /// The copies floor is 100 copies per window commit.
     const TEST_SIGNAL_MIN_COPIES: u64 = 100 * TEST_SIGNAL_WINDOW_COMMITS as u64;
 
     fn test_signal_config_with_min_copies() -> SignalConfig {
@@ -1159,7 +1193,7 @@ mod tests {
     #[test]
     fn record_commit_reports_the_dwell_of_the_band_left() {
         let staggered = StaggeredSubmission::new(test_signal_config(), true);
-        let first = staggered.record_commit(1000, 2000, 3000);
+        let first = staggered.record_commit_without_free_duplicates(1000, 2000);
         assert_eq!(first.transition, Some(2));
         assert_eq!(first.previous_band, 0);
         assert_eq!(first.commits_in_previous_band, 1);
@@ -1168,7 +1202,7 @@ mod tests {
         let mut recorded_in_band2 = 0;
         let mut left = None;
         for _ in 0..=TEST_SIGNAL_WINDOW_COMMITS + TEST_SIGNAL_EXIT_DWELL_COMMITS {
-            let outcome = staggered.record_commit(0, 100, 100);
+            let outcome = staggered.record_commit_without_free_duplicates(0, 100);
             recorded_in_band2 += 1;
             assert_eq!(outcome.previous_band, 2);
             if outcome.transition.is_some() {
@@ -1442,12 +1476,24 @@ mod tests {
         #[test]
         fn duplication_ratio_tracks_the_window() {
             let staggered = StaggeredSubmission::new(test_signal_config(), true);
-            assert_eq!(staggered.record_commit(10, 100, 110).duplication_ratio, 0.1);
-            assert_eq!(staggered.record_commit(0, 100, 100).duplication_ratio, 0.05);
+            assert_eq!(
+                staggered
+                    .record_commit_without_free_duplicates(10, 100)
+                    .duplication_ratio,
+                0.1
+            );
+            assert_eq!(
+                staggered
+                    .record_commit_without_free_duplicates(0, 100)
+                    .duplication_ratio,
+                0.05
+            );
             // A full window of quiet commits removes the spike.
             let mut ratio = f64::NAN;
             for _ in 0..TEST_SIGNAL_WINDOW_COMMITS {
-                ratio = staggered.record_commit(0, 100, 100).duplication_ratio;
+                ratio = staggered
+                    .record_commit_without_free_duplicates(0, 100)
+                    .duplication_ratio;
             }
             assert_eq!(ratio, 0.0);
         }
@@ -1455,25 +1501,24 @@ mod tests {
         #[tokio::test]
         async fn late_copies_activate_without_new_unique_transactions() {
             let staggered = StaggeredSubmission::new(test_signal_config(), true);
-            staggered.record_commit(0, 1, 1);
+            staggered.record_commit_without_free_duplicates(0, 1);
             for _ in 0..TEST_SIGNAL_WINDOW_COMMITS {
-                assert_eq!(staggered.record_commit(0, 0, 0).pair(), (None, 0.0));
+                assert_eq!(
+                    staggered.record_commit_without_free_duplicates(0, 0).pair(),
+                    (None, 0.0)
+                );
             }
 
             // `min_excess_copies` still applies when the ratio is large.
             assert_eq!(
                 staggered
-                    .record_commit(
-                        TEST_SIGNAL_MIN_EXCESS_COPIES - 1,
-                        0,
-                        TEST_SIGNAL_MIN_EXCESS_COPIES - 1
-                    )
+                    .record_commit_without_free_duplicates(TEST_SIGNAL_MIN_EXCESS_COPIES - 1, 0)
                     .pair(),
                 (None, (TEST_SIGNAL_MIN_EXCESS_COPIES - 1) as f64),
             );
             assert!(!staggered.is_active());
             assert_eq!(
-                staggered.record_commit(1, 0, 1).pair(),
+                staggered.record_commit_without_free_duplicates(1, 0).pair(),
                 (Some(2), TEST_SIGNAL_MIN_EXCESS_COPIES as f64),
             );
             assert!(staggered.is_active());
@@ -1488,14 +1533,18 @@ mod tests {
             // A 7% burst enters band 1.
             let staggered = StaggeredSubmission::new(test_signal_config(), true);
             assert_eq!(
-                staggered.record_commit(700, 10000, 10700).transition,
+                staggered
+                    .record_commit_without_free_duplicates(700, 10000)
+                    .transition,
                 Some(1)
             );
             assert!(staggered.is_active());
             // A 50% burst enters band 2 directly.
             let staggered = StaggeredSubmission::new(test_signal_config(), true);
             assert_eq!(
-                staggered.record_commit(1000, 2000, 3000).transition,
+                staggered
+                    .record_commit_without_free_duplicates(1000, 2000)
+                    .transition,
                 Some(2)
             );
             assert!(staggered.is_active());
@@ -1505,12 +1554,16 @@ mod tests {
         fn escalates_further_as_the_ratio_climbs() {
             let staggered = StaggeredSubmission::new(test_signal_config(), true);
             assert_eq!(
-                staggered.record_commit(700, 10000, 10700).transition,
+                staggered
+                    .record_commit_without_free_duplicates(700, 10000)
+                    .transition,
                 Some(1)
             );
             // More copies in band 1 push the ratio over band 2's enter ratio.
             assert_eq!(
-                staggered.record_commit(3000, 1000, 4000).transition,
+                staggered
+                    .record_commit_without_free_duplicates(3000, 1000)
+                    .transition,
                 Some(2)
             );
             assert!(staggered.is_active());
@@ -1524,7 +1577,9 @@ mod tests {
                 TEST_SIGNAL_BANDS[0].max_delay
             );
             assert_eq!(
-                staggered.record_commit(1000, 2000, 3000).transition,
+                staggered
+                    .record_commit_without_free_duplicates(1000, 2000)
+                    .transition,
                 Some(2)
             );
             assert_eq!(
@@ -1535,7 +1590,11 @@ mod tests {
             // signal moves to band 1 and lowers the cap.
             let mut transitions = Vec::new();
             for _ in 0..TEST_SIGNAL_WINDOW_COMMITS + TEST_SIGNAL_EXIT_DWELL_COMMITS {
-                transitions.extend(staggered.record_commit(4, 100, 104).transition);
+                transitions.extend(
+                    staggered
+                        .record_commit_without_free_duplicates(4, 100)
+                        .transition,
+                );
                 if !transitions.is_empty() {
                     break;
                 }
@@ -1577,7 +1636,12 @@ mod tests {
             // At 4% per commit the excess copies pass `min_excess_copies`, but the
             // ratio stays below band 1.
             for _ in 0..30 {
-                assert_eq!(staggered.record_commit(40, 1000, 1040).transition, None);
+                assert_eq!(
+                    staggered
+                        .record_commit_without_free_duplicates(40, 1000)
+                        .transition,
+                    None
+                );
             }
             assert!(!staggered.is_active());
         }
@@ -1588,10 +1652,20 @@ mod tests {
             // The ratio is 20%, with two excess copies per commit. The signal waits
             // until a full window reaches `min_excess_copies` and then enters band 2.
             for _ in 0..TEST_SIGNAL_WINDOW_COMMITS - 1 {
-                assert_eq!(staggered.record_commit(2, 10, 12).transition, None);
+                assert_eq!(
+                    staggered
+                        .record_commit_without_free_duplicates(2, 10)
+                        .transition,
+                    None
+                );
                 assert!(!staggered.is_active());
             }
-            assert_eq!(staggered.record_commit(2, 10, 12).transition, Some(2));
+            assert_eq!(
+                staggered
+                    .record_commit_without_free_duplicates(2, 10)
+                    .transition,
+                Some(2)
+            );
         }
 
         #[test]
@@ -1600,7 +1674,12 @@ mod tests {
             // Each commit has 60 excess copies over 30 unique transactions. That passes
             // `min_excess_copies` and band 2's ratio, with 90 copies per commit.
             for _ in 0..2 * TEST_SIGNAL_WINDOW_COMMITS {
-                assert_eq!(staggered.record_commit(60, 30, 90).pair(), (None, 2.0));
+                assert_eq!(
+                    staggered
+                        .record_commit_without_free_duplicates(60, 30)
+                        .pair(),
+                    (None, 2.0)
+                );
             }
             assert!(!staggered.is_active());
             assert_eq!(staggered.signal_band(), 0);
@@ -1670,15 +1749,30 @@ mod tests {
             enter_band2_with_burst(&staggered);
             // The ratio stays at 200%, above every exit ratio. Only the volume is low.
             for _ in 0..LOW_VOLUME_COMMITS_TO_OFF - 1 {
-                assert_eq!(staggered.record_commit(60, 30, 90).pair(), (None, 2.0));
+                assert_eq!(
+                    staggered
+                        .record_commit_without_free_duplicates(60, 30)
+                        .pair(),
+                    (None, 2.0)
+                );
                 assert!(staggered.is_active());
             }
             // The signal drops from band 2 straight to off.
-            assert_eq!(staggered.record_commit(60, 30, 90).pair(), (Some(0), 2.0));
+            assert_eq!(
+                staggered
+                    .record_commit_without_free_duplicates(60, 30)
+                    .pair(),
+                (Some(0), 2.0)
+            );
             assert!(!staggered.is_active());
             // The same traffic does not turn the signal back on.
             for _ in 0..2 * TEST_SIGNAL_WINDOW_COMMITS {
-                assert_eq!(staggered.record_commit(60, 30, 90).transition, None);
+                assert_eq!(
+                    staggered
+                        .record_commit_without_free_duplicates(60, 30)
+                        .transition,
+                    None
+                );
             }
         }
 
@@ -1687,7 +1781,12 @@ mod tests {
             let staggered = StaggeredSubmission::new(test_signal_config_with_min_copies(), true);
             enter_band2_with_burst(&staggered);
             for _ in 0..LOW_VOLUME_COMMITS_TO_OFF - 1 {
-                assert_eq!(staggered.record_commit(60, 30, 90).transition, None);
+                assert_eq!(
+                    staggered
+                        .record_commit_without_free_duplicates(60, 30)
+                        .transition,
+                    None
+                );
             }
             // One commit before the dwell ends, a commit lifts the window over the
             // floor again. The dwell restarts.
@@ -1702,10 +1801,20 @@ mod tests {
                 None
             );
             for _ in 0..LOW_VOLUME_COMMITS_TO_OFF - 1 {
-                assert_eq!(staggered.record_commit(60, 30, 90).transition, None);
+                assert_eq!(
+                    staggered
+                        .record_commit_without_free_duplicates(60, 30)
+                        .transition,
+                    None
+                );
             }
             assert_eq!(staggered.signal_band(), 2);
-            assert_eq!(staggered.record_commit(60, 30, 90).transition, Some(0));
+            assert_eq!(
+                staggered
+                    .record_commit_without_free_duplicates(60, 30)
+                    .transition,
+                Some(0)
+            );
         }
 
         #[test]
@@ -1713,7 +1822,12 @@ mod tests {
             let staggered = StaggeredSubmission::new(test_signal_config_with_min_copies(), true);
             enter_band2_with_burst(&staggered);
             for _ in 0..LOW_VOLUME_COMMITS_TO_OFF - 1 {
-                assert_eq!(staggered.record_commit(60, 30, 90).transition, None);
+                assert_eq!(
+                    staggered
+                        .record_commit_without_free_duplicates(60, 30)
+                        .transition,
+                    None
+                );
             }
             // The window holds 299 low-volume commits: 17,940 excess copies over 8,970
             // unique transactions. The last commit of the dwell brings 170,430 unique
@@ -1743,13 +1857,22 @@ mod tests {
             );
             // Commits without duplicates move the burst out of the window.
             for _ in 0..TEST_SIGNAL_WINDOW_COMMITS {
-                assert_eq!(staggered.record_commit(0, 30, 30).transition, None);
+                assert_eq!(
+                    staggered
+                        .record_commit_without_free_duplicates(0, 30)
+                        .transition,
+                    None
+                );
             }
             // The ratio then climbs to 200% at low volume. The signal does not move to
             // band 2. It turns off when the dwell ends.
             let mut transitions = Vec::new();
             for _ in 0..TEST_SIGNAL_EXIT_DWELL_COMMITS {
-                transitions.extend(staggered.record_commit(60, 30, 90).transition);
+                transitions.extend(
+                    staggered
+                        .record_commit_without_free_duplicates(60, 30)
+                        .transition,
+                );
                 assert!(staggered.signal_band() <= 1);
             }
             assert_eq!(transitions, vec![0]);
@@ -1759,13 +1882,28 @@ mod tests {
         fn old_spikes_slide_out_of_window() {
             let staggered = StaggeredSubmission::new(test_signal_config(), true);
             // 500 excess copies at 50% stay below `min_excess_copies`.
-            assert_eq!(staggered.record_commit(500, 1000, 1500).transition, None);
+            assert_eq!(
+                staggered
+                    .record_commit_without_free_duplicates(500, 1000)
+                    .transition,
+                None
+            );
             // After a full window of quiet commits, a second spike does not add to
             // the first.
             for _ in 0..TEST_SIGNAL_WINDOW_COMMITS {
-                assert_eq!(staggered.record_commit(0, 100, 100).transition, None);
+                assert_eq!(
+                    staggered
+                        .record_commit_without_free_duplicates(0, 100)
+                        .transition,
+                    None
+                );
             }
-            assert_eq!(staggered.record_commit(500, 1000, 1500).transition, None);
+            assert_eq!(
+                staggered
+                    .record_commit_without_free_duplicates(500, 1000)
+                    .transition,
+                None
+            );
             assert!(!staggered.is_active());
         }
 
@@ -1773,14 +1911,20 @@ mod tests {
         fn deescalates_straight_to_off_once_quiet_traffic_dilutes_the_spike() {
             let staggered = StaggeredSubmission::new(test_signal_config(), true);
             assert_eq!(
-                staggered.record_commit(1000, 2000, 3000).transition,
+                staggered
+                    .record_commit_without_free_duplicates(1000, 2000)
+                    .transition,
                 Some(2)
             );
             // Quiet traffic brings the ratio to zero. After the dwell the signal drops
             // from band 2 straight to off, without visiting band 1.
             let mut transitions = Vec::new();
             for _ in 0..=TEST_SIGNAL_WINDOW_COMMITS + TEST_SIGNAL_EXIT_DWELL_COMMITS {
-                transitions.extend(staggered.record_commit(0, 100, 100).transition);
+                transitions.extend(
+                    staggered
+                        .record_commit_without_free_duplicates(0, 100)
+                        .transition,
+                );
                 assert_eq!(staggered.is_active(), transitions.is_empty());
             }
             assert_eq!(transitions, vec![0]);
@@ -1790,25 +1934,40 @@ mod tests {
         fn threshold_gaps_hold_the_band_between_exit_and_enter() {
             let staggered = StaggeredSubmission::new(test_signal_config(), true);
             assert_eq!(
-                staggered.record_commit(1000, 2000, 3000).transition,
+                staggered
+                    .record_commit_without_free_duplicates(1000, 2000)
+                    .transition,
                 Some(2)
             );
             // A steady 4% lies between band 1's exit and enter ratios. The signal
             // moves to band 1 and stays there.
             let mut transitions = Vec::new();
             for _ in 0..2 * TEST_SIGNAL_WINDOW_COMMITS + TEST_SIGNAL_EXIT_DWELL_COMMITS {
-                transitions.extend(staggered.record_commit(4, 100, 104).transition);
+                transitions.extend(
+                    staggered
+                        .record_commit_without_free_duplicates(4, 100)
+                        .transition,
+                );
                 assert!(staggered.is_active());
             }
             assert_eq!(transitions, vec![1]);
             // After 2% turns the signal off, 4% does not turn it back on.
             let mut transitions = Vec::new();
             for _ in 0..TEST_SIGNAL_WINDOW_COMMITS + TEST_SIGNAL_EXIT_DWELL_COMMITS {
-                transitions.extend(staggered.record_commit(2, 100, 102).transition);
+                transitions.extend(
+                    staggered
+                        .record_commit_without_free_duplicates(2, 100)
+                        .transition,
+                );
             }
             assert_eq!(transitions, vec![0]);
             for _ in 0..2 * TEST_SIGNAL_WINDOW_COMMITS {
-                assert_eq!(staggered.record_commit(4, 100, 104).transition, None);
+                assert_eq!(
+                    staggered
+                        .record_commit_without_free_duplicates(4, 100)
+                        .transition,
+                    None
+                );
                 assert!(!staggered.is_active());
             }
         }
@@ -1819,20 +1978,34 @@ mod tests {
             // band 2 active.
             let staggered = StaggeredSubmission::new(test_signal_config(), true);
             assert_eq!(
-                staggered.record_commit(1000, 2000, 3000).transition,
+                staggered
+                    .record_commit_without_free_duplicates(1000, 2000)
+                    .transition,
                 Some(2)
             );
             for _ in 0..2 * TEST_SIGNAL_WINDOW_COMMITS {
-                assert_eq!(staggered.record_commit(17, 100, 117).transition, None);
+                assert_eq!(
+                    staggered
+                        .record_commit_without_free_duplicates(17, 100)
+                        .transition,
+                    None
+                );
             }
             // It also does not move band 1 up to band 2.
             let staggered = StaggeredSubmission::new(test_signal_config(), true);
             assert_eq!(
-                staggered.record_commit(700, 10000, 10700).transition,
+                staggered
+                    .record_commit_without_free_duplicates(700, 10000)
+                    .transition,
                 Some(1)
             );
             for _ in 0..2 * TEST_SIGNAL_WINDOW_COMMITS {
-                assert_eq!(staggered.record_commit(17, 100, 117).transition, None);
+                assert_eq!(
+                    staggered
+                        .record_commit_without_free_duplicates(17, 100)
+                        .transition,
+                    None
+                );
             }
         }
 
@@ -1841,7 +2014,9 @@ mod tests {
             let staggered = StaggeredSubmission::new(test_signal_config(), false);
             // A disabled signal reports transitions.
             assert_eq!(
-                staggered.record_commit(1000, 2000, 3000).transition,
+                staggered
+                    .record_commit_without_free_duplicates(1000, 2000)
+                    .transition,
                 Some(2)
             );
             // Staggering and its hold cap do not change.
@@ -1853,7 +2028,11 @@ mod tests {
             // De-escalation is also reported without changing staggering.
             let mut transitions = Vec::new();
             for _ in 0..=TEST_SIGNAL_WINDOW_COMMITS + TEST_SIGNAL_EXIT_DWELL_COMMITS {
-                transitions.extend(staggered.record_commit(0, 100, 100).transition);
+                transitions.extend(
+                    staggered
+                        .record_commit_without_free_duplicates(0, 100)
+                        .transition,
+                );
                 assert!(!staggered.is_active());
             }
             assert_eq!(transitions, vec![0]);
@@ -1867,7 +2046,9 @@ mod tests {
         fn exit_dwell_absorbs_transient_dips() {
             let staggered = StaggeredSubmission::new(test_signal_config(), true);
             assert_eq!(
-                staggered.record_commit(1000, 2000, 3000).transition,
+                staggered
+                    .record_commit_without_free_duplicates(1000, 2000)
+                    .transition,
                 Some(2)
             );
             let exit_ratio = TEST_SIGNAL_BANDS[1].exit_ratio;
@@ -1913,7 +2094,12 @@ mod tests {
             // The signal starts at off, so quiet commits cause no transition and the
             // manual setting stays.
             for _ in 0..50 {
-                assert_eq!(staggered.record_commit(0, 100, 100).transition, None);
+                assert_eq!(
+                    staggered
+                        .record_commit_without_free_duplicates(0, 100)
+                        .transition,
+                    None
+                );
             }
             assert!(staggered.is_active());
         }

@@ -301,6 +301,7 @@ pub struct AuthorityMetrics {
     pub(crate) staggered_submission_commit_copies: IntCounterVec,
     pub(crate) staggered_submission_band_duration_commits: HistogramVec,
     pub(crate) staggered_submission_duplication_ratio: Gauge,
+    pub(crate) staggered_submission_window_copies: IntGauge,
 
     pub(crate) authority_overload_status: IntGauge,
     pub(crate) authority_load_shedding_percentage: IntGauge,
@@ -657,6 +658,12 @@ impl AuthorityMetrics {
             staggered_submission_duplication_ratio: register_gauge_with_registry!(
                 "staggered_submission_duplication_ratio",
                 "Amplification measured by the duplication signal: excess duplicate copies as a fraction of unique user transactions over the signal window, compared against the band enter/exit ratios",
+                registry,
+            )
+            .unwrap(),
+            staggered_submission_window_copies: register_int_gauge_with_registry!(
+                "staggered_submission_window_copies",
+                "User transaction copies in the duplication signal's window, duplicates included. The signal does not escalate while this is below the copies floor, which is the protocol's min copies per commit times the window commits.",
                 registry,
             )
             .unwrap(),
