@@ -5092,9 +5092,11 @@ impl ProtocolConfig {
 
                     cfg.feature_flags.staggered_submission_signal = true;
                     // Staggering should turn on only at peak load. Mainnet commits about
-                    // 15 times per second, and about 10 to 13 times per second under
-                    // load. The window therefore covers about 40 seconds, and the floor
-                    // is about 10,000 to 13,000 copies per second, duplicates included.
+                    // 15 times per second. There the window covers about 40 seconds and
+                    // the floor is about 15,000 copies per second, duplicates included.
+                    // Under load mainnet commits about 10 to 13 times per second. There
+                    // the window covers 46 to 60 seconds and the floor is about 10,000
+                    // to 13,000 copies per second.
                     // Mainnet traffic from 2026-11-04 to 2026-11-19 would have turned
                     // the signal on 32 times, with a median of once per day. With the
                     // same floor and the previous window of 300 commits, bursts of a

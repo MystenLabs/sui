@@ -365,17 +365,37 @@ pub struct StaggeredSubmission {
     signal: Mutex<SignalState>,
 }
 
+/// Copy counts of one commit, or their sum over the signal window.
+#[derive(Debug, Clone, Copy, Default)]
+struct WindowCounts {
+    excess: u64,
+    unique: u64,
+    copies: u64,
+}
+
+impl WindowCounts {
+    fn add(&mut self, other: &Self) {
+        self.excess += other.excess;
+        self.unique += other.unique;
+        self.copies += other.copies;
+    }
+
+    /// Removes counts that `add` added earlier, so the fields cannot underflow.
+    fn sub(&mut self, other: &Self) {
+        self.excess -= other.excess;
+        self.unique -= other.unique;
+        self.copies -= other.copies;
+    }
+}
+
 /// State of the duplication signal. It is kept apart from `active` so that transitions
 /// are logged and counted even when the signal is not enabled.
 struct SignalState {
-    /// `(excess copies, unique user transactions, all copies)` for each commit in the
-    /// window, newest last.
-    window: VecDeque<(u64, u64, u64)>,
-    /// Sums of the three fields of `window`. `record_commit` updates them as commits
-    /// enter and leave the window.
-    window_excess: u64,
-    window_unique: u64,
-    window_copies: u64,
+    /// The counts of each commit in the window, newest last.
+    window: VecDeque<WindowCounts>,
+    /// The sum of `window`. `record_commit` updates it as commits enter and leave the
+    /// window.
+    window_sum: WindowCounts,
     /// The signal level: 0 is off, and `b > 0` is `SignalConfig::bands[b - 1]`.
     band: usize,
     /// Consecutive commits with the ratio below the active band's exit ratio or with a
@@ -394,9 +414,7 @@ impl StaggeredSubmission {
             enabled,
             signal: Mutex::new(SignalState {
                 window: VecDeque::new(),
-                window_excess: 0,
-                window_unique: 0,
-                window_copies: 0,
+                window_sum: WindowCounts::default(),
                 band: 0,
                 below_exit_commits: 0,
                 commits_in_band: 0,
@@ -451,23 +469,22 @@ impl StaggeredSubmission {
         let mut guard = self.signal.lock();
         let signal = &mut *guard;
         signal.commits_in_band += 1;
-        signal
-            .window
-            .push_back((excess_copies, unique_user_txns, copies));
-        signal.window_excess += excess_copies;
-        signal.window_unique += unique_user_txns;
-        signal.window_copies += copies;
+        let commit = WindowCounts {
+            excess: excess_copies,
+            unique: unique_user_txns,
+            copies,
+        };
+        signal.window.push_back(commit);
+        signal.window_sum.add(&commit);
         while signal.window.len() > config.window_commits {
-            let (e, u, c) = signal.window.pop_front().expect("window is not empty");
-            signal.window_excess -= e;
-            signal.window_unique -= u;
-            signal.window_copies -= c;
+            let oldest = signal.window.pop_front().expect("window is not empty");
+            signal.window_sum.sub(&oldest);
         }
-        let (excess, total, window_copies) = (
-            signal.window_excess,
-            signal.window_unique,
-            signal.window_copies,
-        );
+        let WindowCounts {
+            excess,
+            unique: total,
+            copies: window_copies,
+        } = signal.window_sum;
         let low_volume = window_copies < config.min_copies;
         // First copies can leave the window while late copies keep arriving. A window
         // with no unique transactions uses a denominator of one so that the late copies
@@ -567,16 +584,6 @@ impl StaggeredSubmission {
             unique_user_txns,
             excess_copies + unique_user_txns,
         )
-    }
-
-    /// Returns `(transition, duplication_ratio)` from `record_commit`.
-    #[cfg(test)]
-    fn record_commit_pair(
-        &self,
-        excess_copies: u64,
-        unique_user_txns: u64,
-    ) -> (Option<usize>, f64) {
-        self.record(excess_copies, unique_user_txns).pair()
     }
 
     /// What this validator does with a group of user transactions — a single transaction
@@ -1862,7 +1869,7 @@ mod tests {
             // active for half the dwell.
             let mut below_exit = 0;
             while below_exit < TEST_SIGNAL_EXIT_DWELL_COMMITS / 2 {
-                let (transition, ratio) = staggered.record_commit_pair(0, 100);
+                let (transition, ratio) = staggered.record(0, 100).pair();
                 assert_eq!(transition, None);
                 if ratio < exit_ratio {
                     below_exit += 1;
@@ -1870,14 +1877,14 @@ mod tests {
             }
             // One heavy commit lifts the ratio above the exit ratio and restarts the
             // dwell.
-            let (transition, ratio) = staggered.record_commit_pair(10_000, 100);
+            let (transition, ratio) = staggered.record(10_000, 100).pair();
             assert_eq!(transition, None);
             assert!(ratio >= exit_ratio);
             assert_eq!(staggered.signal_band(), 2);
 
             let mut below_exit = 0;
             loop {
-                let (transition, ratio) = staggered.record_commit_pair(0, 100);
+                let (transition, ratio) = staggered.record(0, 100).pair();
                 if ratio < exit_ratio {
                     below_exit += 1;
                 }
