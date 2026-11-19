@@ -17,6 +17,26 @@ pub struct SizeConfig {
     pub include_vector_size: bool,
 }
 
+pub(crate) const PRIMITIVE_SIZE: AbstractMemorySize = AbstractMemorySize::new(8);
+pub(crate) const U128_SIZE: AbstractMemorySize = AbstractMemorySize::new(16);
+pub(crate) const U256_SIZE: AbstractMemorySize = AbstractMemorySize::new(32);
+/// The size of a struct, variant or vector header.
+pub(crate) const STRUCT_SIZE: AbstractMemorySize = AbstractMemorySize::new(2);
+pub(crate) const REFERENCE_SIZE: AbstractMemorySize = AbstractMemorySize::new(8);
+
+#[allow(clippy::arithmetic_side_effects)]
+pub(crate) fn primitive_vector_abstract_size<T>(
+    values: &[T],
+    include_vector_size: bool,
+) -> AbstractMemorySize {
+    let elements = AbstractMemorySize::new(std::mem::size_of_val(values) as u64);
+    if include_vector_size {
+        STRUCT_SIZE + elements
+    } else {
+        elements
+    }
+}
+
 /// Trait that provides an abstract view into a Move Value.
 ///
 /// This is used to expose certain info to clients (e.g. the gas meter),
@@ -30,22 +50,16 @@ pub trait ValueView {
     /// saturating addition. This means that if the value is too large, it will not overflow.
     #[allow(clippy::arithmetic_side_effects)]
     fn abstract_memory_size(&self, config: &SizeConfig) -> PartialVMResult<AbstractMemorySize> {
-        /// The size for primitives smaller than u128
-        const PRIMITIVE_SIZE: AbstractMemorySize = AbstractMemorySize::new(8);
-        /// The size for u128
-        const U128_SIZE: AbstractMemorySize = AbstractMemorySize::new(16);
-        /// The size for u256
-        const U256_SIZE: AbstractMemorySize = AbstractMemorySize::new(32);
-
-        /// The size of a struct
-        const STRUCT_SIZE: AbstractMemorySize = AbstractMemorySize::new(2);
-
-        /// The size in bytes for a reference on the stack
-        const REFERENCE_SIZE: AbstractMemorySize = AbstractMemorySize::new(8);
-
         struct Acc<'b> {
             accumulated_size: AbstractMemorySize,
             config: &'b SizeConfig,
+        }
+
+        impl Acc<'_> {
+            fn visit_primitive_vector<T>(&mut self, values: &[T]) {
+                self.accumulated_size +=
+                    primitive_vector_abstract_size(values, self.config.include_vector_size);
+            }
         }
 
         impl ValueVisitor for Acc<'_> {
@@ -113,42 +127,27 @@ pub trait ValueView {
             }
 
             fn visit_vec_u8(&mut self, _depth: usize, vals: &[u8]) -> PartialVMResult<()> {
-                if self.config.include_vector_size {
-                    self.accumulated_size += STRUCT_SIZE;
-                }
-                self.accumulated_size += (std::mem::size_of_val(vals) as u64).into();
+                self.visit_primitive_vector(vals);
                 Ok(())
             }
 
             fn visit_vec_u16(&mut self, _depth: usize, vals: &[u16]) -> PartialVMResult<()> {
-                if self.config.include_vector_size {
-                    self.accumulated_size += STRUCT_SIZE;
-                }
-                self.accumulated_size += (std::mem::size_of_val(vals) as u64).into();
+                self.visit_primitive_vector(vals);
                 Ok(())
             }
 
             fn visit_vec_u32(&mut self, _depth: usize, vals: &[u32]) -> PartialVMResult<()> {
-                if self.config.include_vector_size {
-                    self.accumulated_size += STRUCT_SIZE;
-                }
-                self.accumulated_size += (std::mem::size_of_val(vals) as u64).into();
+                self.visit_primitive_vector(vals);
                 Ok(())
             }
 
             fn visit_vec_u64(&mut self, _depth: usize, vals: &[u64]) -> PartialVMResult<()> {
-                if self.config.include_vector_size {
-                    self.accumulated_size += STRUCT_SIZE;
-                }
-                self.accumulated_size += (std::mem::size_of_val(vals) as u64).into();
+                self.visit_primitive_vector(vals);
                 Ok(())
             }
 
             fn visit_vec_u128(&mut self, _depth: usize, vals: &[u128]) -> PartialVMResult<()> {
-                if self.config.include_vector_size {
-                    self.accumulated_size += STRUCT_SIZE;
-                }
-                self.accumulated_size += (std::mem::size_of_val(vals) as u64).into();
+                self.visit_primitive_vector(vals);
                 Ok(())
             }
 
@@ -157,18 +156,12 @@ pub trait ValueView {
                 _depth: usize,
                 vals: &[move_core_types::u256::U256],
             ) -> PartialVMResult<()> {
-                if self.config.include_vector_size {
-                    self.accumulated_size += STRUCT_SIZE;
-                }
-                self.accumulated_size += (std::mem::size_of_val(vals) as u64).into();
+                self.visit_primitive_vector(vals);
                 Ok(())
             }
 
             fn visit_vec_bool(&mut self, _depth: usize, vals: &[bool]) -> PartialVMResult<()> {
-                if self.config.include_vector_size {
-                    self.accumulated_size += STRUCT_SIZE;
-                }
-                self.accumulated_size += (std::mem::size_of_val(vals) as u64).into();
+                self.visit_primitive_vector(vals);
                 Ok(())
             }
 
@@ -177,10 +170,7 @@ pub trait ValueView {
                 _depth: usize,
                 vals: &[AccountAddress],
             ) -> PartialVMResult<()> {
-                if self.config.include_vector_size {
-                    self.accumulated_size += STRUCT_SIZE;
-                }
-                self.accumulated_size += (std::mem::size_of_val(vals) as u64).into();
+                self.visit_primitive_vector(vals);
                 Ok(())
             }
 

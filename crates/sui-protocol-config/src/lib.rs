@@ -436,6 +436,8 @@ const MAINNET_USDB: &str =
 //              Configure explicit Move binary format encoding limits.
 //              Enable defer_owned_object_double_spend on all networks.
 // Version 143: Add and enable a new execution version.
+//              Charge bcs::to_bytes for the size of its input.
+//              Charge vector::copy_range for the size of its copied range.
 //              Simplify Nitro attestation header validation.
 //              Disable forwarding addresses on devnet.
 //              Charge a MIST-denominated amount for publish and upgrade commands before execution.
@@ -2197,6 +2199,7 @@ pub struct ProtocolConfig {
     layout_node_cost_large_layout_threshold: Option<u64>,
 
     // Stdlib costs
+    bcs_per_input_abstract_unit_cost: Option<u64>,
     bcs_per_byte_serialized_cost: Option<u64>,
     bcs_legacy_min_output_size_cost: Option<u64>,
     bcs_failure_cost: Option<u64>,
@@ -2234,6 +2237,7 @@ pub struct ProtocolConfig {
     vector_keep_range_per_dropped_elem_cost: Option<u64>,
     vector_keep_range_per_moved_elem_cost: Option<u64>,
     vector_copy_range_base_cost: Option<u64>,
+    vector_copy_range_per_abstract_memory_unit_cost: Option<u64>,
     vector_replace_range_base_cost: Option<u64>,
     vector_replace_range_per_elem_cost: Option<u64>,
     debug_print_base_cost: Option<u64>,
@@ -3186,6 +3190,7 @@ impl ProtocolConfig {
 
             layout_node_cost: None,
             layout_node_cost_large_layout_threshold: None,
+            bcs_per_input_abstract_unit_cost: None,
             bcs_per_byte_serialized_cost: None,
             bcs_legacy_min_output_size_cost: None,
             bcs_failure_cost: None,
@@ -3220,6 +3225,7 @@ impl ProtocolConfig {
             vector_keep_range_per_dropped_elem_cost: None,
             vector_keep_range_per_moved_elem_cost: None,
             vector_copy_range_base_cost: None,
+            vector_copy_range_per_abstract_memory_unit_cost: None,
             vector_replace_range_base_cost: None,
             vector_replace_range_per_elem_cost: None,
             debug_print_base_cost: None,
@@ -5087,6 +5093,8 @@ impl ProtocolConfig {
                     }
                     cfg.layout_node_cost = Some(16);
                     cfg.layout_node_cost_large_layout_threshold = Some(64);
+                    cfg.bcs_per_input_abstract_unit_cost = Some(20);
+                    cfg.vector_copy_range_per_abstract_memory_unit_cost = Some(1);
                 }
                 144 => {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {

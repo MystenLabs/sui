@@ -11,8 +11,9 @@ use crate::{
         make_module_natives,
     },
     pop_arg,
+    shared::views::{SizeConfig, ValueView},
 };
-use move_binary_format::{errors::PartialVMResult, safe_assert_eq, safe_unwrap};
+use move_binary_format::{errors::PartialVMResult, safe_assert, safe_assert_eq, safe_unwrap};
 use move_core_types::{
     gas_algebra::InternalGas, vm_status::sub_status::NFE_BCS_SERIALIZATION_FAILURE,
 };
@@ -22,6 +23,7 @@ use std::{collections::VecDeque, sync::Arc};
  * native fun to_bytes
  *
  *   gas cost: layout_cost(val_type) +
+ *             size_of(input) * input_unit_cost +
  *             max(size_of(output), legacy_min_output_size) * output_unit_cost
  *
  *             Layout or serialization failures additionally attempt to charge failure_cost.
@@ -29,6 +31,7 @@ use std::{collections::VecDeque, sync::Arc};
  **************************************************************************************************/
 #[derive(Debug, Clone)]
 pub struct ToBytesGasParameters {
+    pub per_input_abstract_unit: Option<InternalGas>,
     pub per_byte_serialized: InternalGas,
     pub legacy_min_output_size: u64,
     pub failure: InternalGas,
@@ -62,9 +65,36 @@ fn native_to_bytes(
             ));
         }
     };
-    // serialize value
-    let val = ref_to_val.read_ref()?;
-    let serialized_value = match val.typed_serialize(&layout) {
+    if let Some(per_input_abstract_unit) = gas_params.per_input_abstract_unit {
+        let size = ref_to_val.abstract_memory_size(&SizeConfig {
+            traverse_references: true,
+            include_vector_size: true,
+        })?;
+        native_charge_gas_early_exit!(
+            context,
+            per_input_abstract_unit.saturating_mul(u64::from(size))
+        );
+    }
+
+    let serialized_value = match ref_to_val {
+        Reference::Value(mem_box) => mem_box.try_borrow()?.typed_serialize(&layout),
+        indexed @ Reference::Indexed(_) => {
+            let value = indexed.read_ref()?;
+            safe_assert!(matches!(
+                &value,
+                Value::U8(_)
+                    | Value::U16(_)
+                    | Value::U32(_)
+                    | Value::U64(_)
+                    | Value::U128(_)
+                    | Value::U256(_)
+                    | Value::Bool(_)
+                    | Value::Address(_)
+            ));
+            value.typed_serialize(&layout)
+        }
+    };
+    let serialized_value = match serialized_value {
         Some(serialized_value) => serialized_value,
         None => {
             // If we run out of gas when charging for failure, we don't want the `OUT_OF_GAS` error

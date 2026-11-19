@@ -184,6 +184,10 @@ impl StackFrame {
             .and_then(|value| Ok(value.try_borrow()?.copy_value()))
     }
 
+    pub(crate) fn copy_loc_view(&self, ndx: usize) -> PartialVMResult<&MemBox<Value>> {
+        self.get_valid(ndx)
+    }
+
     /// Moves a location out of memory, swapping it with `ValueImpl::Invalid`
     pub fn move_loc(&mut self, ndx: usize) -> PartialVMResult<Value> {
         let value_slot = self.get_valid_mut(ndx)?;

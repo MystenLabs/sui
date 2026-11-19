@@ -490,13 +490,9 @@ fn op_step_impl(
             state.push_operand(Value::bool(false))?;
         }
         Bytecode::CopyLoc(idx) => {
-            // TODO(Gas): We should charge gas before copying the value.
-            let local = state
-                .call_stack
-                .current_frame
-                .stack_frame
-                .copy_loc(*idx as usize)?;
-            gas_meter.charge_copy_loc(&local)?;
+            let stack_frame = &state.call_stack.current_frame.stack_frame;
+            gas_meter.charge_copy_loc(stack_frame.copy_loc_view(*idx as usize)?)?;
+            let local = stack_frame.copy_loc(*idx as usize)?;
             state.push_operand(local)?;
         }
         Bytecode::MoveLoc(idx) => {

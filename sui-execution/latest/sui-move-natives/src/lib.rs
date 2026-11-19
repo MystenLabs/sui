@@ -923,6 +923,9 @@ pub fn make_stdlib_gas_params_for_protocol_config(
     GasParameters::new(
         MSN::bcs::GasParameters {
             to_bytes: MSN::bcs::ToBytesGasParameters {
+                per_input_abstract_unit: protocol_config
+                    .bcs_per_input_abstract_unit_cost_as_option()
+                    .map(Into::into),
                 per_byte_serialized: get_gas_cost_or_default!(
                     bcs_per_byte_serialized_cost_as_option
                 ),
@@ -1032,6 +1035,9 @@ pub fn make_stdlib_gas_params_for_protocol_config(
             },
             copy_range: MSN::vector::CopyRangeGasParameters {
                 base: get_gas_cost_or_default_since!(vector_copy_range_base_cost_as_option, 140),
+                per_abstract_memory_unit: protocol_config
+                    .vector_copy_range_per_abstract_memory_unit_cost_as_option()
+                    .map(Into::into),
             },
             replace_range: MSN::vector::ReplaceRangeGasParameters {
                 base: get_gas_cost_or_default_since!(vector_replace_range_base_cost_as_option, 140),

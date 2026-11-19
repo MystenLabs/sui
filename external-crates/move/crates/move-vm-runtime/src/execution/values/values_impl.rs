@@ -7,7 +7,7 @@ use crate::{
     jit::execution::ast::{ArenaType, Type},
     shared::{
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
-        views::{ValueView, ValueVisitor},
+        views::{STRUCT_SIZE, SizeConfig, ValueView, ValueVisitor, primitive_vector_abstract_size},
     },
 };
 use move_binary_format::{
@@ -19,6 +19,7 @@ use move_binary_format::{
 use move_core_types::{
     VARIANT_TAG_MAX_VALUE,
     account_address::AccountAddress,
+    gas_algebra::AbstractMemorySize,
     runtime_value::{MoveEnumLayout, MoveStructLayout, MoveTypeLayout},
     u256,
     vm_status::sub_status::NFE_VECTOR_ERROR_BASE,
@@ -2165,6 +2166,36 @@ impl VectorRef {
                     .map(MemBox::copy_value)
                     .collect(),
             ),
+        })
+    }
+
+    #[allow(clippy::arithmetic_side_effects)]
+    pub fn copy_range_abstract_memory_size(
+        &self,
+        i: usize,
+        j: usize,
+        type_param: &Type,
+    ) -> PartialVMResult<AbstractMemorySize> {
+        let specialization = VectorSpecialization::try_from(type_param)?;
+        let value = &*self.0.try_borrow()?;
+        check_elem_layout(specialization, value)?;
+        let config = SizeConfig {
+            traverse_references: false,
+            include_vector_size: true,
+        };
+
+        Ok(match value.vector_ref()?.0 {
+            VectorMatch::PrimVec(prim_vec) => match_prim_vec!(
+                prim_vec,
+                items,
+                primitive_vector_abstract_size(checked_range(items, i, j)?, true)
+            ),
+            VectorMatch::Vec(items) => checked_range(items, i, j)?.iter().try_fold(
+                STRUCT_SIZE,
+                |size, item| -> PartialVMResult<_> {
+                    Ok(size + item.try_borrow()?.abstract_memory_size(&config)?)
+                },
+            )?,
         })
     }
 
