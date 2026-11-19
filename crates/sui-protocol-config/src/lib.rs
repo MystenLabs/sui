@@ -1784,6 +1784,9 @@ pub struct ProtocolConfig {
     /// Maximum number of cached objects in the object runtime ObjectStore in system transaction. Enforced by object runtime during execution
     object_runtime_max_num_cached_objects_system_tx: Option<u64>,
 
+    /// Maximum total abstract size of child values loaded from storage in a transaction.
+    object_runtime_max_loaded_child_value_size: Option<u64>,
+
     /// Maximum number of stored objects accessed by object runtime ObjectStore. Enforced by object runtime during execution
     object_runtime_max_num_store_entries: Option<u64>,
 
@@ -2863,6 +2866,7 @@ impl ProtocolConfig {
 
             object_runtime_max_num_cached_objects: Some(1000),
             object_runtime_max_num_cached_objects_system_tx: Some(1000 * 16),
+            object_runtime_max_loaded_child_value_size: None,
             object_runtime_max_num_store_entries: Some(1000),
             object_runtime_max_num_store_entries_system_tx: Some(1000 * 16),
             base_tx_cost_fixed: Some(110_000),
@@ -5071,6 +5075,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_timestamp_transaction_expiration = true;
                     }
+                    cfg.object_runtime_max_loaded_child_value_size = Some(5_000_000);
                 }
                 // Use this template when making changes:
                 //

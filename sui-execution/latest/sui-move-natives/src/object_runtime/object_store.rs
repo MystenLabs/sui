@@ -7,7 +7,10 @@ use crate::object_runtime::{
 use move_binary_format::errors::PartialVMResult;
 use move_binary_format::partial_vm_error;
 use move_core_types::{annotated_value as A, runtime_value as R};
-use move_vm_runtime::execution::values::{GlobalValue, StructRef, Value};
+use move_vm_runtime::{
+    execution::values::{GlobalValue, StructRef, Value},
+    shared::views::{SizeConfig, ValueView},
+};
 use std::{
     collections::{BTreeMap, BTreeSet, btree_map},
     sync::Arc,
@@ -82,6 +85,8 @@ struct Inner<'a> {
     // cached objects from the resolver. An object might be in this map but not in the store
     // if it's existence was queried, but the value was not used.
     cached_objects: BTreeMap<ObjectID, Option<Object>>,
+    // Total initial abstract size of child values loaded from storage.
+    loaded_child_value_size: u64,
     // whether or not this TX is gas metered
     is_metered: bool,
     // Protocol config used to enforce limits
@@ -329,6 +334,13 @@ impl Inner<'_> {
         ObjectResult<CacheMetadata<(MoveObjectType, GlobalValue, ObjectFingerprint)>>,
     > {
         let track_balances = self.balances_before.is_some();
+        let size_limit = if self.is_metered {
+            self.protocol_config
+                .object_runtime_max_loaded_child_value_size_as_option()
+        } else {
+            None
+        };
+        let previous_size = self.loaded_child_value_size;
         // retrieve the object from storage if it exists
         let (cache_info, obj_opt) = self.get_or_fetch_object_from_store(parent, child)?;
         let Some(obj) = obj_opt else {
@@ -355,6 +367,26 @@ impl Inner<'_> {
                     "Failed to deserialize object {child} with type {child_move_type}",
                 ));
             }
+        };
+        let loaded_size = if let Some(limit) = size_limit {
+            let size = u64::from(v.abstract_memory_size(&SizeConfig {
+                include_vector_size: true,
+                traverse_references: true,
+            })?);
+            let total = previous_size.saturating_add(size);
+            if total > limit {
+                return Err(partial_vm_error!(
+                    MEMORY_LIMIT_EXCEEDED,
+                    "Object runtime loaded child value size limit ({limit} abstract units) exceeded"
+                )
+                .with_sub_status(
+                    VMMemoryLimitExceededSubStatusCode::OBJECT_RUNTIME_LOADED_VALUE_SIZE_LIMIT_EXCEEDED
+                        as u64,
+                ));
+            }
+            total
+        } else {
+            previous_size
         };
         // save a fingerprint
         let fingerprint =
@@ -383,6 +415,7 @@ impl Inner<'_> {
             )
         })?;
         let contained_uids = self.record_contents(child, contents);
+        self.loaded_child_value_size = loaded_size;
         let parents_root_version = self.root_version.get(&parent).copied();
         if let Some(v) = parents_root_version {
             debug_assert!(contained_uids.contains(&child));
@@ -451,6 +484,7 @@ impl<'a> ChildObjectStore<'a> {
                 root_version,
                 wrapped_object_containers,
                 cached_objects: BTreeMap::new(),
+                loaded_child_value_size: 0,
                 is_metered,
                 protocol_config,
                 metrics,
