@@ -328,6 +328,7 @@ impl ConsensusManager {
                         .max_transactions_in_block_bytes(),
                 ),
                 config.max_queue_age(),
+                config.max_pending_user_bytes(),
                 context.metrics().clone(),
                 context.adapter_metrics().clone(),
             ));

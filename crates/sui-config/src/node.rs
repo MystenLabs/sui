@@ -297,6 +297,10 @@ impl Default for TransactionDriverConfig {
     }
 }
 
+/// The consensus transaction pool caps the serialized bytes of queued user-lane entries
+/// at this value when `max_pending_user_bytes` is unset.
+pub const DEFAULT_MAX_PENDING_USER_BYTES: u64 = 256 * 1024 * 1024;
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ConsensusTransactionPoolConfig {
@@ -326,6 +330,13 @@ pub struct ConsensusTransactionPoolConfig {
     /// A value below the longest staggered-submission hold (about 5 seconds)
     /// expires held entries before this validator can propose them.
     pub max_queue_age_secs: Option<u64>,
+
+    /// Cap on the total serialized bytes of queued user-lane entries, enforced
+    /// alongside `max_pending_transactions`. Entries are evicted lowest gas price
+    /// first to stay within it. Defaults to 256 MiB when unset; 0 disables the cap.
+    /// A non-zero value below `max_transactions_in_block_bytes` is raised to it, so
+    /// that a maximum-size bundle can always be admitted to an empty queue.
+    pub max_pending_user_bytes: Option<u64>,
 }
 
 impl Default for ConsensusTransactionPoolConfig {
@@ -336,6 +347,7 @@ impl Default for ConsensusTransactionPoolConfig {
             rate_limit_user_bytes: true,
             max_user_bytes_per_second: None,
             max_queue_age_secs: None,
+            max_pending_user_bytes: None,
         }
     }
 }
@@ -360,6 +372,14 @@ impl ConsensusTransactionPoolConfig {
             Some(0) => None,
             Some(secs) => Some(Duration::from_secs(secs)),
             None => Some(Duration::from_secs(60)),
+        }
+    }
+
+    pub fn max_pending_user_bytes(&self) -> Option<u64> {
+        match self.max_pending_user_bytes {
+            Some(0) => None,
+            Some(bytes) => Some(bytes),
+            None => Some(DEFAULT_MAX_PENDING_USER_BYTES),
         }
     }
 }
@@ -1910,8 +1930,8 @@ mod tests {
     use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair, SuiKeyPair, get_key_pair_from_rng};
 
     use super::{
-        AuthorityStorePruningConfig, ConsensusTransactionPoolConfig, ExecutionTimeObserverConfig,
-        Genesis, StateArchiveConfig,
+        AuthorityStorePruningConfig, ConsensusTransactionPoolConfig,
+        DEFAULT_MAX_PENDING_USER_BYTES, ExecutionTimeObserverConfig, Genesis, StateArchiveConfig,
     };
     use crate::NodeConfig;
 
@@ -1995,6 +2015,27 @@ mod tests {
         assert_eq!(parsed.max_queue_age(), Some(Duration::from_secs(5)));
         let omitted: ConsensusTransactionPoolConfig = serde_yaml::from_str("{}").unwrap();
         assert_eq!(omitted.max_queue_age(), Some(Duration::from_secs(60)));
+    }
+
+    #[test]
+    fn max_pending_user_bytes_defaults_and_disable() {
+        let default = ConsensusTransactionPoolConfig::default();
+        assert_eq!(
+            default.max_pending_user_bytes(),
+            Some(DEFAULT_MAX_PENDING_USER_BYTES)
+        );
+
+        let configured = ConsensusTransactionPoolConfig {
+            max_pending_user_bytes: Some(1024),
+            ..Default::default()
+        };
+        assert_eq!(configured.max_pending_user_bytes(), Some(1024));
+
+        let disabled = ConsensusTransactionPoolConfig {
+            max_pending_user_bytes: Some(0),
+            ..Default::default()
+        };
+        assert_eq!(disabled.max_pending_user_bytes(), None);
     }
 
     #[test]
