@@ -14,6 +14,7 @@ use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsResponse;
 use sui_rpc::proto::sui::rpc::v2::state_service_server::StateService;
 
+mod filter;
 mod get_balance;
 mod get_coin_info;
 mod list_balances;

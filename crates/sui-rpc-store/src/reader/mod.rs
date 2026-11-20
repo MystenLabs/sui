@@ -24,6 +24,7 @@ mod child_resolver;
 mod indexes;
 #[cfg(test)]
 mod integration_test;
+mod key_ranges;
 mod layout;
 mod object_store;
 mod read_store;
