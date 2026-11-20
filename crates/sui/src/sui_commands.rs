@@ -1051,7 +1051,7 @@ async fn start(
 
     let fullnode_rpc_address = if no_full_node {
         swarm_builder = swarm_builder.with_fullnode_count(0);
-        let mut fullnode_rpc_address = sui_config::node::default_json_rpc_address();
+        let mut fullnode_rpc_address = sui_config::node::default_fullnode_http_address();
         fullnode_rpc_address.set_port(fullnode_rpc_port);
         fullnode_rpc_address
     } else {
@@ -1069,8 +1069,13 @@ async fn start(
                         fullnode_config_path
                     ))
                 })?;
-            fullnode_config.json_rpc_address.set_port(fullnode_rpc_port);
-            fullnode_config.rpc = Some(rpc_config);
+            let mut http_address = fullnode_config.fullnode_http_address();
+            http_address.set_port(fullnode_rpc_port);
+            fullnode_config.json_rpc_address = None;
+            fullnode_config.rpc = Some(sui_config::RpcConfig {
+                http_address: Some(http_address),
+                ..rpc_config
+            });
             if disable_fullnode_pruning {
                 let pruning = &mut fullnode_config.authority_store_pruning_config;
                 pruning.set_num_epochs_to_retain(u64::MAX);
@@ -1098,7 +1103,7 @@ async fn start(
                 .with_fullnode_config(fullnode_config);
             fullnode_rpc_address
         } else {
-            let mut fullnode_rpc_address = sui_config::node::default_json_rpc_address();
+            let mut fullnode_rpc_address = sui_config::node::default_fullnode_http_address();
             fullnode_rpc_address.set_port(fullnode_rpc_port);
             swarm_builder = swarm_builder
                 .with_fullnode_count(1)
@@ -1555,7 +1560,7 @@ async fn genesis(
 
     let fullnode_config = FullnodeConfigBuilder::new()
         .with_config_directory(sui_config_dir.to_path_buf())
-        .with_rpc_addr(sui_config::node::default_json_rpc_address())
+        .with_rpc_addr(sui_config::node::default_fullnode_http_address())
         .build(&mut OsRng, &network_config);
 
     fullnode_config.save(sui_config_dir.join(SUI_FULLNODE_CONFIG))?;
@@ -1574,7 +1579,7 @@ async fn genesis(
                 .with_network_address("/ip4/0.0.0.0/tcp/8080/http".parse().unwrap())
                 .with_metrics_address("0.0.0.0:9184".parse().unwrap())
                 .with_admin_interface_port(1337)
-                .with_json_rpc_address("0.0.0.0:9000".parse().unwrap())
+                .with_rpc_addr("0.0.0.0:9000".parse().unwrap())
                 .with_genesis(Genesis::new_from_file("/opt/sui/config/genesis.blob"))
                 .build(&mut OsRng, &network_config);
             ssfn_nodes.push(ssfn_config.clone());

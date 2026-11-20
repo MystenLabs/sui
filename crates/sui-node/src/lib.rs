@@ -3062,11 +3062,11 @@ async fn build_http_servers(
     };
 
     let http_address = config.fullnode_http_address();
-    if config.rpc().and_then(|rpc| rpc.http_address).is_none() {
+    if let Some(json_rpc_address) = config.json_rpc_address {
         warn!(
-            json_rpc_address = %http_address,
-            "rpc.http-address is unset, so plaintext RPC is served on json-rpc-address, \
-             which is deprecated and will be removed; set rpc.http-address instead"
+            %json_rpc_address,
+            "json-rpc-address is deprecated and will be removed; set rpc.http-address instead, \
+             which takes precedence"
         );
     }
 

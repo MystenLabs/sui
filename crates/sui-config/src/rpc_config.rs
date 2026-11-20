@@ -21,9 +21,9 @@ pub struct RpcConfig {
 
     /// Address to listen on for plaintext gRPC.
     ///
-    /// When this is unset, a fullnode serves plaintext on the top-level
-    /// `json-rpc-address`, which is deprecated, and a validator with
-    /// `enable-validator-rpc` serves no plaintext.
+    /// When this is unset, a fullnode serves plaintext on the deprecated
+    /// top-level `json-rpc-address`, or on `0.0.0.0:9000` when that is unset
+    /// too. A validator with `enable-validator-rpc` serves no plaintext.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub http_address: Option<SocketAddr>,
 

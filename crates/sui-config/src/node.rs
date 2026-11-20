@@ -71,13 +71,12 @@ pub struct NodeConfig {
     pub db_path: PathBuf,
     #[serde(default = "default_grpc_address")]
     pub network_address: Multiaddr,
-    /// Deprecated: set `rpc.http-address` instead, which takes precedence.
-    /// When `rpc.http-address` is unset, a fullnode's HTTP server (gRPC and
-    /// REST) listens here. The key keeps its historical name from when the
-    /// JSON-RPC service was also served on this address. Validators do not
-    /// use it.
-    #[serde(default = "default_json_rpc_address")]
-    pub json_rpc_address: SocketAddr,
+    /// Deprecated: set `rpc.http-address` instead, which takes precedence. A
+    /// fullnode whose config sets neither listens on `0.0.0.0:9000`. The key
+    /// keeps its historical name from when the JSON-RPC service was also
+    /// served on this address. Validators do not use it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub json_rpc_address: Option<SocketAddr>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rpc: Option<crate::RpcConfig>,
@@ -985,7 +984,7 @@ pub fn default_admin_interface_port() -> u16 {
     1337
 }
 
-pub fn default_json_rpc_address() -> SocketAddr {
+pub fn default_fullnode_http_address() -> SocketAddr {
     use std::net::{IpAddr, Ipv4Addr};
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9000)
 }
@@ -1081,14 +1080,15 @@ impl NodeConfig {
         self.consensus_config.as_ref()
     }
 
-    /// The address a fullnode serves plaintext RPC on: `rpc.http-address`, or
-    /// the deprecated `json-rpc-address` when that is unset. Validators serve
-    /// plaintext only on `rpc.http-address`.
+    /// The address a fullnode serves plaintext RPC on: `rpc.http-address`,
+    /// then the deprecated `json-rpc-address`, then `0.0.0.0:9000`. Validators
+    /// serve plaintext only on `rpc.http-address`.
     pub fn fullnode_http_address(&self) -> SocketAddr {
         self.rpc
             .as_ref()
             .and_then(|rpc| rpc.http_address)
-            .unwrap_or(self.json_rpc_address)
+            .or(self.json_rpc_address)
+            .unwrap_or_else(default_fullnode_http_address)
     }
 
     /// Returns the node role as declared by configuration. This is the
