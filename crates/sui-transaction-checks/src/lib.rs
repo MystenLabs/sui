@@ -10,20 +10,22 @@ mod checked {
     use std::collections::{BTreeMap, BTreeSet, HashSet};
     use std::sync::Arc;
     use sui_config::verifier_signing_config::VerifierSigningConfig;
-    use sui_protocol_config::ProtocolConfig;
+    use sui_protocol_config::{ProtocolConfig, assert_reachable_gated};
     use sui_types::TypeTag;
     use sui_types::allowance::parse_allowance_object;
     use sui_types::balance::Balance;
     use sui_types::base_types::{ObjectID, ObjectRef};
+    use sui_types::clock::Clock;
     use sui_types::error::{SuiResult, UserInputError, UserInputResult};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::gas::{check_gas_budget_and_balance, check_gas_price};
+    use sui_types::gas_coin::GAS;
     use sui_types::metrics::BytecodeVerifierMetrics;
     use sui_types::object::ObjectPermission;
     use sui_types::transaction::{
         CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
-        ReceivingObjectReadResult, ReceivingObjects, SharedObjectMutability, TransactionData,
-        TransactionDataAPI, TransactionKind, WithdrawFrom,
+        ReceivingObjectReadResult, ReceivingObjects, Reservation, SharedObjectMutability,
+        TransactionData, TransactionDataAPI, TransactionKind, WithdrawFrom,
     };
     use sui_types::{
         SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID,
@@ -69,6 +71,9 @@ mod checked {
             &[],
         )?;
         transaction.check_allowance_inputs(&input_objects)?;
+        if protocol_config.gasless_allowance_spend() && transaction.is_gasless_transaction() {
+            check_gasless_allowance_spends(transaction, &input_objects)?;
+        }
         check_receiving_objects(&input_objects, receiving_objects)?;
         // Runs verifier, which could be expensive.
         check_non_system_packages_to_be_published(
@@ -102,8 +107,10 @@ mod checked {
         )?;
         // NB: We do not check receiving objects when executing. Only at signing time do we check.
         // NB: move verifier is only checked at signing time, not at execution.
-        // NB: allowance withdrawal declarations are only validated at signing; at execution
-        // the allowance's own Move checks enforce policy on consensus-sequenced state.
+        // NB: allowance withdrawal declarations and gasless allowance spends are only validated
+        // at signing; at execution the allowance's own Move checks enforce policy on
+        // consensus-sequenced state. `check_gasless_object_inputs` reads allowances at execution,
+        // but only fields that are fixed at creation.
 
         Ok(input_objects.into_checked())
     }
@@ -798,6 +805,59 @@ mod checked {
                 .is_some_and(|coin_type| allowed_token_types.contains_key(&coin_type)),
             unsupported("Gasless transactions only support allowances of allowlisted types")
         );
+        Ok(())
+    }
+
+    /// Rejects a gasless spend from an allowance that must abort in `consume`. A failed gasless
+    /// transaction is free but still writes the funder's allowance, so the spender could otherwise
+    /// write it indefinitely at no cost.
+    ///
+    /// Signing only. At execution the allowance and Clock are read at consensus-assigned versions,
+    /// where a rejection is fatal. `spend_must_abort` stays true at every later version, so this
+    /// rejects no transaction that could succeed.
+    fn check_gasless_allowance_spends(
+        transaction: &TransactionData,
+        input_objects: &InputObjects,
+    ) -> UserInputResult<()> {
+        let mut amounts: BTreeMap<ObjectID, u128> = BTreeMap::new();
+        for withdrawal in transaction.kind().get_funds_withdrawals() {
+            let WithdrawFrom::SenderAllowance { allowance, .. } = withdrawal.withdraw_from else {
+                continue;
+            };
+            let Reservation::MaxAmountU64(amount) = withdrawal.reservation;
+            let total = amounts.entry(allowance).or_default();
+            *total = total.saturating_add(u128::from(amount));
+        }
+        if amounts.is_empty() {
+            return Ok(());
+        }
+        let objects: BTreeMap<ObjectID, &Object> = input_objects
+            .iter()
+            .filter_map(|input| Some((input.id(), input.as_object()?)))
+            .collect();
+        let now_ms = objects
+            .get(&SUI_CLOCK_OBJECT_ID)
+            .and_then(|clock| clock.to_rust::<Clock>())
+            .map(|clock| clock.timestamp_ms());
+        for (allowance_id, amount) in amounts {
+            // `check_allowance_inputs` has already resolved every declared allowance.
+            let Some(object) = objects.get(&allowance_id) else {
+                continue;
+            };
+            if parse_allowance_object(object)?.spend_must_abort(amount, now_ms) {
+                // Only configs that allowlist SUI run the composite workload's gasless spends.
+                assert_reachable_gated!(
+                    "gasless spend of an expired or exhausted allowance rejected",
+                    |pc| pc.gasless_allowance_spend()
+                        && sui_types::transaction::get_gasless_allowed_token_types(pc)
+                            .contains_key(&GAS::type_tag())
+                );
+                return Err(UserInputError::Unsupported(format!(
+                    "Gasless transactions cannot spend from allowance {allowance_id}: it has \
+                     expired, or the spend exceeds its lifetime cap or rate limit"
+                )));
+            }
+        }
         Ok(())
     }
 

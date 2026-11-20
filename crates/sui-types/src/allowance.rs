@@ -99,6 +99,31 @@ pub struct ResolvedAllowance {
     pub funds_type: TypeTag,
     /// App-bound allowances can only be spent through `app_balance_spend`.
     pub is_app_bound: bool,
+    pub lifetime_cap: Option<U256>,
+    pub expiration_timestamp_ms: Option<u64>,
+    /// The per-window limit of the rate limit, if any.
+    pub rate_limit: Option<U256>,
+    /// Mutable state, so only meaningful at signing.
+    pub current_spend: U256,
+}
+
+impl ResolvedAllowance {
+    /// Whether `consume` must abort when spending `amount` at a Clock time of at least `now_ms`.
+    /// The expiration and limits are fixed at creation and `current_spend` only grows, so a true
+    /// result also holds at every later version of the allowance.
+    pub fn spend_must_abort(&self, amount: u128, now_ms: Option<u64>) -> bool {
+        let amount = U256::from(amount);
+        let expired = now_ms
+            .zip(self.expiration_timestamp_ms)
+            .is_some_and(|(now, expiration)| now >= expiration);
+        let over_lifetime_cap = self.lifetime_cap.is_some_and(|cap| {
+            self.current_spend
+                .checked_add(amount)
+                .is_none_or(|total| total > cap)
+        });
+        let over_rate_limit = self.rate_limit.is_some_and(|limit| amount > limit);
+        expired || over_lifetime_cap || over_rate_limit
+    }
 }
 
 /// Parses an object as an `Allowance`, extracting the sign-time-relevant fields.
@@ -135,5 +160,12 @@ pub fn parse_allowance_object(object: &Object) -> UserInputResult<ResolvedAllowa
         spender: allowance.settings.spender,
         funds_type,
         is_app_bound: allowance.settings.app.is_some(),
+        lifetime_cap: allowance.settings.lifetime_cap,
+        expiration_timestamp_ms: allowance.settings.expiration_timestamp_ms,
+        rate_limit: allowance
+            .settings
+            .rate_limit
+            .map(|RateLimit::Windowed { limit, .. }| limit),
+        current_spend: allowance.current_spend,
     })
 }

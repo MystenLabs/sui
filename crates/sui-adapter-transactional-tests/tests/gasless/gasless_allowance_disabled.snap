@@ -1,0 +1,30 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+// Without gasless_allowance_spend, gasless transactions reject shared inputs.
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 8-26:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1031000000, storage_cost: 11331600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 30-33:
+//# programmable --sender A --inputs object(1,1) 1000
+// Mint and share a coin.
+//> 0: sui::coin::mint<test::usdc::USDC>(Input(0), Input(1));
+//> test::usdc::share_coin(Result(0));
+created: object(3,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2690131, non_refundable_storage_fee: 269
+
+task 4, lines 35-37:
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(3,0) @B
+// Rejected: a shared coin.
+//> 0: sui::coin::send_funds<test::usdc::USDC>(Input(0), Input(1));
+Error: Error checking transaction input objects: Feature is not supported: Gasless transactions only support owned object inputs
