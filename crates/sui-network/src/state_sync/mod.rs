@@ -1933,7 +1933,7 @@ async fn sync_checkpoint_contents<S>(
     let mut highest_started_network_total_transactions = highest_synced.network_total_transactions;
     let mut checkpoint_contents_tasks = FuturesOrdered::new();
 
-    let running = Arc::new(RunningDownloads::default());
+    let running = Arc::new(RunningDownloads::new(metrics.clone()));
     let mut last_notified_sequence = None;
 
     let hedge = checkpoint_content_hedge_delay.map(|delay| ContentHedge {
@@ -1952,7 +1952,6 @@ async fn sync_checkpoint_contents<S>(
                     }
                     Err(_) => {
                         // Watch channel is closed, exit loop.
-                        metrics.set_checkpoint_content_downloads_running(0);
                         return
                     }
                 }
@@ -2031,7 +2030,7 @@ async fn sync_checkpoint_contents<S>(
                 ));
 
             // Enforce transaction count concurrency limit. A checkpoint is always admitted when
-            // nothing is in flight, so a checkpoint with more transactions than the limit is still
+            // no download is running, so a checkpoint with more transactions than the limit is still
             // downloaded.
             let tx_count = next_checkpoint.network_total_transactions
                 - highest_started_network_total_transactions;
@@ -2057,7 +2056,6 @@ async fn sync_checkpoint_contents<S>(
                 ),
             ));
         }
-        metrics.set_checkpoint_content_downloads_running(running.count());
 
         if last_notified_sequence != Some(*highest_synced.sequence_number())
             && (highest_synced
@@ -2149,6 +2147,9 @@ where
 /// In hedged mode, the most requests for one checkpoint's contents that are in flight at once.
 const MAX_CONCURRENT_CONTENT_REQUESTS: usize = 2;
 
+/// How much later than the client's timeout the anemo timeout of a contents request expires.
+const CONTENT_REQUEST_SERVER_GRACE: Duration = Duration::from_secs(1);
+
 /// In hedged mode, only checkpoints at most this far past the highest synced checkpoint are
 /// hedged, or keep looking for a peer after every peer that had the checkpoint failed.
 /// Checkpoints are released in order, so a later checkpoint can't be released before the ones
@@ -2236,14 +2237,23 @@ struct UnaskedPeer {
 
 /// This tracks the checkpoint contents downloads that are still running. A download stops
 /// counting when it finishes, even if earlier checkpoints are still downloading.
-#[derive(Default)]
 struct RunningDownloads {
     count: AtomicUsize,
     tx_count: AtomicU64,
     finished: Notify,
+    metrics: Metrics,
 }
 
 impl RunningDownloads {
+    fn new(metrics: Metrics) -> Self {
+        Self {
+            count: AtomicUsize::new(0),
+            tx_count: AtomicU64::new(0),
+            finished: Notify::new(),
+            metrics,
+        }
+    }
+
     fn count(&self) -> usize {
         self.count.load(Ordering::Relaxed)
     }
@@ -2257,16 +2267,26 @@ impl RunningDownloads {
         tx_count: u64,
         download: F,
     ) -> impl Future<Output = F::Output> + use<F> {
-        self.count.fetch_add(1, Ordering::Relaxed);
+        let count = self.count.fetch_add(1, Ordering::Relaxed) + 1;
+        self.metrics.set_checkpoint_content_downloads_running(count);
         self.tx_count.fetch_add(tx_count, Ordering::Relaxed);
         let running = self.clone();
         async move {
             let result = download.await;
-            running.count.fetch_sub(1, Ordering::Relaxed);
+            let count = running.count.fetch_sub(1, Ordering::Relaxed) - 1;
+            running
+                .metrics
+                .set_checkpoint_content_downloads_running(count);
             running.tx_count.fetch_sub(tx_count, Ordering::Relaxed);
             running.finished.notify_one();
             result
         }
+    }
+}
+
+impl Drop for RunningDownloads {
+    fn drop(&mut self) {
+        self.metrics.set_checkpoint_content_downloads_running(0);
     }
 }
 
@@ -2509,9 +2529,10 @@ impl ContentFetch<'_> {
             peer_id
         );
         async move {
-            // The request carries no anemo timeout: anemo reports its own timeout as an opaque
-            // error, which would hide whether the request timed out or failed for another reason.
-            let request = Request::new(digest);
+            // anemo reports its own timeout as an opaque error, so the client's timer decides
+            // whether the request timed out. The anemo timeout tells the server the deadline and
+            // is set later, so the client's timer fires first.
+            let request = Request::new(digest).with_timeout(timeout + CONTENT_REQUEST_SERVER_GRACE);
             let start = Instant::now();
             let result = tokio::time::timeout(timeout, async {
                 if use_get_checkpoint_contents_v2 {

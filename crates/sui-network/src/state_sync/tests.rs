@@ -3496,7 +3496,9 @@ async fn contents_request_timeout_stops_at_max_timeout() {
 /// even while an earlier download is still running.
 #[tokio::test]
 async fn running_downloads_free_slot_when_download_finishes_out_of_order() {
-    let running = std::sync::Arc::new(super::RunningDownloads::default());
+    let running = std::sync::Arc::new(super::RunningDownloads::new(
+        super::metrics::Metrics::disabled(),
+    ));
     let (first_done, first) = tokio::sync::oneshot::channel::<()>();
     let (second_done, second) = tokio::sync::oneshot::channel::<()>();
     let mut downloads = FuturesOrdered::new();
@@ -3583,7 +3585,8 @@ async fn contents_request_timeout_escalates_only_after_timeout() {
     );
 }
 
-/// The peer answers for checkpoint 1's contents after 10 s and for the others at once. The
+/// The peer answers for checkpoint 1's contents after 5 s and for the others at once. Content
+/// timeouts of 30 s keep the stalled request on the full-contents path. The
 /// transaction limit allows two running downloads. Downloads of checkpoints 2 to 5 finish and free
 /// their slots while checkpoint 1 is still downloading, and checkpoints are still released in
 /// order.
@@ -3597,7 +3600,7 @@ async fn finished_downloads_free_slots_behind_stalled_download() {
         &checkpoints,
         &contents,
         6,
-        Duration::from_secs(10),
+        Duration::from_secs(5),
         Some(checkpoints[1].content_digest),
     );
     let store = SharedInMemoryStore::default();
@@ -3608,6 +3611,8 @@ async fn finished_downloads_free_slots_behind_stalled_download() {
     );
     let config = StateSyncConfig {
         checkpoint_content_download_tx_concurrency: Some(8),
+        checkpoint_content_timeout_min_ms: Some(30_000),
+        checkpoint_content_timeout_max_ms: Some(60_000),
         ..Default::default()
     };
     let (builder, router) = Builder::new().store(store.clone()).config(config).build();
@@ -3616,7 +3621,7 @@ async fn finished_downloads_free_slots_behind_stalled_download() {
     let mut synced = handle.subscribe_to_synced_checkpoints();
     network.connect(source.local_addr()).await.unwrap();
 
-    timeout(Duration::from_secs(8), async {
+    timeout(Duration::from_secs(4), async {
         while !checkpoints[2..].iter().all(|checkpoint| {
             store
                 .get_checkpoint_contents_by_digest(&checkpoint.content_digest)
