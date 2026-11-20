@@ -6,7 +6,9 @@ use std::sync::Arc;
 use super::to_signing_message;
 use crate::crypto::DefaultHash;
 use crate::error::SuiErrorKind;
+use crate::multisig::{MultiSig, MultiSigPublicKey};
 use crate::passkey_authenticator::{PasskeyAuthenticator, RawPasskeyAuthenticator};
+use crate::signature::{AuthenticatorTrait, VerifyParams};
 use crate::{
     base_types::{ObjectID, SuiAddress, dbg_addr},
     crypto::{PublicKey, Signature, SignatureScheme},
@@ -20,6 +22,7 @@ use fastcrypto::encoding::Base64;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::hash::HashFunction;
 use fastcrypto::rsa::{Base64UrlUnpadded, Encoding as _};
+use fastcrypto::secp256r1::Secp256r1PublicKey;
 use fastcrypto::traits::ToFromBytes;
 use p256::pkcs8::DecodePublicKey;
 use passkey_authenticator::{Authenticator, UserCheck, UserValidationMethod};
@@ -82,6 +85,19 @@ async fn create_credential_and_sign_test_tx(
     origin: &Url,
     request: CredentialCreationOptions,
 ) -> PasskeyResponse<TransactionData> {
+    create_credential_and_sign_test_tx_with_encoding(origin, request, false)
+        .await
+        .unwrap()
+}
+
+/// This function works like [create_credential_and_sign_test_tx]. If `compact` is set, the public key is in the SEC1
+/// compact encoding `0x05 || x`. Returns `None` if that encoding decodes to the negated key, which
+/// happens for about half of all keys.
+async fn create_credential_and_sign_test_tx_with_encoding(
+    origin: &Url,
+    request: CredentialCreationOptions,
+    compact: bool,
+) -> Option<PasskeyResponse<TransactionData>> {
     // Set up authenticator and client.
     let my_aaguid = Aaguid::new_empty();
     let user_validation_method = MyUserValidationMethod {};
@@ -100,13 +116,20 @@ async fn create_credential_and_sign_test_tx(
     )
     .unwrap();
 
-    // Derive its compact pubkey from DER format.
+    // Derive its compressed pubkey from DER format.
     let encoded_point = verifying_key.to_encoded_point(false);
     let x = encoded_point.x();
     let y = encoded_point.y();
     let prefix = if y.unwrap()[31] % 2 == 0 { 0x02 } else { 0x03 };
     let mut pk_bytes = vec![prefix];
     pk_bytes.extend_from_slice(x.unwrap());
+    if compact {
+        let canonical = Secp256r1PublicKey::from_bytes(&pk_bytes).unwrap();
+        pk_bytes[0] = 0x05;
+        if Secp256r1PublicKey::from_bytes(&pk_bytes).unwrap() != canonical {
+            return None;
+        }
+    }
     let pk = PublicKey::try_from_bytes(SignatureScheme::PasskeyAuthenticator, &pk_bytes).unwrap();
 
     // Derives its sui address and make a test transaction with it as sender.
@@ -162,13 +185,13 @@ async fn create_credential_and_sign_test_tx(
     user_sig_bytes.extend_from_slice(&sig_bytes);
     user_sig_bytes.extend_from_slice(&pk_bytes);
 
-    PasskeyResponse {
+    Some(PasskeyResponse {
         user_sig_bytes,
         authenticator_data: authenticator_data.to_vec(),
         client_data_json: String::from_utf8_lossy(client_data_json).to_string(),
         intent_msg,
         sender,
-    }
+    })
 }
 
 fn make_credential_creation_option(origin: &Url) -> CredentialCreationOptions {
@@ -366,4 +389,84 @@ async fn test_real_passkey_output() {
         Arc::new(VerifiedDigestCache::new_empty()),
     );
     assert!(res.is_ok());
+}
+
+#[tokio::test]
+async fn test_passkey_compact_public_key_gated_by_protocol_config() {
+    let origin = Url::parse("https://www.sui.io").unwrap();
+    let lenient = VerifyParams {
+        accept_passkey_in_multisig: true,
+        ..Default::default()
+    };
+    let strict = lenient.clone().with_secp256r1_strict_public_keys(true);
+
+    // A passkey whose public key is in the compact encoding, standalone and in a multisig.
+    // Each attempt succeeds with probability 1/2.
+    let mut compact = None;
+    for _ in 0..64 {
+        let request = make_credential_creation_option(&origin);
+        compact = create_credential_and_sign_test_tx_with_encoding(&origin, request, true).await;
+        if compact.is_some() {
+            break;
+        }
+    }
+    let compact = compact.expect("no key with a valid compact encoding found");
+    // A passkey whose public key is in the compressed encoding.
+    let request = make_credential_creation_option(&origin);
+    let canonical = create_credential_and_sign_test_tx(&origin, request).await;
+
+    let to_passkey = |response: &PasskeyResponse<TransactionData>| {
+        PasskeyAuthenticator::new_for_testing(
+            response.authenticator_data.clone(),
+            response.client_data_json.clone(),
+            Signature::from_bytes(&response.user_sig_bytes).unwrap(),
+        )
+        .unwrap()
+    };
+    let compact_passkey = to_passkey(&compact);
+    let canonical_passkey = to_passkey(&canonical);
+
+    let member = compact_passkey.get_pk().unwrap();
+    let multisig_pk = MultiSigPublicKey::new(vec![member], vec![1], 1).unwrap();
+    let multisig = MultiSig::combine(
+        vec![GenericSignature::PasskeyAuthenticator(
+            compact_passkey.clone(),
+        )],
+        multisig_pk.clone(),
+    )
+    .unwrap();
+
+    let verify = |params: &VerifyParams| {
+        let new_cache = || Arc::new(VerifiedDigestCache::new_empty());
+        (
+            canonical_passkey
+                .verify_claims(&canonical.intent_msg, canonical.sender, params, new_cache())
+                .is_ok(),
+            compact_passkey
+                .verify_claims(&compact.intent_msg, compact.sender, params, new_cache())
+                .is_ok(),
+            multisig
+                .verify_claims(
+                    &compact.intent_msg,
+                    SuiAddress::from(&multisig_pk),
+                    params,
+                    new_cache(),
+                )
+                .is_ok(),
+        )
+    };
+    assert_eq!(verify(&lenient), (true, true, true));
+    assert_eq!(verify(&strict), (true, false, false));
+
+    let err = compact_passkey
+        .verify_claims(
+            &compact.intent_msg,
+            compact.sender,
+            &strict,
+            Arc::new(VerifiedDigestCache::new_empty()),
+        )
+        .unwrap_err();
+    assert!(
+        matches!(err.into_inner(), SuiErrorKind::InvalidSignature { error } if error.contains("compact encoding"))
+    );
 }

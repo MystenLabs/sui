@@ -37,7 +37,9 @@ public native fun secp256r1_ecrecover(
 /// Secp256r1. This is an non-recoverable signature without recovery id.
 /// Reference implementation on signature generation using RFC6979:
 /// https://github.com/MystenLabs/fastcrypto/blob/74aec4886e62122a5b769464c2bea5f803cf8ecc/fastcrypto/src/secp256r1/mod.rs
-/// @param public_key: The public key to verify the signature against
+/// @param public_key: The public key to verify the signature against. The key is a 33-byte SEC1
+/// compressed point or a 65-byte SEC1 uncompressed point. A key in the SEC1 compact encoding (first
+/// byte 0x05) is rejected and the function returns false.
 /// @param msg: The message that the signature is signed against, this is raw message without hashing.
 /// @param hash: The u8 representing the name of hash function used to hash the message when signing.
 ///

@@ -471,7 +471,8 @@ async fn zklogin_v1_to_v2_migration_scenario_test() {
             config.additional_multisig_checks(),
             config.validate_zklogin_public_identifier(),
         )
-        .with_mldsa65_in_multisig(config.mldsa65_auth());
+        .with_mldsa65_in_multisig(config.mldsa65_auth())
+        .with_secp256r1_strict_public_keys(config.secp256r1_strict_public_keys());
 
         // Capture debug logs for assert fallback or not.
         let logs = Logs::default();
