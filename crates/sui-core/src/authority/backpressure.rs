@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use mysten_common::debug_fatal;
 use mysten_metrics::monitored_scope;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tokio::sync::watch;
@@ -14,25 +15,36 @@ use crate::checkpoints::CheckpointStore;
 struct Watermarks {
     executed: CheckpointSequenceNumber,
     certified: CheckpointSequenceNumber,
+    verified: CheckpointSequenceNumber,
+    checkpoint_rebuild_pending: bool,
 }
 
 impl Watermarks {
-    // we can only permit backpressure if the certified checkpoint is ahead of the executed
+    // We can only permit backpressure if a certified checkpoint is ahead of the executed
     // checkpoint. Otherwise, backpressure might prevent construction of the next checkpoint,
     // because it could stop consensus commits from being processed.
+    //
+    // A verified checkpoint summary ahead of the executed checkpoint also counts: a quorum has
+    // already certified it, so state sync can download its contents and the
+    // checkpoint executor can execute it without this node processing more consensus commits.
+    // While backpressure holds on this basis, the node makes progress only through state sync.
+    //
+    // From the start of each epoch until the builder has rebuilt the checkpoints it built before
+    // a restart, backpressure is suppressed: the checkpoint executor waits for the rebuild, and
+    // the rebuild needs the consensus handler.
     fn should_suppress_backpressure(&self) -> bool {
-        self.certified <= self.executed
+        self.checkpoint_rebuild_pending || self.certified.max(self.verified) <= self.executed
     }
 }
 
 pub struct BackpressureManager {
-    // Holds the executed and certified checkpoint watermarks.
-    // Because we never execute an uncertified checkpoint, the executed watermark is always
-    // less than or equal to the certified watermark.
+    // Holds the executed, certified and verified checkpoint watermarks.
+    // The executed watermark is always less than or equal to the certified watermark. The
+    // verified watermark is forwarded asynchronously and can briefly lag the executed watermark.
     //
-    // If the watermarks are equal, we must not apply backpressure to consensus handler,
-    // because we could be waiting on the next consensus commit in order to build and eventually
-    // certify the next checkpoint.
+    // If neither the certified nor the verified watermark is ahead of the executed watermark,
+    // we must not apply backpressure to consensus handler, because we could be waiting on the
+    // next consensus commit in order to build and eventually certify the next checkpoint.
     watermarks_sender: watch::Sender<Watermarks>,
 
     // used by the WritebackCache to notify us when it has too many pending transactions in memory.
@@ -66,15 +78,40 @@ impl BackpressureManager {
             .get_highest_synced_checkpoint_seq_number()
             .expect("read cannot fail")
             .unwrap_or_default();
+        let mut verified_rx = store.subscribe_highest_verified_checkpoint();
+        let verified = *verified_rx.borrow_and_update();
         info!(
             ?executed,
             ?certified,
+            ?verified,
             "initializing backpressure manager from checkpoint store"
         );
-        Self::new_from_watermarks(Watermarks {
+        let manager = Self::new_from_watermarks(Watermarks {
             executed,
             certified,
-        })
+            verified,
+            checkpoint_rebuild_pending: false,
+        });
+        match tokio::runtime::Handle::try_current() {
+            Ok(handle) => {
+                let weak = Arc::downgrade(&manager);
+                handle.spawn(async move {
+                    while verified_rx.changed().await.is_ok() {
+                        let seq = *verified_rx.borrow_and_update();
+                        let Some(manager) = weak.upgrade() else {
+                            return;
+                        };
+                        manager.update_highest_verified_checkpoint(seq);
+                    }
+                });
+            }
+            Err(_) => {
+                debug_fatal!(
+                    "BackpressureManager created outside a tokio runtime; verified checkpoints will not be tracked"
+                );
+            }
+        }
+        manager
     }
 
     pub fn update_highest_certified_checkpoint(&self, seq: CheckpointSequenceNumber) {
@@ -82,6 +119,30 @@ impl BackpressureManager {
             if seq > watermarks.certified {
                 watermarks.certified = seq;
                 debug!(?watermarks, "updating highest certified checkpoint");
+                true
+            } else {
+                false
+            }
+        });
+    }
+
+    pub fn update_highest_verified_checkpoint(&self, seq: CheckpointSequenceNumber) {
+        self.watermarks_sender.send_if_modified(|watermarks| {
+            if seq > watermarks.verified {
+                watermarks.verified = seq;
+                debug!(?watermarks, "updating highest verified checkpoint");
+                true
+            } else {
+                false
+            }
+        });
+    }
+
+    pub fn set_checkpoint_rebuild_pending(&self, pending: bool) {
+        self.watermarks_sender.send_if_modified(|watermarks| {
+            if watermarks.checkpoint_rebuild_pending != pending {
+                watermarks.checkpoint_rebuild_pending = pending;
+                info!(?watermarks, "setting checkpoint rebuild pending");
                 true
             } else {
                 false
@@ -173,6 +234,8 @@ mod tests {
     use parking_lot::Mutex;
     use std::sync::Arc;
     use std::time::Duration;
+    use sui_types::messages_checkpoint::VerifiedCheckpoint;
+    use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
     #[tokio::test]
     async fn test_no_backpressure() {
@@ -197,6 +260,75 @@ mod tests {
 
         // backpressure should be suppressed because of watermarks.
         subscriber.await_no_backpressure().now_or_never().unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_backpressure_applies_when_verified_ahead() {
+        let manager = Arc::new(BackpressureManager::new_for_tests());
+
+        manager.update_highest_verified_checkpoint(5);
+        manager.set_backpressure(true);
+
+        let subscriber = manager.subscribe();
+        assert!(subscriber.await_no_backpressure().now_or_never().is_none());
+
+        for seq in 1..=5 {
+            manager.update_highest_executed_checkpoint(seq);
+        }
+        subscriber.await_no_backpressure().now_or_never().unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_verified_checkpoint_forwarded_from_store() {
+        let store = CheckpointStore::new_for_tests();
+        let manager = BackpressureManager::new_from_checkpoint_store(&store);
+        manager.set_backpressure(true);
+
+        let subscriber = manager.subscribe();
+        assert!(subscriber.await_no_backpressure().now_or_never().is_some());
+
+        let checkpoint = VerifiedCheckpoint::new_unchecked(
+            TestCheckpointBuilder::new(3).build_checkpoint().summary,
+        );
+        store
+            .update_highest_verified_checkpoint(&checkpoint)
+            .unwrap();
+
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while subscriber.await_no_backpressure().now_or_never().is_some() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("verified checkpoint did not reach the backpressure manager");
+    }
+
+    #[tokio::test]
+    async fn test_backpressure_suppressed_during_checkpoint_rebuild() {
+        let manager = Arc::new(BackpressureManager::new_for_tests());
+        manager.update_highest_verified_checkpoint(5);
+        manager.set_backpressure(true);
+        manager.set_checkpoint_rebuild_pending(true);
+
+        let subscriber = manager.subscribe();
+        subscriber.await_no_backpressure().now_or_never().unwrap();
+
+        manager.set_checkpoint_rebuild_pending(false);
+        assert!(subscriber.await_no_backpressure().now_or_never().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_rebuild_pending_releases_paused_waiter() {
+        let manager = Arc::new(BackpressureManager::new_for_tests());
+        manager.update_highest_verified_checkpoint(5);
+        manager.set_backpressure(true);
+
+        let subscriber = manager.subscribe();
+        let waiter = tokio::spawn(async move { subscriber.await_no_backpressure().await });
+        tokio::task::yield_now().await;
+
+        manager.set_checkpoint_rebuild_pending(true);
+        await_with_timeout(waiter).await;
     }
 
     async fn await_with_timeout<R>(f: impl std::future::Future<Output = R>) {

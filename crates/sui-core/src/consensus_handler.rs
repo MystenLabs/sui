@@ -1114,7 +1114,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // This may block until one of two conditions happens:
         // - Number of uncommitted transactions in the writeback cache goes below the
         //   backpressure threshold.
-        // - The highest executed checkpoint catches up to the highest certified checkpoint.
+        // - The highest executed checkpoint catches up to both the highest certified checkpoint
+        //   and the highest verified checkpoint summary.
         self.backpressure_subscriber.await_no_backpressure().await;
 
         let epoch = self.epoch_store.epoch();
