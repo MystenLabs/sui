@@ -10,6 +10,8 @@ use crate::{
 };
 use anemo::{PeerId, Request};
 use anyhow::anyhow;
+use futures::StreamExt;
+use futures::stream::FuturesOrdered;
 use mysten_common::ZipDebugEqIteratorExt;
 use prost::Message;
 use std::num::NonZeroUsize;
@@ -1908,14 +1910,27 @@ impl HedgeTestClient {
         &'a self,
         checkpoint: &'a sui_types::messages_checkpoint::VerifiedCheckpoint,
     ) -> super::ContentFetch<'a> {
+        self.content_fetch_with_timeouts(
+            checkpoint,
+            Duration::from_secs(20),
+            Duration::from_secs(20),
+        )
+    }
+
+    fn content_fetch_with_timeouts<'a>(
+        &'a self,
+        checkpoint: &'a sui_types::messages_checkpoint::VerifiedCheckpoint,
+        timeout: Duration,
+        max_timeout: Duration,
+    ) -> super::ContentFetch<'a> {
         super::ContentFetch {
             network: &self.network,
-            max_timeout: Duration::from_secs(20),
+            max_timeout,
             failed_requests: std::sync::atomic::AtomicU32::new(0),
             peer_heights: &self.peer_heights,
             checkpoint,
             use_get_checkpoint_contents_v2: true,
-            timeout: Duration::from_secs(20),
+            timeout,
             metrics: &self.metrics,
         }
     }
@@ -3337,4 +3352,102 @@ async fn paginated_checkpoints_exceeding_transaction_budget_keep_syncing() {
         store.get_highest_synced_checkpoint().unwrap().digest(),
         checkpoints[2].digest()
     );
+}
+
+/// Both peers answer after 500 ms and the first request times out after 300 ms. The failed
+/// request doubles the timeout of the next one to 600 ms, so the second peer's answer arrives in
+/// time.
+#[tokio::test]
+async fn contents_request_timeout_doubles_after_failed_request() {
+    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let (checkpoints, contents, _, _) = committee.make_random_checkpoints(2, None);
+    let delay = Duration::from_millis(500);
+    let peer_a = build_contents_peer(&committee, &checkpoints, &contents, 2, delay);
+    let peer_b = build_contents_peer(&committee, &checkpoints, &contents, 2, delay);
+    let client =
+        HedgeTestClient::new(*checkpoints[0].digest(), &[(&peer_a, 1), (&peer_b, 1)]).await;
+
+    let fetch = client.content_fetch_with_timeouts(
+        &checkpoints[1],
+        Duration::from_millis(300),
+        Duration::from_secs(5),
+    );
+    assert!(super::get_full_checkpoint_contents(fetch, &client.store, None).await);
+
+    let requests = |outcome: super::metrics::ContentRequestOutcome| {
+        client
+            .metrics
+            .checkpoint_content_peer_requests("other", outcome)
+    };
+    assert_eq!(requests(super::metrics::ContentRequestOutcome::Failure), 1);
+    assert_eq!(requests(super::metrics::ContentRequestOutcome::Success), 1);
+}
+
+/// As above, but the maximum timeout of 400 ms caps the second request's timeout below the
+/// peers' 500 ms delay. Both requests time out and the client falls back to the paginated
+/// download, which the peers answer without delay.
+#[tokio::test]
+async fn contents_request_timeout_stops_at_max_timeout() {
+    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let (checkpoints, contents, _, _) = committee.make_random_checkpoints(2, None);
+    let delay = Duration::from_millis(500);
+    let peer_a = build_contents_peer(&committee, &checkpoints, &contents, 2, delay);
+    let peer_b = build_contents_peer(&committee, &checkpoints, &contents, 2, delay);
+    let client =
+        HedgeTestClient::new(*checkpoints[0].digest(), &[(&peer_a, 1), (&peer_b, 1)]).await;
+
+    let fetch = client.content_fetch_with_timeouts(
+        &checkpoints[1],
+        Duration::from_millis(300),
+        Duration::from_millis(400),
+    );
+    assert!(super::get_full_checkpoint_contents(fetch, &client.store, None).await);
+
+    let requests = |outcome: super::metrics::ContentRequestOutcome| {
+        client
+            .metrics
+            .checkpoint_content_peer_requests("other", outcome)
+    };
+    assert_eq!(requests(super::metrics::ContentRequestOutcome::Failure), 2);
+    assert_eq!(requests(super::metrics::ContentRequestOutcome::Success), 0);
+    assert!(
+        client
+            .store
+            .get_full_checkpoint_contents(Some(1), &checkpoints[1].content_digest)
+            .is_some()
+    );
+}
+
+/// A download that finishes stops counting against the running limits and wakes the scheduler,
+/// even while an earlier download is still running.
+#[tokio::test]
+async fn running_downloads_free_slot_when_download_finishes_out_of_order() {
+    let running = std::sync::Arc::new(super::RunningDownloads::default());
+    let (first_done, first) = tokio::sync::oneshot::channel::<()>();
+    let (second_done, second) = tokio::sync::oneshot::channel::<()>();
+    let mut downloads = FuturesOrdered::new();
+    downloads.push_back(running.track(10, first));
+    downloads.push_back(running.track(20, second));
+    assert_eq!(running.count(), 2);
+    assert_eq!(running.tx_count(), 30);
+
+    second_done.send(()).unwrap();
+    timeout(Duration::from_secs(5), async {
+        loop {
+            tokio::select! {
+                _ = downloads.next() => panic!("the first download has not finished"),
+                () = running.finished.notified() => break,
+            }
+        }
+    })
+    .await
+    .expect("the second download should finish");
+    assert_eq!(running.count(), 1);
+    assert_eq!(running.tx_count(), 10);
+
+    first_done.send(()).unwrap();
+    assert!(downloads.next().await.unwrap().is_ok());
+    assert!(downloads.next().await.unwrap().is_ok());
+    assert_eq!(running.count(), 0);
+    assert_eq!(running.tx_count(), 0);
 }
