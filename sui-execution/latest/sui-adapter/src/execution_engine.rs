@@ -757,7 +757,7 @@ pub(crate) mod checked {
         let rates = gas_charger.storage_rates();
         let charge = match tier {
             StorageTier::AllWrites | StorageTier::InputsOnly => {
-                temporary_store.collect_storage_and_rebate(&rates)?
+                temporary_store.collect_storage_and_rebate(&rates, gas_charger.is_gasless())?
             }
             StorageTier::RebatesOnly => temporary_store.collect_rebate_only(&rates)?,
         };
