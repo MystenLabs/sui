@@ -8,16 +8,20 @@
 //! `object_by_owner` key, so it selects the keys under a byte prefix, or a
 //! union and difference of prefixes for a dynamic field's name type. AND, OR
 //! and NOT of such sets are again sets of byte ranges, so a filter compiles
-//! to sorted, disjoint ranges. [`FilteredScan`] walks the owner's keys and
-//! seeks over the gaps between ranges, so it never reads a key the filter
-//! rejects and returns matches in index order.
+//! to sorted, disjoint ranges. [`FilteredScan`] bounds its RocksDB iterator to
+//! the span of those ranges and seeks over each gap between them, so it reads
+//! at most one rejected key per gap and returns matches in index order.
+
+use std::ops::Bound;
 
 use move_core_types::language_storage::StructTag;
+use sui_consistent_store::DbMap;
 use sui_consistent_store::Encode;
 use sui_consistent_store::Iter;
 use sui_consistent_store::error::EncodeError;
 use sui_consistent_store::error::Error;
 use sui_consistent_store::iter::next_prefix;
+use sui_consistent_store::reader::Reader;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::dynamic_field::DYNAMIC_FIELD_FIELD_STRUCT_NAME;
 use sui_types::dynamic_field::DYNAMIC_FIELD_MODULE_NAME;
@@ -174,13 +178,16 @@ pub(crate) fn owned_object_ranges(
 /// dynamic object field under `Field<Wrapper<Name>, ID>`. So a name type
 /// selects the `Field<Name` prefix, minus every `Field<Wrapper` key (`Wrapper`
 /// is itself a type at `0x2`), plus the `Field<Wrapper<Name` prefix.
+///
+/// A filter selects only `Field` objects. An object can own others: the
+/// `Field` object of a dynamic object field owns the field's value object,
+/// which only an unfiltered listing returns.
 pub(crate) fn dynamic_field_ranges(
     kind: OwnerKind,
     filter: Option<&DynamicFieldFilter>,
 ) -> Result<KeyRanges, EncodeError> {
-    let owned = KeyRanges::prefix(kind.encode()?);
     let Some(filter) = filter else {
-        return Ok(owned);
+        return Ok(KeyRanges::prefix(kind.encode()?));
     };
 
     // `kind || Field` type up to its first type parameter, the name type.
@@ -192,17 +199,21 @@ pub(crate) fn dynamic_field_ranges(
     TypeFilter::Type(wrapper_struct_tag()).encode_into(&mut wrapper)?;
     let dynamic_object_fields = KeyRanges::prefix(wrapper.clone());
 
-    dnf_ranges(owned, filter, |predicate| match predicate {
-        DynamicFieldPredicate::DynamicObjectField => Ok(dynamic_object_fields.clone()),
-        DynamicFieldPredicate::NameType(pattern) => {
-            let name = name_type_prefix(pattern)?;
-            let inline_value = KeyRanges::prefix([field.as_slice(), &name].concat())
-                .difference(&dynamic_object_fields);
-            // `Wrapper` has one type parameter, the name type.
-            let object_value = KeyRanges::prefix([wrapper.as_slice(), &[1], &name].concat());
-            Ok(inline_value.union(object_value))
-        }
-    })
+    dnf_ranges(
+        KeyRanges::prefix(field.clone()),
+        filter,
+        |predicate| match predicate {
+            DynamicFieldPredicate::DynamicObjectField => Ok(dynamic_object_fields.clone()),
+            DynamicFieldPredicate::NameType(pattern) => {
+                let name = name_type_prefix(pattern)?;
+                let inline_value = KeyRanges::prefix([field.as_slice(), &name].concat())
+                    .difference(&dynamic_object_fields);
+                // `Wrapper` has one type parameter, the name type.
+                let object_value = KeyRanges::prefix([wrapper.as_slice(), &[1], &name].concat());
+                Ok(inline_value.union(object_value))
+            }
+        },
+    )
 }
 
 /// The union over terms of the intersection over literals, each literal's
@@ -263,17 +274,45 @@ fn wrapper_struct_tag() -> StructTag {
 /// The rows of an `object_by_owner` scan whose keys lie in a [`KeyRanges`],
 /// reached by seeking over the gaps between ranges.
 pub(crate) struct FilteredScan<'d> {
-    rows: Iter<'d, Key, Value>,
+    /// `None` when no range lies at or after the cursor.
+    rows: Option<Iter<'d, Key, Value>>,
     ranges: Vec<KeyRange>,
     /// The first range that ends after the last key seen.
     current: usize,
 }
 
 impl<'d> FilteredScan<'d> {
-    pub(crate) fn new(rows: Iter<'d, Key, Value>, ranges: KeyRanges) -> Self {
+    /// Scans the rows of `map` in `ranges`, starting at `from` (inclusive).
+    pub(crate) fn open<R: Reader>(
+        map: &'d DbMap<Key, Value, R>,
+        ranges: KeyRanges,
+        from: Option<&Key>,
+    ) -> Result<Self, Error> {
+        let from = from.map(Encode::encode).transpose()?;
+        let mut ranges = ranges.0;
+        if let Some(from) = &from {
+            ranges.retain(|range| before_end(from, &range.end));
+        }
+        let (Some(first), Some(last)) = (ranges.first(), ranges.last()) else {
+            return Ok(Self::empty());
+        };
+        let lower = match from {
+            Some(from) if from > first.start => from,
+            _ => first.start.clone(),
+        };
+        let upper = last.end.clone().map_or(Bound::Unbounded, Bound::Excluded);
+        let rows = map.iter_with::<Vec<u8>>((Bound::Included(lower), upper))?;
+        Ok(Self {
+            rows: Some(rows),
+            ranges,
+            current: 0,
+        })
+    }
+
+    fn empty() -> Self {
         Self {
-            rows,
-            ranges: ranges.0,
+            rows: None,
+            ranges: Vec::new(),
             current: 0,
         }
     }
@@ -283,10 +322,11 @@ impl Iterator for FilteredScan<'_> {
     type Item = Result<(Key, Value), Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let rows = self.rows.as_mut()?;
         loop {
-            let Some(key) = self.rows.raw_key() else {
+            let Some(key) = rows.raw_key() else {
                 // Exhausted or failed; `next` reports which.
-                return self.rows.next();
+                return rows.next();
             };
             while self
                 .ranges
@@ -297,9 +337,9 @@ impl Iterator for FilteredScan<'_> {
             }
             let range = self.ranges.get(self.current)?;
             if range.start.as_slice() <= key {
-                return self.rows.next();
+                return rows.next();
             }
-            self.rows.seek(&range.start);
+            rows.seek(&range.start);
         }
     }
 }

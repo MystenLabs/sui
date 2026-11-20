@@ -182,13 +182,10 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
             inverted_balance: c.balance.map(|b| !b),
             object_id: c.object_id,
         });
-        let rows = match &from {
-            Some(from) => map.iter_prefix_from(&kind, from),
-            None => map.iter_prefix(&kind),
-        }
-        .map_err(sui_types::storage::error::Error::custom)?;
+        let rows = FilteredScan::open(map, ranges, from.as_ref())
+            .map_err(sui_types::storage::error::Error::custom)?;
 
-        let mapped = FilteredScan::new(rows, ranges).map(move |row| {
+        let mapped = rows.map(move |row| {
             let (key, value) = row.map_err(to_typed_store_err)?;
             Ok(OwnedObjectInfo {
                 owner,
@@ -225,13 +222,10 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
             inverted_balance: None,
             object_id: c.field_id,
         });
-        let rows = match &from {
-            Some(from) => map.iter_prefix_from(&kind, from),
-            None => map.iter_prefix(&kind),
-        }
-        .map_err(sui_types::storage::error::Error::custom)?;
+        let rows = FilteredScan::open(map, ranges, from.as_ref())
+            .map_err(sui_types::storage::error::Error::custom)?;
 
-        let mapped = FilteredScan::new(rows, ranges).map(move |row| {
+        let mapped = rows.map(move |row| {
             let (key, _value) = row.map_err(to_typed_store_err)?;
             Ok(DynamicFieldKey {
                 parent,
@@ -1331,6 +1325,47 @@ mod tests {
         // Richest coin first.
         let expected: Vec<ObjectID> = (60..70).rev().map(ObjectID::from_single_byte).collect();
         assert_eq!(page_owned_objects(&reader, owner, &usdc, 3), expected);
+
+        let literal = |negated, s: &str| FilterLiteral {
+            negated,
+            predicate: s.parse().unwrap(),
+        };
+        let either_end = OwnedObjectFilter {
+            terms: vec![
+                vec![literal(false, "0xff::z::Z")],
+                vec![literal(false, "0x1::a")],
+            ],
+        };
+        let expected: Vec<ObjectID> = [1, 3].map(ObjectID::from_single_byte).to_vec();
+        assert_eq!(page_owned_objects(&reader, owner, &either_end, 1), expected);
+        let contradiction = OwnedObjectFilter {
+            terms: vec![vec![
+                literal(false, "0x2::coin::Coin"),
+                literal(true, "0x2::coin::Coin"),
+            ]],
+        };
+        assert_eq!(
+            page_owned_objects(&reader, owner, &contradiction, 1),
+            vec![]
+        );
+
+        // A cursor past the filter's last range, e.g. a token from an
+        // unfiltered listing resumed under a narrower filter, yields nothing.
+        let last_object = reader
+            .owned_objects_iter(owner, None, None)
+            .unwrap()
+            .last()
+            .unwrap()
+            .unwrap();
+        assert_eq!(last_object.object_id, ObjectID::from_single_byte(3));
+        let only_a = OwnedObjectFilter::object_type(tag("0x1::a::A"));
+        assert_eq!(
+            reader
+                .owned_objects_iter(owner, Some(&only_a), Some(last_object))
+                .unwrap()
+                .count(),
+            0
+        );
     }
 
     #[test]
@@ -1362,6 +1397,11 @@ mod tests {
             (dynamic_object_field("0x2::kiosk::Item"), 4),
             (dynamic_field("0x2::kiosk::Listing"), 5),
             (dynamic_field("u64"), 6),
+            // The value object of a dynamic object field, owned by its `Field`.
+            (
+                sui_types::parse_sui_struct_tag("0x2::coin::Coin<0x2::sui::SUI>").unwrap(),
+                7,
+            ),
         ];
         let mut batch = db.batch();
         for (type_, id) in &fields {

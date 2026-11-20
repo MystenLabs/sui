@@ -677,11 +677,9 @@ impl ForkStore {
     pub(crate) fn get_owned_object_infos(
         &self,
         owner: SuiAddress,
-        filter: Option<&OwnedObjectFilter>,
-        cursor: Option<OwnedObjectInfo>,
     ) -> StorageResult<Vec<OwnedObjectInfo>> {
         let local_store = self.local_store();
-        let iter = RpcIndexes::owned_objects_iter(local_store.reader(), owner, filter, cursor)?;
+        let iter = RpcIndexes::owned_objects_iter(local_store.reader(), owner, None, None)?;
         iter.collect::<Result<Vec<_>, _>>()
             .map_err(|e| StorageError::custom(e.to_string()))
     }
@@ -957,7 +955,7 @@ impl SimulatorStore for ForkStore {
     }
 
     fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = Object> + '_> {
-        let objects = match self.get_owned_object_infos(owner, None, None).map(|infos| {
+        let objects = match self.get_owned_object_infos(owner).map(|infos| {
             infos
                 .into_iter()
                 .filter_map(|info| {
