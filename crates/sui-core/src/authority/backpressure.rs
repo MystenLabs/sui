@@ -267,15 +267,12 @@ mod tests {
     async fn test_backpressure_applies_when_verified_ahead() {
         let manager = Arc::new(BackpressureManager::new_for_tests());
 
-        // A verified summary ahead of the executed checkpoint means the rest of the committee
-        // has certified it, so backpressure is not suppressed.
         manager.update_highest_verified_checkpoint(5);
         manager.set_backpressure(true);
 
         let subscriber = manager.subscribe();
         assert!(subscriber.await_no_backpressure().now_or_never().is_none());
 
-        // Once execution catches up to the verified checkpoint, backpressure is suppressed again.
         for seq in 1..=5 {
             manager.update_highest_executed_checkpoint(seq);
         }

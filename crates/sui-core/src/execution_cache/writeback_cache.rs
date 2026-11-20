@@ -268,8 +268,6 @@ struct UncommittedData {
 
     total_transaction_inserts: AtomicU64,
     total_transaction_commits: AtomicU64,
-    total_transaction_insert_bytes: AtomicU64,
-    total_transaction_commit_bytes: AtomicU64,
 }
 
 impl UncommittedData {
@@ -284,8 +282,6 @@ impl UncommittedData {
             unchanged_loaded_runtime_objects: DashMap::with_shard_amount(2048),
             total_transaction_inserts: AtomicU64::new(0),
             total_transaction_commits: AtomicU64::new(0),
-            total_transaction_insert_bytes: AtomicU64::new(0),
-            total_transaction_commit_bytes: AtomicU64::new(0),
         }
     }
 
@@ -301,19 +297,6 @@ impl UncommittedData {
             .store(0, std::sync::atomic::Ordering::Relaxed);
         self.total_transaction_commits
             .store(0, std::sync::atomic::Ordering::Relaxed);
-        self.total_transaction_insert_bytes
-            .store(0, std::sync::atomic::Ordering::Relaxed);
-        self.total_transaction_commit_bytes
-            .store(0, std::sync::atomic::Ordering::Relaxed);
-    }
-
-    fn pending_transaction_bytes(&self) -> u64 {
-        self.total_transaction_insert_bytes
-            .load(std::sync::atomic::Ordering::Relaxed)
-            .saturating_sub(
-                self.total_transaction_commit_bytes
-                    .load(std::sync::atomic::Ordering::Relaxed),
-            )
     }
 
     fn is_empty(&self) -> bool {
@@ -331,8 +314,7 @@ impl UncommittedData {
                         .load(std::sync::atomic::Ordering::Relaxed)
                         == self
                             .total_transaction_commits
-                            .load(std::sync::atomic::Ordering::Relaxed)
-                    && self.pending_transaction_bytes() == 0,
+                            .load(std::sync::atomic::Ordering::Relaxed),
             );
         }
         empty
@@ -496,7 +478,6 @@ pub struct WritebackCache {
 
     store: Arc<AuthorityStore>,
     backpressure_threshold: u64,
-    backpressure_threshold_bytes: u64,
     backpressure_manager: Arc<BackpressureManager>,
     metrics: Arc<ExecutionCacheMetrics>,
 }
@@ -614,7 +595,6 @@ impl WritebackCache {
             store,
             backpressure_manager,
             backpressure_threshold: config.backpressure_threshold(),
-            backpressure_threshold_bytes: config.backpressure_threshold_bytes(),
             metrics,
         }
     }
@@ -1083,10 +1063,6 @@ impl WritebackCache {
             .pending_notify_read
             .set(self.executed_effects_digests_notify_read.num_pending() as i64);
 
-        self.dirty.total_transaction_insert_bytes.fetch_add(
-            approximate_outputs_size(&tx_outputs),
-            std::sync::atomic::Ordering::Relaxed,
-        );
         let prev = self
             .dirty
             .total_transaction_inserts
@@ -1098,7 +1074,7 @@ impl WritebackCache {
                 .load(std::sync::atomic::Ordering::Relaxed),
         );
 
-        self.set_backpressure(pending_count, self.dirty.pending_transaction_bytes());
+        self.set_backpressure(pending_count);
     }
 
     fn build_db_batch(&self, epoch: EpochId, digests: &[TransactionDigest]) -> Batch {
@@ -1170,14 +1146,6 @@ impl WritebackCache {
             self.flush_objects_from_dirty_to_cached(epoch, outputs);
         }
 
-        let committed_bytes = all_outputs
-            .iter()
-            .map(|outputs| approximate_outputs_size(outputs))
-            .sum();
-        self.dirty
-            .total_transaction_commit_bytes
-            .fetch_add(committed_bytes, std::sync::atomic::Ordering::Relaxed);
-
         let num_outputs = all_outputs.len() as u64;
         let num_commits = self
             .dirty
@@ -1191,7 +1159,7 @@ impl WritebackCache {
             .load(std::sync::atomic::Ordering::Relaxed)
             .saturating_sub(num_commits);
 
-        self.set_backpressure(pending_count, self.dirty.pending_transaction_bytes());
+        self.set_backpressure(pending_count);
     }
 
     fn approximate_pending_transaction_count(&self) -> u64 {
@@ -1206,12 +1174,8 @@ impl WritebackCache {
             .saturating_sub(num_commits)
     }
 
-    fn set_backpressure(&self, pending_count: u64, pending_bytes: u64) {
-        self.metrics
-            .pending_transaction_bytes
-            .set(pending_bytes as i64);
-        let backpressure = pending_count > self.backpressure_threshold
-            || pending_bytes > self.backpressure_threshold_bytes;
+    fn set_backpressure(&self, pending_count: u64) {
+        let backpressure = pending_count > self.backpressure_threshold;
         let backpressure_changed = self.backpressure_manager.set_backpressure(backpressure);
         if backpressure_changed {
             self.metrics.backpressure_toggles.inc();
@@ -1446,7 +1410,7 @@ impl WritebackCache {
         }
 
         self.dirty.clear();
-        self.set_backpressure(0, 0);
+        self.set_backpressure(0);
 
         info!("clearing old transaction locks");
         self.object_locks.clear();
@@ -2699,17 +2663,4 @@ impl StateSyncAPI for WritebackCache {
                 .ok();
         }
     }
-}
-
-/// Approximate memory held by uncommitted outputs: the transaction and the objects it wrote.
-/// Effects, events and markers are not counted, so the value undercounts the memory held.
-/// Must return the same value when the outputs are written and when they are committed.
-fn approximate_outputs_size(outputs: &TransactionOutputs) -> u64 {
-    let transaction_size = bcs::serialized_size(outputs.transaction.data()).unwrap_or_default();
-    let written_size: usize = outputs
-        .written
-        .values()
-        .map(|object| object.object_size_for_gas_metering())
-        .sum();
-    (transaction_size + written_size) as u64
 }

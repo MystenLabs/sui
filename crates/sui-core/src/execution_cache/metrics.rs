@@ -20,7 +20,6 @@ pub struct ExecutionCacheMetrics {
     pub(crate) expired_tickets: IntCounter,
     pub(crate) backpressure_status: IntGauge,
     pub(crate) backpressure_toggles: IntCounter,
-    pub(crate) pending_transaction_bytes: IntGauge,
     pub(crate) implicit_system_object_read_waits: IntCounterVec,
     pub(crate) implicit_system_object_read_wait_latency: HistogramVec,
 }
@@ -89,12 +88,6 @@ impl ExecutionCacheMetrics {
             backpressure_toggles: register_int_counter_with_registry!(
                 "execution_cache_backpressure_toggles",
                 "Number of times backpressure was turned on or off",
-                registry,
-            )
-            .unwrap(),
-            pending_transaction_bytes: register_int_gauge_with_registry!(
-                "execution_cache_pending_transaction_bytes",
-                "Approximate size of transaction outputs not yet committed to the db",
                 registry,
             )
             .unwrap(),

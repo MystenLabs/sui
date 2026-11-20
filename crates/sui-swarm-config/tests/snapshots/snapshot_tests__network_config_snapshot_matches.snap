@@ -169,7 +169,6 @@ validator_configs:
         events_cache_size: ~
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
-        backpressure_threshold_bytes: ~
         backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-simulate-allowed-proposers: true
@@ -356,7 +355,6 @@ validator_configs:
         events_cache_size: ~
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
-        backpressure_threshold_bytes: ~
         backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-simulate-allowed-proposers: true
@@ -543,7 +541,6 @@ validator_configs:
         events_cache_size: ~
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
-        backpressure_threshold_bytes: ~
         backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-simulate-allowed-proposers: true
@@ -730,7 +727,6 @@ validator_configs:
         events_cache_size: ~
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
-        backpressure_threshold_bytes: ~
         backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-simulate-allowed-proposers: true
@@ -917,7 +913,6 @@ validator_configs:
         events_cache_size: ~
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
-        backpressure_threshold_bytes: ~
         backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-simulate-allowed-proposers: true
@@ -1104,7 +1099,6 @@ validator_configs:
         events_cache_size: ~
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
-        backpressure_threshold_bytes: ~
         backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-simulate-allowed-proposers: true
@@ -1291,7 +1285,6 @@ validator_configs:
         events_cache_size: ~
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
-        backpressure_threshold_bytes: ~
         backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-simulate-allowed-proposers: true
