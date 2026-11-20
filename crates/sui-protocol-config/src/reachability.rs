@@ -18,8 +18,8 @@
 //!
 //! ```ignore
 //! assert_reachable_gated!(
-//!     "retry object withdraw later",
-//!     |pc| !pc.check_object_funds_withdraw_in_execution()
+//!     "object funds insufficient in execution",
+//!     |pc| pc.check_object_funds_withdraw_in_execution()
 //! );
 //! ```
 //!

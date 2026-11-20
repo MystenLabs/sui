@@ -394,10 +394,6 @@ pub enum ExecutionOutput<T> {
     EpochEnded,
     /// Execution failed with an error. This should never happen - we use fatal! when encountered.
     Fatal(SuiError),
-    /// Execution should be retried later due to unsatisfied constraints such as insufficient object
-    /// balance withdrawals that require waiting for the balance to reach a deterministic amount.
-    /// When this happens, the transaction is auto-rescheduled from AuthorityState.
-    RetryLater,
 }
 
 impl<T> ExecutionOutput<T> {
@@ -412,9 +408,6 @@ impl<T> ExecutionOutput<T> {
             ExecutionOutput::Fatal(e) => {
                 panic!("called `ExecutionOutput::unwrap()` on `Fatal`: {e}")
             }
-            ExecutionOutput::RetryLater => {
-                panic!("called `ExecutionOutput::unwrap()` on `RetryLater`")
-            }
         }
     }
 
@@ -426,7 +419,6 @@ impl<T> ExecutionOutput<T> {
             }
             Self::EpochEnded => ExecutionOutput::EpochEnded,
             Self::Fatal(e) => ExecutionOutput::Fatal(e),
-            Self::RetryLater => ExecutionOutput::RetryLater,
         }
     }
 }

@@ -14,8 +14,7 @@ If you are touching code under `crates/sui-core/src/accumulators/` or
 | [`data_model.md`](./data_model.md) | On-chain layout: the `0xACC` root, `AccumulatorObjId` derivation, dynamic-field representation, and the version invariant. |
 | [`write_path.md`](./write_path.md) | How a balance changes: `FundsWithdrawalArg`, transaction rewriting, accumulator events (Split/Merge), `AccumulatorSettlementTxBuilder`, and the placeholder→settlement-txns→barrier expansion. Also covers the two paths by which settlement reaches a node (validator vs. checkpoint executor). |
 | [`address_funds_scheduling.md`](./address_funds_scheduling.md) | Pre-execution withdraw scheduling for **address-owned** accumulator accounts (max amounts known up front). Eager scheduler, naive baseline, determinism. |
-| [`object_funds_in_execution.md`](./object_funds_in_execution.md) | In-execution sufficiency checking for **object-owned** accumulator accounts, inside the Move VM (`check_object_funds_withdraw_in_execution`). The current design. |
-| [`object_funds_checking.md`](./object_funds_checking.md) | **Deprecated** post-execution sufficiency checking for object-owned accounts, used only while the in-execution flag is off. |
+| [`object_funds_in_execution.md`](./object_funds_in_execution.md) | In-execution sufficiency checking for **object-owned** accumulator accounts, inside the Move VM (`check_object_funds_withdraw_in_execution`). |
 | [`coin_reservations.md`](./coin_reservations.md) | Backward-compat layer that lets pre-address-balance SDKs use address balances by encoding withdrawals as fake `ObjectRef`s. Transitional — expected to be removed once SDK migration is done. |
 
 The **read path** (RPC balance queries via `accumulators/balances.rs` and the
@@ -46,27 +45,14 @@ on those modules is the source of truth — no separate doc is provided here.
                            ▼            ▼
                   ┌──────────────────────────────────┐
                   │     execution engine/adapter     │
-                  │  emits AccumulatorEvents per     │
+                  │  checks each object withdraw in  │
+                  │  the VM (object_funds_in_        │
+                  │  execution.md) and emits         │
+                  │  AccumulatorEvents per           │
                   │  Split/Merge — see write_path.md │
                   └──────────────┬───────────────────┘
                                  │
                                  ▼
-                      Has object withdraws?
-                                 │
-                          ┌──────┴──────┐
-                         YES            NO
-                          │             │
-                          ▼             │
-              ┌────────────────────────┐│
-              │  Sufficiency check     ││
-              │  in-execution (VM) —   ││
-              │  see object_funds_in_  ││
-              │  execution.md; legacy  ││
-              │  post-execution — see  ││
-              │  object_funds_checking ││
-              └────────────┬───────────┘│
-                           │            │
-                           ▼            ▼
                   Effects committed; events
                   accumulated for settlement
                                  │
@@ -90,7 +76,7 @@ on those modules is the source of truth — no separate doc is provided here.
 - **Address funds** — virtual balances owned by an address (`SuiAddress`). Withdraw maximums are
   declared in transaction data; sufficiency can be checked **before** execution.
 - **Object funds** — virtual balances owned by another object (UID). Withdraw amounts are
-  determined by Move program logic at runtime; sufficiency must be checked **after** execution.
+  determined by Move program logic at runtime; sufficiency is checked **during** execution.
 - **Settlement** — the act of folding a commit's accumulator events into the on-chain root.
   Implemented as N parallel settlement transactions (`NonExclusiveWrite` access) plus one
   barrier transaction (`Mutable` access).
@@ -98,7 +84,7 @@ on those modules is the source of truth — no separate doc is provided here.
   bump. Driven by `accumulators::build_accumulator_barrier_tx`.
 - **Split / Merge** — Accumulator events. Split = withdrawal, Merge = deposit.
 - **Running max withdraw** — the peak net withdrawal an account experiences during a single
-  transaction's execution. The basis for object-funds sufficiency checking.
+  transaction's execution. It bounds the net withdrawal recorded as unsettled.
 - **Reservation** — in the address-funds scheduler, the *declared maximum* a transaction may
   withdraw from an account. Held against the in-memory balance until settlement releases it.
 - **Checkpoint-builder path / checkpoint-executor path** — the two ways settlement reaches a validator.
