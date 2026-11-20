@@ -448,6 +448,7 @@ const MAINNET_USDB: &str =
 //              windows. Add a minimum number of user transactions per consensus commit,
 //              duplicates included, that it requires.
 // Version 145: Reject secp256r1 public keys in the SEC1 compact encoding.
+//              Create the FreezeList system object.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1423,6 +1424,10 @@ struct FeatureFlags {
     // `TransactionExpired`.
     #[serde(skip_serializing_if = "is_false")]
     enable_timestamp_transaction_expiration: bool,
+
+    // If true, create the freeze list object in the change epoch transaction.
+    #[serde(skip_serializing_if = "is_false")]
+    create_freeze_list: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -5134,6 +5139,7 @@ impl ProtocolConfig {
                 }
                 145 => {
                     cfg.feature_flags.secp256r1_strict_public_keys = true;
+                    cfg.feature_flags.create_freeze_list = true;
                 }
                 // Use this template when making changes:
                 //
