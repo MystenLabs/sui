@@ -1,0 +1,470 @@
+<!--
+Copyright (c) Mysten Labs, Inc.
+SPDX-License-Identifier: Apache-2.0
+-->
+
+# Mysticeti v3 proof scope
+
+## Result
+
+The formal model has no unfinished proof placeholders or declared axioms in its
+current lemmas. It proves safety, evidence retention, unbounded network DAG
+progress, network commit progress, and pointwise exact-reference catch-up. The
+theorem `current_sources_give_end_to_end_liveness_probability_one` completes
+the adopted ordinary-DAG route in Lean under proposed local source rules and
+the independent-uniform first-slot law. Exact replay remains a separate
+non-adopted proof experiment. See the plain-language
+[safety and liveness properties](SAFETY_AND_LIVENESS.md).
+
+The model is not an end-to-end proof of the product. A result applies to the
+product only when all related environment conditions and product-mapping
+conditions hold. The [assumption ledger](ASSUMPTIONS.md) is the complete list
+for these conditions. The [gap report](IMPLEMENTATION_GAPS.md) lists required
+product changes.
+
+## Safety
+
+The safety model uses weighted validator sets:
+
+- `N` is total validator-set stake.
+- `f` is the maximum Byzantine stake.
+- `Q` is the quorum threshold.
+- `A` is the certification threshold.
+- `c` is the additional unavailable-stake budget.
+
+Safety requires:
+
+```text
+N + f < Q + A
+N + f + A <= 2Q
+```
+
+The nominal v3 construction is:
+
+```text
+N = 5f + 3c + 1
+Q = 4f + 2c + 1
+A = 2f + c + 1
+```
+
+The proof shows that this construction satisfies both inequalities. The main
+results use actual stake and actual thresholds. They do not require every
+committee to have the nominal total. For actual `N`, v3 uses `A = 2f + c + 1`
+and `Q = N - f - c`, then checks both inequalities.
+
+### Leader decisions
+
+For one fixed selected leader slot, a commit result and a skip result cannot both
+be valid. This covers all direct and indirect result pairs. An equivocating
+validator can count once on each side, but it cannot count twice on one side.
+
+This is a per-slot result. Global safety also requires all correct validators to
+use one commit chain, leader schedule, round leader selection, and selected leader
+slot order.
+
+### Transaction decisions
+
+For one transaction, an accept result and a reject result cannot both be valid.
+The first descendant of the target on each authority chain, through the round
+after the target's commit leader, gives an implicit accept vote when the target
+is above the signed vote cutoff and the block has no explicit rejection for the
+transaction. A block that does not accept supplies no stake. Explicit reject
+votes are signed vote entries, and the vote tracker aggregates them; only the
+depth-two trigger rejects the transactions that still have no committed accept
+certificate.
+
+The proof covers direct against direct, direct against indirect, and indirect
+against indirect results. Durable restart behavior remains a product obligation.
+
+The signed cutoff is at least the block-cleanup round and the transaction-vote
+cleanup round, and vote-target truncation can raise it. Every removed target is
+at or below the cutoff, and an accept vote is above it, so an accept vote is
+above both cleanup boundaries.
+
+### Committed material
+
+The model contains the Rust v3 commit materializer walk. A successful
+`FlexCommitter::build_commit` run returns exactly the blocks that its ancestor
+filter reaches from the committed leaders of the commit round. These blocks are
+above the local GC round and are not in an earlier commit. The conditions are
+the reads that Rust already relies on. Each leader body is local, and every
+followed ancestor body is in the local `DagState`. The view has a finite,
+duplicate-free catalog domain. `buildCommit_terminates` proves that the walk
+finishes with fuel at most one more than the domain length.
+`Linearizer::linearize_sub_dag` is the one-leader pre-v3 form of the same walk.
+
+The walk commits each block once. Two hosts whose walk reads agree commit the
+same duplicate-free block set. The deterministic seeded sort then gives one
+commit body and one commit digest. That sort keys on the block round and on a
+hash of the commit seed and the block digest, so its determinism reduces to
+collision freedom of that hash.
+
+The weighted honest-parent bound holds for every block in a committed flush. Each
+counted non-Byzantine parent reference is in the same flush, which supplies its
+body; or it carries the committed mark of an earlier commit; or it is at or below
+the GC boundary, where the walk stops. The third case is a boundary result, not a
+durability claim. The result also applies to the sorted committed vector that
+`build_commit` puts in the sub-DAG and in the serialized commit body.
+
+A commit body names the commit before it. `CommitV1.previous_digest` holds that
+identifier, and `TrustedCommit::compute_digest` hashes the complete serialized
+commit, so a checked digest fixes the link. The model carries the same link in
+`ValidatorCommitHead.previousId`, and `DigestLinkedCommits` states the
+digest-link check that commit synchronization performs on a returned range.
+
+From those two facts the specification derives, rather than assumes, that a
+checked chain ending at a commit one host installed agrees with that host's own
+durable prefix at every earlier entry. The theorem is
+`ExactCommitDurablePrefixSourceMap.digest_chain_entry_matches_installed_prefix`.
+It uses three one-host inputs: the chain links by identifier, one index with one
+identifier names one body, and the host's own prefix keeps the predecessor of
+each stored commit. No step compares two hosts. This result was an input field
+of `ASM-SAFE-INSTALL-PROVENANCE` and is now a proved consequence of
+`ASM-SAFE-DIGEST-IDENTITY` and `ASM-SAFE-COMMIT-STORE`.
+
+Two durable-before-exposure rules hold in the current product, and neither is an
+open condition. A local proposal is written before it is broadcast. A finalized
+commit and its committed blocks are flushed before the commit goes to the commit
+handler: `CommitFinalizer` calls `dag_state.flush()` and only then sends on
+`commit_sender`. See `REF-DURABLE-PROPOSAL` and `REF-DURABLE-COMMIT-OUTPUT` in
+the [assumption ledger](ASSUMPTIONS.md#verified-current-rust-behavior).
+
+Restart needs no separate treatment in the model. The durable prefix is a
+predicate over time, so a restart is one later time in the same trace. What the
+model needs across that step is that the store keeps what it held, which is
+`ASM-SAFE-COMMIT-STORE`. The product supports it: one durable commit supplies the
+local index, reference, and protocol timestamp after restart
+(`REF-COMMIT-STATE`), and a normal restart restores the own-round floor
+(`REF-OWN-PROPOSAL-ROUND`). Empty-store recovery is a separate case that
+`REF-OWN-PROPOSAL-ROUND` and `REF-AMNESIA-SIGNER-GUARD` cover.
+
+### Adaptive leader schedule
+
+The model contains the `LeaderScheduleV3` replay bookkeeping: the three-deep
+pending window, the sliding score window, the boundary-only allowed-leader
+refresh, and the shuffle seed taken from the last pending commit digest. It also
+derives the next commit index and the minimum next leader round. The scorer input
+is the sorted materializer flush. A mapped V3 run has a nonempty leader list,
+and every leader has the commit-head round. The source map requires exact
+commit-decision replay to supply the same ordered committed-leader list at two
+hosts. This order fixes the sort seed. The exact commit reference and this
+source condition then fix the scorer input.
+
+The scoring calculation itself is one deterministic function of the four
+committed materials. The model does not reproduce its arithmetic; equal inputs
+give equal score entries, which is what a shared schedule needs.
+
+The running per-authority totals, leader count, and leader stakes always equal a
+recomputation over the retained score entries. The Rust `checked_sub` on an
+evicted entry therefore cannot underflow. Two correct hosts with exact installed
+heads at one commit index reach the same replayed schedule state, so every read
+that the proposer and the FlexCommitter take from it agrees.
+
+## Evidence retention and old-block cleanup
+
+The model proves that the pre-commit cleanup boundary keeps the leader block, its
+next-round votes, and the path to a depth-two anchor.
+
+For transactions, the proof covers targets that are far below or close to their
+first commit leader. The close case uses the first eligible depth-two trigger and
+requires a cleanup depth greater than two.
+
+Evidence already copied into a pending committed prefix is separate from the live
+block cache. Later cleanup of the live cache cannot remove that copied evidence.
+The product still needs an end-to-end guarantee that all required evidence enters
+the prefix on local, synchronization, replay, and restart paths.
+
+For one continuous common commit stream, the first eligible trigger is unique and
+stays first as the visible prefix grows. Correct validators with the same stream
+and trigger make the same indirect decision.
+`first_trigger_result_is_prefix_stable` states the prefix result.
+
+This result does not apply to an arbitrary larger prefix. A later prefix can
+introduce a new accept certificate and change an earlier indirect reject
+calculation. `arbitrary_prefix_decision_can_flip` gives this counterexample.
+Safety depends on ordered processing and the same first trigger.
+
+## Conditional progress
+
+The progress model uses partial synchrony. Before the network stabilization time,
+messages can have any delay. After that time, messages between correct validators
+arrive within `delta`. Required local work completes within a finite bound
+`epsilon`, and enabled protocol tasks eventually run. The proof does not require
+`epsilon < delta`.
+
+### Consensus progress
+
+`EndToEndLivenessInputs.network_dag_progress` proves unbounded network DAG
+progress from the local proposal, subscription replay, ordinary block-sync,
+current-GC, and handler rules. It does not take a future quorum layer or a commit
+advance as an input.
+
+The adopted commit proof uses one fixed reference round for all local waits.
+V2 current no-idle sources derive a later own block for each correct, available
+host. The V2 no-skip source recovers the finite exact round family that one
+favorable path needs. It does not supply a future window. The strict proof
+derives timer spread from actual prior broadcasts, pinned sync, and one
+action-local exact-next timer-promptness rule. Its source record contains only
+static, local, current, or past facts.
+
+Pinned ordinary block sync and commit-orthogonal retention make each selected
+leader usable at the receiver before the next proposal snapshot. The resulting
+direct range feeds one actual local FlexCommitter run. Exact-prefix induction
+turns receiver-local progress into network commit progress and pointwise
+catch-up. A local commit-head change does not split this proof into separate
+no-ahead and already-ahead routes.
+
+The target strong result starts after both network stabilization and catch-up
+activation. It uses safe intermediate proposals after round jumps, a live-leader
+rule, and continued task execution. This result is intended to cover old leader
+blocks.
+
+The model includes a local counterexample in which a direct jump omits one required
+proposal. It does not claim that the complete published attack applies unchanged
+to v3. The local result is `direct_jump_can_violate_safe_catchup`.
+
+The specification gives no latency bound for one favorable leader window. An
+earlier stage-composition model gave a `10 * delta` figure, but that figure was
+a sum of supplied stage bounds, not a derived product latency. The derived
+commit-liveness route replaced that model, so the model and its assumption were
+removed.
+
+### Transfer budget
+
+The causal-work queue no longer assumes its own service margin. A coarse
+per-validator transfer budget supplies it. The budget counts whole blocks in one
+`delta`; it does not give a larger block a longer transfer time.
+
+The budget is assumed large enough for ordinary round advancement, with room to
+spare. The above-GC references that new rounds require stay strictly below it,
+so the cap binds only on bulk movement: recursive causal block sync and commit
+sync over many blocks. The surplus over the production bound is the rate at
+which a backlog drains, and `high_backlog_drains_by_spare_capacity` states that
+rate.
+
+The budget is necessary and not only sufficient. If arrivals in one interval
+reach the budget, the backlog cannot shrink in that interval, whatever the rest
+of the pipeline does. `saturated_interval_does_not_drain` proves this from the
+cap alone.
+
+This models one validator's ingest capacity. It is not a network model: it has
+no cross-flow contention, no shared bottleneck, and no queueing discipline
+between peers. Message delivery stays capacity-blind, so partial synchrony still
+carries one `delta` for every protocol message whatever its size.
+
+### Commit progress recovery
+
+The model proves the stake, next-round, direct-vote, pending-round, anchor-scan,
+and local Flex-install lemmas. It also proves the same-head timing and causal
+catch-up route. `BlockId` has a fixed finite encoding. Unique in-range
+references give one static per-round cap. The receiver GC round changes this cap
+into a linear unresolved-history bound.
+
+For one fixed reference round `R_c`, the proposed wait is:
+
+```text
+W(R) = b + l * (R - R_c) + q * (R - R_c)^2
+```
+
+The coefficient conditions make each adjacent wait margin dominate the
+pointwise causal-visibility and timer-spread cost. The wait value does not use
+the local commit head. The proof first selects a favorable base above every
+numeric lower bound. It then derives the finite exact V2 production family,
+pinned sync, accepted retention, and adjacent parent edges. This order avoids a
+circular favorable-window choice.
+
+The exact persisted capsule projection, proposal origin, timer-spread source,
+and accepted retention rules are current or past refinements. They do not state
+future progress.
+
+The network-DAG result has no commit alternative. At every requested round,
+it requires a later positive total-stake quorum layer held by one correct,
+available validator. The holder has one exact accepted, retained, and
+catalogued valid body for each selected author, above its local GC boundary.
+This public network-DAG result does not require each correct validator to
+produce its own block or to hold the layer. The commit proof separately derives
+unbounded later own-block production at each correct, available validator. Its
+proposed no-skip source reconstructs only the finite contiguous window that the
+selected favorable path needs. The commit proof keeps stronger
+correct-authored receiver windows inside the construction. It requires
+unbounded exact commit references
+and pointwise installation of each such reference at every correct, available
+validator. Ordinary DAG blocks and recursive above-GC causal-history fetch
+supply the positive local view. Commit synchronization and commit votes are not
+liveness dependencies. Commit sync can stop after commit-index catch-up while
+the local ordinary DAG still lags. It cannot prove DAG availability or replace
+the normal block-sync route.
+
+The pointwise catch-up finish can be different for each validator and commit
+reference. The proof does not claim one fixed numerical lag bound. It also does
+not require a correct validator's own blocks or transactions to enter a commit.
+
+Commit progress recovery does not prove that every old correct leader block or
+every transaction commits. See the
+[recovery design](../design/commit_progress_recovery.md).
+
+### Transaction progress
+
+The current transaction theorem is `transaction_liveness_stage_composition`. It
+takes commit liveness as one input, and composes it with the supplied trigger,
+decision, and durable-output stages. Commit liveness is derived in
+`ValidatorFixedReferenceCurrentPacing`, but that result is stated over the
+end-to-end execution model. A trace refinement must still connect the two
+models, so transaction progress is not yet derived from fundamental inputs. The
+epoch-tail case also remains open.
+
+Transaction payload retention is not required. A validator or user can submit a
+transaction again.
+
+## Leader conditions
+
+Let `S` be leader-schedule stake and `P_r` be round-leader-selection stake in
+round `r`. Progress uses:
+
+```text
+P_r <= S <= N
+f + c < S
+A <= P_r
+```
+
+Current v3 selects the full schedule in each pending leader round, so `P_r = S`.
+The optional `P_r <= Q` limit controls work. Per-slot safety and quorum coverage
+do not require it. A larger selection can still affect the ordered anchor scan.
+
+`schedule_upper_bound_alone_is_not_sufficient` shows that `S <= N` alone does
+not give liveness. `schedule_bounds_do_not_force_round_leader_selection` shows
+that schedule viability does not give `A <= P_r`.
+`threshold_safety_is_independent_of_leader_selection` separates the per-slot
+safety inequalities from the leader selection.
+
+The leader-order model treats each round-seeded shuffle as an independent
+uniform pseudorandom permutation of the current allowed-leader list. All correct
+validators still compute the same deterministic result. The list is fixed
+before that round's shuffle. Lean uses only the first selected slot. Thus, full
+tail uniformity is stronger than the proof needs. This is not a claim that the
+runtime uses fresh entropy.
+
+## Conditions and proof goals
+
+Entries whose type is **Derived** are proof goals. They are not inputs to the
+final liveness theorems.
+
+The results depend on these groups of conditions:
+
+- **Safety:** `ASM-MATH-THRESHOLDS`, `ASM-SAFE-PARAMETERS`,
+  `ASM-SAFE-FAULT-BOUND`, `ASM-SAFE-AUTHENTICATION`,
+  `ASM-SAFE-NON-EQUIVOCATION`, `ASM-SAFE-PARENT-QUORUM`,
+  `ASM-SAFE-EVIDENCE-REFINEMENT`, `ASM-SAFE-DIGEST-IDENTITY`,
+  `ASM-SAFE-COMMIT-STORE`, `ASM-SAFE-INSTALL-PROVENANCE`,
+  `ASM-SAFE-FIRST-TRIGGER`, `ASM-SAFE-COMMITTED-PREFIX`, and `ASM-SAFE-GC`.
+- **Configuration:** `ASM-CONFIG-V3-ACTIVATION`, `ASM-CONFIG-VOTING`, and
+  `ASM-REFINE-INTEGERS`.
+- **Network and runtime:** `ASM-LIVE-PARTIAL-SYNCHRONY`,
+  `ASM-LIVE-TRANSFER-BUDGET`,
+  `ASM-LIVE-PEER-FAIRNESS`, `ASM-LIVE-TASK-FAIRNESS`, and
+  `ASM-LIVE-LOCAL-RESPONSE`. Commit-sync resource isolation is part of
+  `ASM-LIVE-TASK-FAIRNESS`; no commit-sync success is assumed.
+- **Consensus progress:** `ASM-LIVE-FINITE-REFERENCE-SPACE`,
+  `ASM-LIVE-CAPSULE-PROJECTION`, `ASM-LIVE-GC-FRONTIER`,
+  `ASM-LIVE-ROUND-CATCHUP`,
+  `ASM-LIVE-COMMIT-PROGRESS-RECOVERY`, `ASM-LIVE-LOCAL-PROPOSAL`,
+  `ASM-LIVE-LEADER-STAKE`, `ASM-LIVE-LEADER-SCHEDULE`,
+  `ASM-LIVE-FIRST-SLOT-SAMPLING`,
+  `ASM-LIVE-POST-GST-CAUSAL-SERVICE`, and `ASM-LIVE-BLOCK-SYNC`.
+- **Transaction progress:** `ASM-LIVE-FINALIZER-TRIGGER` and
+  `ASM-LIVE-DURABILITY`.
+
+The public network-DAG theorem does not use `ASM-LIVE-ROUND-CATCHUP`. The final
+fixed-reference commit theorem does use it for its finite internal window.
+
+## What this specification can and cannot establish
+
+Read this before you plan work that tries to connect the model to the source.
+
+The specification is a conditional model. Its theorems have the shape "given
+these modeled facts, safety holds". The modeled facts are the fields of the
+source-map structures, such as the 17 fields of `AuthenticatedFlexVoteSourceMap`
+and the 5 fields of `ExactCommitInstallProvenance`. A theorem applies to the
+product only when each field is true of the running code.
+
+**Do not try to prove that the Rust equals the Lean model.** No proof assistant
+can close that step from the source alone. It needs one of these instead:
+
+- extraction of the Lean from the Rust;
+- generation of the Rust from the Lean; or
+- translation validation between the two.
+
+None of these exists for this codebase, and none is planned. A comparable
+formalization, `lean-dag`, does not attempt the step either: it names no Rust at
+all. A plan that starts with "prove the Rust matches" will not finish.
+
+What is achievable, in order of value:
+
+1. Construct a source-map value from a model of one Rust function. This turns a
+   field from an assumption into a stated obligation with a named call site. It
+   also exposes a field that the code cannot satisfy.
+2. Keep the assumption ledger honest. A status of `Known mismatch` is more
+   useful than an unexamined abstraction.
+3. Add conformance tests that run the same vectors against the model and the
+   product, and record counterexamples. This is the practical substitute for the
+   step that cannot be proved.
+4. Report which obligations a source change puts at risk. See the
+   [spec obligation check](../design/spec_obligation_check.md).
+
+The size of the gap is measurable. Safety is
+`correct_validators_agree_on_commit_at_index`. Its hypotheses are two
+structures with 22 fields in total: 17 in `AuthenticatedFlexVoteSourceMap` and
+5 in `ExactCommitInstallProvenance`. No module constructs either one. Every
+mention is a consumer, or a field of the `EndToEndLivenessInputs` bundle, which
+is itself assumed. The theorem is therefore real, machine checked, and never
+instantiated.
+
+Some fields are already known to be false of the code, and that is the useful
+kind of finding. `ASM-SAFE-PARAMETERS` needs one authenticated threshold set for
+every correct validator in an epoch. Some v3 inputs can come from local process
+settings, so two correct validators can derive different thresholds. Quorum
+intersection then fails, and the per-slot exclusion that the whole safety
+argument rests on is void.
+
+Check the store before you record a durability hazard. `PendingCommitState` is
+in-memory and never reaches the store. `WriteBatch` carries accepted blocks,
+commits, commit info, and finalized commits with their rejected transaction
+indices, and no slot status or decision origin. A restart recomputes every
+verdict from recovered blocks and commits. An earlier version of this section
+claimed that a restart loses indirect decision provenance. It does not, because
+nothing preserves that provenance to lose.
+
+## Current product status
+
+Source review and focused tests support the current leader-decision mapping,
+including thresholds, authentication, unique voter stake, parent quorum, common
+ordering from fixed compatible inputs, decision scans, local evidence ownership,
+and commit recording. This evidence is not a machine-checked proof that the source
+follows the model.
+
+The commit materializer and adaptive-schedule results above are stated on models
+of the running Rust loops. Their open source rows are
+`REF-COMMIT-MATERIALIZER-WALK`, `REF-COMMIT-BODY-ORDER`,
+`REF-V3-SCHEDULE-SCORER`, and `REF-V3-SCHEDULE-READERS`.
+
+The current product does not implement commit progress recovery, the
+fixed-reference quadratic wait, or the V2 no-skip proposal sequence. Exact
+successful-Flex material replay is a non-adopted proof experiment and is not a
+current product requirement. Normal startup does
+not enable the analyzed v3 path from shared epoch state. The signed v3
+transaction voting and finalization path is implemented on the branch
+`tmw/mysticeti-v3-transaction-voting` and is not merged. Therefore, the
+related recovery and transaction results do not yet describe product behavior.
+
+The current review also does not prove the V2 current no-idle sources, pinned
+sync sources, commit-orthogonal retention, exact-next timer promptness,
+authenticated correct-body ownership, past recovery-timer origin mapping, or
+the strict post-GST causal-service margin under the fastest permitted round
+creation. These rules are conditional inputs to the completed Lean theorem. The
+causal-service margin now follows from the transfer budget below, so what
+remains for it is measuring the budget and the production bound rather than
+accepting the margin outright.
+
+Other open work includes common epoch parameters, complete commit-chain agreement,
+synchronization progress, committed-prefix evidence, integer bounds, stable leader
+ordering across compatible versions, and finalizer shutdown behavior.
