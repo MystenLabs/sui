@@ -3463,11 +3463,9 @@ async fn running_downloads_free_slot_when_download_finishes_out_of_order() {
 
     second_done.send(()).unwrap();
     timeout(Duration::from_secs(5), async {
-        loop {
-            tokio::select! {
-                _ = downloads.next() => panic!("the first download has not finished"),
-                () = running.finished.notified() => break,
-            }
+        tokio::select! {
+            _ = downloads.next() => panic!("the first download has not finished"),
+            () = running.finished.notified() => {}
         }
     })
     .await
