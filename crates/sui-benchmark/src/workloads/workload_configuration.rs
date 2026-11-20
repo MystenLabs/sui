@@ -101,6 +101,7 @@ impl WorkloadConfiguration {
                 slow,
                 conflicting_transfer,
                 composite,
+                composite_profile,
                 gas_double_spend,
                 shared_counter_hotness_factor,
                 num_shared_counters,
@@ -199,7 +200,13 @@ impl WorkloadConfiguration {
                         in_flight_ratio: in_flight_ratio[i],
                         duration: duration[i],
                         composite_config: if composite[i] > 0 {
-                            Some(CompositeWorkloadConfig::balanced())
+                            Some(CompositeWorkloadConfig::from_profile(
+                                // Groups past the last profile given use the last one.
+                                *composite_profile
+                                    .get(i)
+                                    .or(composite_profile.last())
+                                    .unwrap(),
+                            ))
                         } else {
                             None
                         },

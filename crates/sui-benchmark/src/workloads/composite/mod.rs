@@ -435,8 +435,8 @@ pub struct CompositeWorkloadConfig {
     /// one. The coin-merge lifecycle uses the same probability and also needs the TestCoinCap.
     /// Zero disables both.
     pub owned_object_probability: f32,
-    /// Per-batch probability of adding a gasless SUI transfer to the partner. The protocol
-    /// config must allow SUI in gasless txs, or validators reject these txs.
+    /// Per-batch probability of adding a gasless SUI transfer to the partner. None are sent
+    /// unless the protocol config allows SUI in gasless txs.
     pub gasless_probability: f32,
     /// Per-tx probability that the partner payload sponsors a composite tx. Zero disables
     /// sponsorship.
@@ -453,6 +453,13 @@ pub struct CompositeWorkloadConfig {
     /// gets a timestamp window near the current time. Zero disables it.
     pub timestamp_expiration_probability: f32,
     pub metrics: Option<Arc<Mutex<CompositionMetrics>>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, strum_macros::Display)]
+#[strum(serialize_all = "kebab-case")]
+pub enum CompositeProfile {
+    Balanced,
+    Full,
 }
 
 impl CompositeWorkloadConfig {
@@ -491,6 +498,45 @@ impl CompositeWorkloadConfig {
             allowed_proposers_probability: 0.2,
             timestamp_expiration_probability: 0.1,
             ..Default::default()
+        }
+    }
+
+    /// Every operation and lifecycle, at higher lifecycle rates than `balanced`. Gasless SUI
+    /// transfers are sent only where the protocol config allows SUI in gasless txs.
+    pub fn full() -> Self {
+        // Every operation starts at 0.1, so one added to ALL_OPERATIONS is included.
+        let probabilities = ALL_OPERATIONS.iter().map(|desc| (desc.name, 0.1)).collect();
+        Self {
+            probabilities,
+            num_shared_counters: 2,
+            shared_counter_hotness: 0.95,
+            address_balance_gas_probability: 0.2,
+            alias_tx_probability: 0.5,
+            party_object_probability: 0.8,
+            shared_deletion_probability: 0.3,
+            receive_probability: 0.3,
+            upgrade_probability: 0.3,
+            owned_object_probability: 0.3,
+            gasless_probability: 0.2,
+            sponsored_probability: 0.15,
+            deny_probability: 0.2,
+            multisig_probability: 0.2,
+            allowed_proposers_probability: 0.2,
+            timestamp_expiration_probability: 0.3,
+            ..Default::default()
+        }
+        .with_probability(SharedCounterIncrement::NAME, 0.35)
+        .with_probability(TestCoinAddressWithdraw::NAME, 0.05)
+        .with_probability(TestCoinObjectWithdraw::NAME, 0.05)
+        .with_probability(AddressBalanceOverdraw::NAME, 0.3)
+        .with_probability(AccumulatorBalanceRead::NAME, 0.3)
+        .with_probability(ImmutableObjectRead::NAME, 0.2)
+    }
+
+    pub fn from_profile(profile: CompositeProfile) -> Self {
+        match profile {
+            CompositeProfile::Balanced => Self::balanced(),
+            CompositeProfile::Full => Self::full(),
         }
     }
 
@@ -1697,9 +1743,16 @@ impl Payload for CompositePayload {
             transactions.push(self.generate_multisig_transaction(rgp, current_epoch));
         }
 
+        // Validators reject every gasless SUI transfer on a chain whose allowlist leaves SUI out,
+        // and a batch with a gasless tx forgoes soft-bundle submission, so such chains get none.
+        // The draw comes first so that configs without gasless txs keep main's rng stream.
         if !address_balance_gas_disabled
             && !gasless_disabled(system_state.protocol_config.as_ref())
             && rng.gen_bool(self.config.gasless_probability as f64)
+            && system_state
+                .protocol_config
+                .as_ref()
+                .is_some_and(gasless_sui_transfer_allowed)
         {
             self.direct_submission = true;
             transactions.push(self.generate_gasless_transaction(
@@ -3037,8 +3090,64 @@ impl Workload<dyn Payload> for CompositeWorkload {
 
 #[cfg(test)]
 mod tests {
-    use super::gasless_sui_transfer_allowed;
+    use super::{ALL_OPERATIONS, CompositeWorkloadConfig, gasless_sui_transfer_allowed};
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+
+    #[test]
+    fn full_profile_enables_every_operation_and_lifecycle() {
+        let config = CompositeWorkloadConfig::full();
+        for desc in ALL_OPERATIONS {
+            assert!(config.probability_for(desc) > 0.0, "{}", desc.name);
+        }
+
+        // No `..`, so a new field fails to compile here until it is classified.
+        let CompositeWorkloadConfig {
+            probabilities: _,
+            num_shared_counters: _,
+            shared_counter_hotness: _,
+            address_balance_amount: _,
+            metrics: _,
+            address_balance_gas_probability,
+            mixed_gas_payment_probability,
+            conflicting_transaction_probability,
+            alias_tx_probability,
+            alias_txs_before_revoke,
+            party_object_probability,
+            shared_deletion_probability,
+            receive_probability,
+            upgrade_probability,
+            owned_object_probability,
+            gasless_probability,
+            sponsored_probability,
+            deny_probability,
+            multisig_probability,
+            allowed_proposers_probability,
+            timestamp_expiration_probability,
+        } = config;
+        assert!(alias_txs_before_revoke > 0);
+        for (name, p) in [
+            ("address_balance_gas", address_balance_gas_probability),
+            ("mixed_gas_payment", mixed_gas_payment_probability),
+            (
+                "conflicting_transaction",
+                conflicting_transaction_probability,
+            ),
+            ("alias_tx", alias_tx_probability),
+            ("party_object", party_object_probability),
+            ("shared_deletion", shared_deletion_probability),
+            ("receive", receive_probability),
+            ("upgrade", upgrade_probability),
+            ("owned_object", owned_object_probability),
+            ("gasless", gasless_probability),
+            ("sponsored", sponsored_probability),
+            ("deny", deny_probability),
+            ("multisig", multisig_probability),
+            ("allowed_proposers", allowed_proposers_probability),
+            ("timestamp_expiration", timestamp_expiration_probability),
+        ] {
+            assert!(p > 0.0, "{name}");
+        }
+    }
 
     #[test]
     fn gasless_sui_transfers_are_expected_only_where_sui_is_allowlisted() {

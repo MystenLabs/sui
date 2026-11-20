@@ -428,10 +428,11 @@ impl BenchmarkCmp<'_> {
         }
     }
     pub fn cmp_error_rate(&self) -> Comparison {
+        // A batched-only run in which nothing executed has no transactions at all.
         let old_error_rate =
-            self.old.num_error_txes / (self.old.num_error_txes + self.old.num_success_txes);
+            self.old.num_error_txes / (self.old.num_error_txes + self.old.num_success_txes).max(1);
         let new_error_rate =
-            self.new.num_error_txes / (self.new.num_error_txes + self.new.num_success_txes);
+            self.new.num_error_txes / (self.new.num_error_txes + self.new.num_success_txes).max(1);
         let diff = new_error_rate as i64 - old_error_rate as i64;
         let diff_ratio = diff as f64 / old_error_rate as f64;
         let speedup = 1.0 / (1.0 + diff_ratio);

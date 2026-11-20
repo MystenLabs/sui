@@ -215,9 +215,9 @@ async fn main() -> Result<()> {
                         }
                     }
                 }
-                Err(e) => eprintln!("{e}"),
+                Err(e) => return Err(e),
             },
-            Err(e) => eprintln!("{e:?}"),
+            Err(_) => unreachable!("a join error returned above"),
         }
         Ok(())
     }
