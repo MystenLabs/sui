@@ -164,7 +164,10 @@ fn successful_native_costs_match_work_formulas() {
     let slice_args = VecDeque::from([slice_holder.as_ref_value(), Value::u64(1), Value::u64(3)]);
     let slice_result = with_native_context(100, |context| {
         native_copy_range(
-            &CopyRangeGasParameters { base: 5.into() },
+            &CopyRangeGasParameters {
+                base: 5.into(),
+                per_abstract_memory_unit: None,
+            },
             context,
             vec![Type::U8],
             slice_args,

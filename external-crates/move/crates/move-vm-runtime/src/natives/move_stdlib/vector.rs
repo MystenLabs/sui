@@ -444,6 +444,7 @@ pub fn make_native_keep_range(gas_params: KeepRangeGasParameters) -> NativeFunct
 #[derive(Debug, Clone)]
 pub struct CopyRangeGasParameters {
     pub base: InternalGas,
+    pub per_abstract_memory_unit: Option<InternalGas>,
 }
 
 pub fn native_copy_range(
@@ -460,11 +461,20 @@ pub fn native_copy_range(
     let j = checked_as!(pop_arg!(args, u64), usize)?;
     let i = checked_as!(pop_arg!(args, u64), usize)?;
     let v = pop_arg!(args, VectorRef);
+    let ty = ty_args.safe_get(0)?;
+
+    if let Some(per_abstract_memory_unit) = gas_params.per_abstract_memory_unit
+        && let Ok(size) = v.copy_range_abstract_memory_size(i, j, ty)
+    {
+        native_charge_gas_early_exit!(
+            context,
+            per_abstract_memory_unit.saturating_mul(u64::from(size))
+        );
+    }
 
     NativeResult::map_partial_vm_result_one(
         context.gas_used(),
-        v.copy_range(i, j, ty_args.safe_get(0)?)
-            .map_err(native_error_to_abort),
+        v.copy_range(i, j, ty).map_err(native_error_to_abort),
     )
 }
 

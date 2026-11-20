@@ -492,6 +492,7 @@ nitro_attestation_verify_base_cost: 2481600
 nitro_attestation_verify_cost_per_cert: 2618450
 layout_node_cost: 16
 layout_node_cost_large_layout_threshold: 64
+bcs_per_input_abstract_unit_cost: 20
 bcs_per_byte_serialized_cost: 2
 bcs_legacy_min_output_size_cost: 1
 bcs_failure_cost: 52
@@ -526,6 +527,7 @@ vector_keep_range_base_cost: 52
 vector_keep_range_per_dropped_elem_cost: 1
 vector_keep_range_per_moved_elem_cost: 8
 vector_copy_range_base_cost: 52
+vector_copy_range_per_abstract_memory_unit_cost: 1
 vector_replace_range_base_cost: 52
 vector_replace_range_per_elem_cost: 8
 debug_print_base_cost: 52

@@ -35,6 +35,7 @@ impl GasParameters {
         Self {
             bcs: bcs::GasParameters {
                 to_bytes: bcs::ToBytesGasParameters {
+                    per_input_abstract_unit: None,
                     per_byte_serialized: 0.into(),
                     legacy_min_output_size: 0,
                     failure: 0.into(),
@@ -106,7 +107,10 @@ impl GasParameters {
                     per_dropped_elem: 0.into(),
                     per_moved_elem: 0.into(),
                 },
-                copy_range: vector::CopyRangeGasParameters { base: 0.into() },
+                copy_range: vector::CopyRangeGasParameters {
+                    base: 0.into(),
+                    per_abstract_memory_unit: None,
+                },
                 replace_range: vector::ReplaceRangeGasParameters {
                     base: 0.into(),
                     per_elem: 0.into(),
