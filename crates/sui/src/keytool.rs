@@ -548,6 +548,8 @@ impl KeyToolCommand {
                     let tx_bytes = Base64::decode(&tx_bytes)
                         .map_err(|e| anyhow!("Invalid base64 tx bytes: {:?}", e))?;
                     let tx_data: TransactionData = bcs::from_bytes(&tx_bytes)?;
+                    // A valid multisig only counts if this transaction needs its signature.
+                    let is_signer = tx_data.required_signers().contains(&address);
                     let s = GenericSignature::MultiSig(multisig);
                     let res = s.verify_authenticator(
                         &IntentMessage::new(Intent::sui_transaction(), tx_data),
@@ -558,6 +560,11 @@ impl KeyToolCommand {
                     );
 
                     match res {
+                        Ok(()) if !is_signer => {
+                            output.sig_verify_result = format!(
+                                "{address} is not the sender or gas owner of this transaction"
+                            )
+                        }
                         Ok(()) => output.sig_verify_result = "OK".to_string(),
                         Err(e) => output.sig_verify_result = format!("{:?}", e),
                     };
