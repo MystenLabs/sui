@@ -9,7 +9,8 @@ use sui_rpc::Client;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::changed_object::{IdOperation, OutputObjectState};
 use sui_rpc::proto::sui::rpc::v2::{
-    GetCoinInfoRequest, GetCoinInfoResponse, ListOwnedObjectsRequest,
+    GetCoinInfoRequest, GetCoinInfoResponse, ListOwnedObjectsRequest, ObjectFilter, ObjectLiteral,
+    ObjectTerm, ObjectTypeFilter, object_literal,
 };
 use sui_sdk_types::TypeTag;
 use sui_types::Identifier;
@@ -531,6 +532,86 @@ async fn test_filter_by_type() {
         1
     );
     assert_eq!(objects.iter().filter(|o| o.object_type() == sui).count(), 5);
+
+    // A negated `filter` literal excludes every coin, leaving the treasury cap.
+    let objects = client
+        .state_client()
+        .list_owned_objects({
+            let mut message = ListOwnedObjectsRequest::default();
+            message.owner = Some(address.to_string());
+            message.filter = Some(excluding_types(&["0x2::coin::Coin"]));
+            message.read_mask = Some(FieldMask::from_str("object_id,object_type"));
+            message
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .objects;
+    assert_eq!(
+        objects.iter().map(|o| o.object_type()).collect::<Vec<_>>(),
+        vec![treasury_cap_type.as_str()]
+    );
+
+    // Excluding only `Coin<SUI>` keeps the trusted coin, one page at a time.
+    let mut types = Vec::new();
+    let mut page_token = None;
+    loop {
+        let response = client
+            .state_client()
+            .list_owned_objects({
+                let mut message = ListOwnedObjectsRequest::default();
+                message.owner = Some(address.to_string());
+                message.filter = Some(excluding_types(&["0x2::coin::Coin<0x2::sui::SUI>"]));
+                message.page_size = Some(1);
+                message.page_token = page_token.take();
+                message.read_mask = Some(FieldMask::from_str("object_type"));
+                message
+            })
+            .await
+            .unwrap()
+            .into_inner();
+        types.extend(response.objects.iter().map(|o| o.object_type().to_owned()));
+        match response.next_page_token {
+            Some(token) => page_token = Some(token),
+            None => break,
+        }
+    }
+    types.sort();
+    let mut expected = vec![trusted_coin.clone(), treasury_cap_type.clone()];
+    expected.sort();
+    assert_eq!(types, expected);
+
+    let status = client
+        .state_client()
+        .list_owned_objects({
+            let mut message = ListOwnedObjectsRequest::default();
+            message.owner = Some(address.to_string());
+            message.object_type = Some("0x2::coin::Coin".to_owned());
+            message.filter = Some(excluding_types(&["0x2::coin::Coin"]));
+            message
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(status.code(), tonic::Code::InvalidArgument);
+}
+
+/// A filter with one term that excludes each of `object_types`.
+fn excluding_types(object_types: &[&str]) -> ObjectFilter {
+    let mut term = ObjectTerm::default();
+    term.literals = object_types
+        .iter()
+        .map(|object_type| {
+            let mut type_filter = ObjectTypeFilter::default();
+            type_filter.object_type = Some((*object_type).to_owned());
+            let mut literal = ObjectLiteral::default();
+            literal.negated = true;
+            literal.predicate = Some(object_literal::Predicate::ObjectType(type_filter));
+            literal
+        })
+        .collect();
+    let mut filter = ObjectFilter::default();
+    filter.terms = vec![term];
+    filter
 }
 
 #[sim_test]

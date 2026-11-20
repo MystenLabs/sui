@@ -999,11 +999,8 @@ impl From<crate::execution_status::ExecutionErrorKind> for ExecutionError {
             crate::execution_status::ExecutionErrorKind::NonExclusiveWriteInputObjectModified { id } => {
                 Self::NonExclusiveWriteInputObjectModified { object: id.into() }
             }
-            // TODO: map to `Self::TransactionExpired` once sui-sdk-types has the variant. Until
-            // then this conversion is lossy, which is acceptable only while the variant is
-            // produced on devnet alone.
             crate::execution_status::ExecutionErrorKind::TransactionExpired => {
-                Self::InvariantViolation
+                Self::TransactionExpired
             }
         }
     }
@@ -1135,6 +1132,11 @@ impl From<ExecutionError> for crate::execution_status::ExecutionErrorKind {
                 max_scaled_size,
             },
             ExecutionError::InvalidLinkage => Self::InvalidLinkage,
+            ExecutionError::InsufficientFundsForWithdraw => Self::InsufficientFundsForWithdraw,
+            ExecutionError::NonExclusiveWriteInputObjectModified { object } => {
+                Self::NonExclusiveWriteInputObjectModified { id: object.into() }
+            }
+            ExecutionError::TransactionExpired => Self::TransactionExpired,
             _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }

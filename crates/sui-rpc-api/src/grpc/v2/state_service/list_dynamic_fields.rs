@@ -23,6 +23,8 @@ use sui_sdk_types::Address;
 use sui_types::base_types::ObjectID;
 use sui_types::storage::DynamicFieldKey;
 
+use super::filter::dynamic_field_filter;
+
 const MAX_PAGE_SIZE: usize = 1000;
 const DEFAULT_PAGE_SIZE: usize = 50;
 const MAX_PAGE_SIZE_BYTES: usize = 512 * 1024; // 512KiB
@@ -52,6 +54,12 @@ pub fn list_dynamic_fields(
                 .with_description(format!("invalid owner: {e}"))
                 .with_reason(ErrorReason::FieldInvalid)
         })?;
+
+    let filter = request
+        .filter
+        .as_ref()
+        .map(dynamic_field_filter)
+        .transpose()?;
 
     let page_size = request
         .page_size
@@ -85,6 +93,7 @@ pub fn list_dynamic_fields(
 
     let mut iter = indexes.dynamic_field_iter(
         parent.into(),
+        filter.as_ref(),
         page_token.map(|t| DynamicFieldKey {
             parent: parent.into(),
             field_id: t.field_id.into(),
@@ -148,6 +157,8 @@ fn encode_page_token(page_token: PageToken) -> Bytes {
     bcs::to_bytes(&page_token).unwrap().into()
 }
 
+/// Does not record `filter`: resuming with a different filter continues from
+/// the same index position.
 #[derive(serde::Serialize, serde::Deserialize)]
 struct PageToken {
     parent: Address,

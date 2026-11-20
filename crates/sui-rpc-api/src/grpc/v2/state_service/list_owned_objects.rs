@@ -17,7 +17,10 @@ use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsResponse;
 use sui_rpc::proto::sui::rpc::v2::Object;
 use sui_sdk_types::Address;
+use sui_types::storage::OwnedObjectFilter;
 use sui_types::storage::OwnedObjectInfo;
+
+use super::filter::owned_object_filter;
 
 const MAX_PAGE_SIZE: usize = 1000;
 const DEFAULT_PAGE_SIZE: usize = 50;
@@ -45,7 +48,7 @@ pub fn list_owned_objects(
                 .with_description(format!("invalid owner: {e}"))
                 .with_reason(ErrorReason::FieldInvalid)
         })?;
-    let object_type = request
+    let object_type: Option<move_core_types::language_storage::StructTag> = request
         .object_type
         .map(|s| s.parse())
         .transpose()
@@ -54,6 +57,17 @@ pub fn list_owned_objects(
                 .with_description(format!("invalid object_type: {e}"))
                 .with_reason(ErrorReason::FieldInvalid)
         })?;
+    let filter = match (&object_type, &request.filter) {
+        (Some(_), Some(_)) => {
+            return Err(FieldViolation::new("filter")
+                .with_description("set at most one of `object_type` and `filter`")
+                .with_reason(ErrorReason::FieldInvalid)
+                .into());
+        }
+        (Some(object_type), None) => Some(OwnedObjectFilter::object_type(object_type.clone())),
+        (None, Some(filter)) => Some(owned_object_filter(filter)?),
+        (None, None) => None,
+    };
 
     let page_size = request
         .page_size
@@ -64,9 +78,7 @@ pub fn list_owned_objects(
         .map(|token| decode_page_token(&token))
         .transpose()?;
     if let Some(token) = &page_token
-        && (token.owner != owner
-            || token.object_type != object_type
-            || !cursor_within_type_filter(token, object_type.as_ref()))
+        && (token.owner != owner || token.object_type != object_type)
     {
         return Err(FieldViolation::new("page_token")
             .with_description("invalid page_token")
@@ -86,11 +98,8 @@ pub fn list_owned_objects(
     };
 
     let should_load_object = should_load_object(&read_mask);
-    let mut iter = indexes.owned_objects_iter(
-        owner.into(),
-        object_type.clone(),
-        page_token.map(|t| t.inner),
-    )?;
+    let mut iter =
+        indexes.owned_objects_iter(owner.into(), filter.as_ref(), page_token.map(|t| t.inner))?;
     let mut objects = Vec::with_capacity(page_size);
     let render_context = RenderContext::empty(service.reader.inner());
     let mut size_bytes = 0;
@@ -176,37 +185,13 @@ fn owned_object_to_proto(info: OwnedObjectInfo, mask: &FieldMaskTree) -> Object 
     message
 }
 
+/// Does not record `filter`: resuming with a different filter continues from
+/// the same index position.
 #[derive(serde::Serialize, serde::Deserialize)]
 struct PageToken {
     owner: Address,
     object_type: Option<move_core_types::language_storage::StructTag>,
     inner: OwnedObjectInfo,
-}
-
-/// Whether the token's inner cursor position lies within the query's
-/// type filter, mirroring the store's `TypeFilter::Type` matching
-/// contract: a filter with empty type parameters matches every
-/// instantiation of the named type, while one with parameters pins the
-/// exact instantiation. The token's recorded *query* is validated
-/// separately; this checks the resume *position* itself, so a crafted
-/// token cannot seek the scan outside the filtered prefix (the store
-/// also rejects such a cursor, but as an internal error rather than an
-/// invalid argument).
-fn cursor_within_type_filter(
-    token: &PageToken,
-    filter: Option<&move_core_types::language_storage::StructTag>,
-) -> bool {
-    let Some(filter) = filter else {
-        return true;
-    };
-    let cursor_type = &token.inner.object_type;
-    if filter.type_params.is_empty() {
-        cursor_type.address == filter.address
-            && cursor_type.module == filter.module
-            && cursor_type.name == filter.name
-    } else {
-        cursor_type == filter
-    }
 }
 
 fn should_load_object(mask: &FieldMaskTree) -> bool {
