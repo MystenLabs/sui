@@ -1130,8 +1130,8 @@ impl TemporaryStore<'_> {
             .zip_debug_eq(old_storage_rebates)
         {
             // The allowance's storage is neither charged nor rebated, so there is no
-            // non-refundable fee. It only grows by the first rate-limit anchor (8 bytes), which
-            // goes unpaid; the `Allowance` type bounds its size.
+            // non-refundable fee. Spends write only fixed-width fields, so it only grows by the
+            // first rate-limit anchor (8 bytes), which goes unpaid.
             if passthrough {
                 object.storage_rebate = old_storage_rebate;
                 continue;

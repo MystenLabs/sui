@@ -936,8 +936,7 @@ fn is_replay_protected_without_gas_coin(
 ///
 /// Requires: gasless enabled by protocol, caller did not set price (or set it to 0) and did not
 /// set gas payment objects, tx is a PTB that passes the structural gasless checks, and all loaded
-/// Move object inputs pass the runtime gasless input check (`Coin<T>` with `T` allowlisted,
-/// AddressOwner/ConsensusAddressOwner).
+/// Move object inputs pass `check_gasless_object_inputs`.
 fn is_gasless_candidate(
     request: &SimulateTransactionRequest,
     transaction: &sui_types::transaction::TransactionData,
