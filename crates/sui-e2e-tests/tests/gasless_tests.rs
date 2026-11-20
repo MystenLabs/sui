@@ -15,7 +15,7 @@ use sui_types::{
     MOVE_STDLIB_PACKAGE_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
     SUI_FRAMEWORK_PACKAGE_ID,
     balance::Balance,
-    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     effects::TransactionEffectsAPI,
     execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus},
     gas::GasCostSummary,
@@ -994,7 +994,7 @@ async fn issue_rate_limited_allowance(
     funder: SuiAddress,
     spender: SuiAddress,
     coin_type: TypeTag,
-) -> (ObjectID, SequenceNumber) {
+) -> (ObjectID, SequenceNumber, ObjectRef) {
     let funder_gas = test_env.get_gas_for_sender(funder)[0];
     let mut builder = ProgrammableTransactionBuilder::new();
     let period_ms = builder.pure(86_400_000u64).unwrap();
@@ -1038,16 +1038,21 @@ async fn issue_rate_limited_allowance(
     let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
     assert!(effects.status().is_ok(), "{:?}", effects.status());
     test_env.update_all_gas().await;
-    effects
-        .created()
-        .into_iter()
+    let created = effects.created();
+    let (allowance_id, initial_shared_version) = created
+        .iter()
         .find_map(|(obj_ref, owner)| match owner {
             Owner::Shared {
                 initial_shared_version,
-            } => Some((obj_ref.0, initial_shared_version)),
+            } => Some((obj_ref.0, *initial_shared_version)),
             _ => None,
         })
-        .expect("the allowance is created as a shared object")
+        .expect("the allowance is created as a shared object");
+    let cap = created
+        .iter()
+        .find_map(|(obj_ref, owner)| (*owner == Owner::AddressOwner(funder)).then_some(*obj_ref))
+        .expect("the allowance cap is sent to the funder");
+    (allowance_id, initial_shared_version, cap)
 }
 
 fn build_allowance_spend_ptb(
@@ -1113,7 +1118,7 @@ async fn test_gasless_allowance_spend() {
     let recipient = test_env.get_sender(2);
 
     let coin_type = setup_custom_coin(&mut test_env, &[(10_000, funder)]).await;
-    let (allowance_id, initial_shared_version) =
+    let (allowance_id, initial_shared_version, _) =
         issue_rate_limited_allowance(&mut test_env, funder, spender, coin_type.clone()).await;
     let initial = test_env
         .cluster
@@ -1177,6 +1182,104 @@ async fn test_gasless_allowance_spend() {
         .await
         .unwrap();
     assert_eq!(allowance.storage_rebate, initial.storage_rebate);
+
+    test_env.trigger_reconfiguration().await;
+}
+
+// A gasless spend grows the allowance without changing its storage rebate. Deleting it afterwards
+// must refund exactly that rebate, or per-tx and epoch SUI conservation fail.
+#[sim_test]
+async fn test_gasless_allowance_revoke_after_growth() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.set_gasless_allowance_spend_for_testing(true);
+            cfg
+        }))
+        .build()
+        .await;
+    let funder = test_env.get_sender(0);
+    let spender = test_env.get_sender(1);
+    let recipient = test_env.get_sender(2);
+
+    let coin_type = setup_custom_coin(&mut test_env, &[(10_000, funder)]).await;
+    let (allowance_id, initial_shared_version, cap) =
+        issue_rate_limited_allowance(&mut test_env, funder, spender, coin_type.clone()).await;
+    let initial = test_env
+        .cluster
+        .get_object_from_fullnode_store(&allowance_id)
+        .await
+        .unwrap();
+
+    let tx_kind = build_allowance_spend_ptb(
+        1_000,
+        coin_type.clone(),
+        funder,
+        allowance_id,
+        initial_shared_version,
+        recipient,
+    );
+    let tx = test_env.gasless_transaction_data(tx_kind, spender, 0, 0);
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok(), "{:?}", effects.status());
+    assert_zero_gas(effects.gas_cost_summary());
+
+    let grown = test_env
+        .cluster
+        .get_object_from_fullnode_store(&allowance_id)
+        .await
+        .unwrap();
+    assert!(grown.object_size_for_gas_metering() > initial.object_size_for_gas_metering());
+    assert_eq!(grown.storage_rebate, initial.storage_rebate);
+
+    let funder_gas = test_env.get_gas_for_sender(funder)[0];
+    let mut old_rebates = 0;
+    for id in [funder_gas.0, cap.0, allowance_id] {
+        old_rebates += test_env
+            .cluster
+            .get_object_from_fullnode_store(&id)
+            .await
+            .unwrap()
+            .storage_rebate;
+    }
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let cap_arg = builder.obj(ObjectArg::ImmOrOwnedObject(cap)).unwrap();
+    let allowance_arg = builder
+        .obj(ObjectArg::SharedObject {
+            id: allowance_id,
+            initial_shared_version,
+            mutability: SharedObjectMutability::Mutable,
+        })
+        .unwrap();
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("allowance").unwrap(),
+        Identifier::new("revoke").unwrap(),
+        vec![Balance::type_tag(coin_type)],
+        vec![cap_arg, allowance_arg],
+    );
+    let tx = TransactionData::new_programmable(
+        funder,
+        vec![funder_gas],
+        builder.finish(),
+        10_000_000,
+        test_env.rgp,
+    );
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok(), "{:?}", effects.status());
+    assert!(
+        effects
+            .deleted()
+            .iter()
+            .any(|obj_ref| obj_ref.0 == allowance_id)
+    );
+    // The gas coin, cap, and allowance are the only objects touched, so the refund (including the
+    // non-refundable part) is exactly their prior rebates.
+    let summary = effects.gas_cost_summary();
+    assert_eq!(
+        summary.storage_rebate + summary.non_refundable_storage_fee,
+        old_rebates
+    );
 
     test_env.trigger_reconfiguration().await;
 }
