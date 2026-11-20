@@ -1418,7 +1418,9 @@ struct FeatureFlags {
     enable_timestamp_transaction_expiration: bool,
 
     // Allow `sui::allowance::balance_spend` in gasless transactions. The spent allowance is
-    // written without storage charges or rebates. Requires `enable_gasless` and `enable_allowances`.
+    // written without storage charges or rebates. Also makes signing reject any transaction,
+    // gasless or not, that takes a non-app-bound allowance mutably unless the sender is its
+    // funder or spender. Requires `enable_gasless` and `enable_allowances`.
     #[serde(skip_serializing_if = "is_false")]
     #[skip_protocol_config_accessor]
     gasless_allowance_spend: bool,

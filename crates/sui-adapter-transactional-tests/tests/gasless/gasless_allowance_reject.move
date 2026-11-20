@@ -132,3 +132,17 @@ module test::app {
 // Rejected: the allowance has expired.
 //> 0: sui::allowance::balance_spend<test::usdc::USDC>(Input(1), Input(0), Input(2));
 //> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(3));
+
+// Only the funder or spender may take a plain allowance mutably, so others cannot congest it.
+
+//# programmable --sender C --inputs mutshared(5,0)
+// Rejected: C is neither the funder nor the spender.
+//> 0: sui::allowance::allowance_settings<sui::balance::Balance<test::usdc::USDC>>(Input(0));
+
+//# programmable --sender C --inputs immshared(5,0)
+// Accepted: anyone may read the allowance.
+//> 0: sui::allowance::allowance_settings<sui::balance::Balance<test::usdc::USDC>>(Input(0));
+
+//# programmable --sender C --inputs mutshared(15,0)
+// Accepted: app-bound allowances are exempt.
+//> 0: sui::allowance::allowance_settings<sui::balance::Balance<test::usdc::USDC>>(Input(0));

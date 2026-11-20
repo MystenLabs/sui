@@ -71,8 +71,11 @@ mod checked {
             &[],
         )?;
         transaction.check_allowance_inputs(&input_objects)?;
-        if protocol_config.gasless_allowance_spend() && transaction.is_gasless_transaction() {
-            check_gasless_allowance_spends(transaction, &input_objects)?;
+        if protocol_config.gasless_allowance_spend() {
+            check_allowance_writers(transaction, &input_objects)?;
+            if transaction.is_gasless_transaction() {
+                check_gasless_allowance_spends(transaction, &input_objects)?;
+            }
         }
         check_receiving_objects(&input_objects, receiving_objects)?;
         // Runs verifier, which could be expensive.
@@ -808,6 +811,49 @@ mod checked {
         Ok(())
     }
 
+    /// Rejects a transaction that takes a non-app-bound allowance as a writable input unless the
+    /// sender is its funder or spender. Only they can write it: `balance_spend` checks the spender,
+    /// and `revoke` needs the funder's cap, which cannot be transferred. Anyone else could only
+    /// congest the allowance and get its gasless spends, which order last, deferred or cancelled.
+    ///
+    /// App-bound allowances are exempt because an app may rotate the spender from any sender.
+    fn check_allowance_writers(
+        transaction: &TransactionData,
+        input_objects: &InputObjects,
+    ) -> UserInputResult<()> {
+        let sender = transaction.sender();
+        for input in input_objects.iter() {
+            let InputObjectKind::SharedMoveObject { mutability, .. } = &input.input_object_kind
+            else {
+                continue;
+            };
+            if matches!(mutability, SharedObjectMutability::Immutable) {
+                continue;
+            }
+            let Some(object) = input.as_object() else {
+                continue;
+            };
+            let Some(move_obj) = object.data.try_as_move() else {
+                continue;
+            };
+            if !move_obj.type_().is_allowance() {
+                continue;
+            }
+            let allowance = parse_allowance_object(object)?;
+            if allowance.is_app_bound {
+                continue;
+            }
+            fp_ensure!(
+                sender == allowance.funder || allowance.spender == Some(sender),
+                UserInputError::Unsupported(format!(
+                    "Only the funder or spender of allowance {} may take it as a mutable input",
+                    object.id()
+                ))
+            );
+        }
+        Ok(())
+    }
+
     /// Rejects a gasless spend from an allowance that must abort in `consume`. A failed gasless
     /// transaction is free but still writes the funder's allowance, so the spender could otherwise
     /// write it indefinitely at no cost.
@@ -845,7 +891,7 @@ mod checked {
                 continue;
             };
             if parse_allowance_object(object)?.spend_must_abort(amount, now_ms) {
-                // Only configs that allowlist SUI run the composite workload's gasless spends.
+                // Reachability is expected only where SUI is gasless-allowlisted.
                 assert_reachable_gated!(
                     "gasless spend of an expired or exhausted allowance rejected",
                     |pc| pc.gasless_allowance_spend()
