@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 
 use crate::base_types::{ExecutionData, ObjectID, ObjectRef};
 use crate::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
-use crate::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents};
+use crate::messages_checkpoint::{
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary,
+};
 use crate::object::Object;
 use crate::signature::GenericSignature;
 use crate::storage::ObjectKey;
@@ -159,10 +161,22 @@ impl BackingPackageStore for CheckpointData {
 static_assertions::assert_not_impl_any!(Checkpoint: serde::Serialize, serde::de::DeserializeOwned);
 static_assertions::assert_not_impl_any!(ExecutedTransaction: serde::Serialize, serde::de::DeserializeOwned);
 static_assertions::assert_not_impl_any!(ObjectSet: serde::Serialize, serde::de::DeserializeOwned);
+static_assertions::assert_not_impl_any!(LocallyBuiltCheckpoint: serde::Serialize, serde::de::DeserializeOwned);
 
 #[derive(Clone, Debug)]
 pub struct Checkpoint {
     pub summary: CertifiedCheckpointSummary,
+    pub contents: CheckpointContents,
+    pub transactions: Vec<ExecutedTransaction>,
+    pub object_set: ObjectSet,
+}
+
+/// A checkpoint as this node built it from its own consensus output and execution, before the
+/// network certified it. It carries the same data as [`Checkpoint`] except the quorum signature,
+/// so nothing proves that the rest of the network agrees with it.
+#[derive(Clone, Debug)]
+pub struct LocallyBuiltCheckpoint {
+    pub summary: CheckpointSummary,
     pub contents: CheckpointContents,
     pub transactions: Vec<ExecutedTransaction>,
     pub object_set: ObjectSet,

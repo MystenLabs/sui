@@ -4,6 +4,7 @@
 pub(crate) mod causal_order;
 pub mod checkpoint_executor;
 mod checkpoint_output;
+mod locally_built_checkpoints;
 mod metrics;
 
 use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
@@ -14,6 +15,7 @@ use crate::checkpoints::checkpoint_output::CertifiedCheckpointOutput;
 pub use crate::checkpoints::checkpoint_output::{
     CheckpointOutput, LogCheckpointOutput, SendCheckpointToStateSync, SubmitCheckpointToConsensus,
 };
+pub use crate::checkpoints::locally_built_checkpoints::LocallyBuiltCheckpointPublisher;
 pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::consensus_manager::ReplayWaiter;
 use crate::execution_cache::TransactionCacheRead;

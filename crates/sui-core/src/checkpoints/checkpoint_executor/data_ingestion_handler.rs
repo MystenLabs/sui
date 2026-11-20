@@ -12,10 +12,11 @@ use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc;
-use sui_types::effects::TransactionEffectsAPI;
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::full_checkpoint_content::{Checkpoint, ExecutedTransaction, ObjectSet};
 use sui_types::storage::ObjectStore;
+use sui_types::transaction::SenderSignedData;
 
 pub(crate) fn store_checkpoint_locally(
     path: impl AsRef<Path>,
@@ -85,8 +86,31 @@ pub(crate) fn load_checkpoint(
     object_store: &dyn ObjectStore,
     transaction_cache_reader: &dyn TransactionCacheRead,
 ) -> SuiResult<Checkpoint> {
-    let event_tx_digests = ckpt_tx_data
-        .effects
+    let (transactions, object_set) = load_executed_transactions(
+        ckpt_tx_data.transactions.iter().map(|tx| tx.data()),
+        &ckpt_tx_data.effects,
+        object_store,
+        transaction_cache_reader,
+    )?;
+    let checkpoint = Checkpoint {
+        summary: ckpt_data.checkpoint.clone().into(),
+        contents: ckpt_data.checkpoint_contents.clone(),
+        transactions,
+        object_set,
+    };
+    Ok(checkpoint)
+}
+
+/// Assembles executed transactions and their effects, in order, into the transaction data and
+/// object set of a full checkpoint: their events, the runtime objects they loaded without
+/// changing, and every object they read or wrote, all read from the execution cache.
+pub(crate) fn load_executed_transactions<'a>(
+    transactions: impl IntoIterator<Item = &'a SenderSignedData>,
+    effects: &[TransactionEffects],
+    object_store: &dyn ObjectStore,
+    transaction_cache_reader: &dyn TransactionCacheRead,
+) -> SuiResult<(Vec<ExecutedTransaction>, ObjectSet)> {
+    let event_tx_digests = effects
         .iter()
         .flat_map(|fx| fx.events_digest().map(|_| fx.transaction_digest()).copied())
         .collect::<Vec<_>>();
@@ -102,12 +126,8 @@ pub(crate) fn load_checkpoint(
         })
         .collect::<SuiResult<HashMap<_, _>>>()?;
 
-    let mut transactions = Vec::with_capacity(ckpt_tx_data.transactions.len());
-    for (tx, fx) in ckpt_tx_data
-        .transactions
-        .iter()
-        .zip_debug_eq(ckpt_tx_data.effects.iter())
-    {
+    let mut executed_transactions = Vec::with_capacity(effects.len());
+    for (tx, fx) in transactions.into_iter().zip_debug_eq(effects) {
         let events = fx.events_digest().map(|_event_digest| {
             events
                 .remove(fx.transaction_digest())
@@ -120,16 +140,16 @@ pub(crate) fn load_checkpoint(
             effects: fx.clone(),
             events,
             unchanged_loaded_runtime_objects: transaction_cache_reader
-                .get_unchanged_loaded_runtime_objects(tx.digest())
+                .get_unchanged_loaded_runtime_objects(fx.transaction_digest())
                 // We don't write empty sets to the DB to save space, so if this load went through
                 // the writeback cache to the DB itself it wouldn't find an entry.
                 .unwrap_or_default(),
         };
-        transactions.push(transaction);
+        executed_transactions.push(transaction);
     }
 
     let object_set = {
-        let refs = transactions
+        let refs = executed_transactions
             .iter()
             .flat_map(|tx| {
                 sui_types::storage::get_transaction_object_set(
@@ -155,11 +175,5 @@ pub(crate) fn load_checkpoint(
         }
         object_set
     };
-    let checkpoint = Checkpoint {
-        summary: ckpt_data.checkpoint.clone().into(),
-        contents: ckpt_data.checkpoint_contents.clone(),
-        transactions,
-        object_set,
-    };
-    Ok(checkpoint)
+    Ok((executed_transactions, object_set))
 }

@@ -13,7 +13,6 @@ validator_configs:
       value: AGXlMKrYkj+CLojtVPwa9rE1QUKZHJA+XGhfgWp7porR
     db-path: /tmp/foo/
     network-address: ""
-    json-rpc-address: "0.0.0.0:1"
     rpc: {}
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
@@ -199,7 +198,6 @@ validator_configs:
       value: AKTwSrpgq5BEhJgIhv+1H0jMiJQMigkGsrAW9EQPaMSI
     db-path: /tmp/foo/
     network-address: ""
-    json-rpc-address: "0.0.0.0:1"
     rpc: {}
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
@@ -385,7 +383,6 @@ validator_configs:
       value: AJKPlasm4k2SQnJsg8qDJZ3xZFL7Q2TaHy5394eVjf6M
     db-path: /tmp/foo/
     network-address: ""
-    json-rpc-address: "0.0.0.0:1"
     rpc: {}
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
@@ -571,7 +568,6 @@ validator_configs:
       value: AKFIgWPoTZb9/zUu/1P8wFtxDDYuObk1xr/QaxZ2H48i
     db-path: /tmp/foo/
     network-address: ""
-    json-rpc-address: "0.0.0.0:1"
     rpc: {}
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
@@ -757,7 +753,6 @@ validator_configs:
       value: AJFy2uQrEISFM5YRQRBUz9XisSepQRkWMzZDo6w2ppVP
     db-path: /tmp/foo/
     network-address: ""
-    json-rpc-address: "0.0.0.0:1"
     rpc: {}
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
@@ -943,7 +938,6 @@ validator_configs:
       value: AFJKmNZNkqyS85XUqAKsw2adb7nVejMwGaqI2ptF2NmT
     db-path: /tmp/foo/
     network-address: ""
-    json-rpc-address: "0.0.0.0:1"
     rpc: {}
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
@@ -1129,7 +1123,6 @@ validator_configs:
       value: AG9uDSdI54AnHant8fiWuNdavPdx76lZfVjbuiHRO8aE
     db-path: /tmp/foo/
     network-address: ""
-    json-rpc-address: "0.0.0.0:1"
     rpc: {}
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888

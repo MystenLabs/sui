@@ -55,7 +55,7 @@ use crate::execution_scheduler::ExecutionScheduler;
 use crate::execution_scheduler::execution_scheduler_impl::BarrierDependencyBuilder;
 use crate::global_state_hasher::GlobalStateHasher;
 use crate::{
-    checkpoints::CheckpointStore,
+    checkpoints::{CheckpointStore, LocallyBuiltCheckpointPublisher},
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
 };
 
@@ -63,6 +63,7 @@ mod data_ingestion_handler;
 pub mod metrics;
 pub(crate) mod utils;
 
+pub(crate) use data_ingestion_handler::load_executed_transactions;
 use data_ingestion_handler::{load_checkpoint, store_checkpoint_locally};
 use metrics::CheckpointExecutorMetrics;
 use utils::*;
@@ -199,6 +200,11 @@ pub struct CheckpointExecutor {
     metrics: Arc<CheckpointExecutorMetrics>,
     tps_estimator: Mutex<TPSEstimator>,
     subscription_service_checkpoint_sender: Option<tokio::sync::broadcast::Sender<Arc<Checkpoint>>>,
+    /// Present on validators serving RPC. Each checkpoint this node executes is published as
+    /// well as built, so the stream does not break when state sync delivers a certified
+    /// checkpoint before this node builds it, or when this node builds none (outside the
+    /// committee).
+    locally_built_checkpoint_publisher: Option<LocallyBuiltCheckpointPublisher>,
 }
 
 impl CheckpointExecutor {
@@ -213,6 +219,7 @@ impl CheckpointExecutor {
         subscription_service_checkpoint_sender: Option<
             tokio::sync::broadcast::Sender<Arc<Checkpoint>>,
         >,
+        locally_built_checkpoint_publisher: Option<LocallyBuiltCheckpointPublisher>,
     ) -> Self {
         Self {
             epoch_store,
@@ -227,6 +234,7 @@ impl CheckpointExecutor {
             metrics,
             tps_estimator: Mutex::new(TPSEstimator::default()),
             subscription_service_checkpoint_sender,
+            locally_built_checkpoint_publisher,
         }
     }
 
@@ -244,6 +252,7 @@ impl CheckpointExecutor {
             BackpressureManager::new_for_tests(),
             Default::default(),
             CheckpointExecutorMetrics::new_for_tests(),
+            None,
             None,
         )
     }
@@ -502,6 +511,9 @@ impl CheckpointExecutor {
 
         if let Some(checkpoint_data) = ckpt_state.full_data.take() {
             self.enqueue_to_subscription_service(checkpoint_data);
+        }
+        if let Some(publisher) = &self.locally_built_checkpoint_publisher {
+            publisher.publish(ckpt_state.data.checkpoint.data());
         }
 
         finish_stage!(pipeline_handle, UpdateRpcIndex);

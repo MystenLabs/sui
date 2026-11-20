@@ -19,6 +19,14 @@ pub struct RpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enable_indexing: Option<bool>,
 
+    /// Address to listen on for plaintext gRPC.
+    ///
+    /// When this is unset, a fullnode serves plaintext on the deprecated
+    /// top-level `json-rpc-address`, or on `0.0.0.0:9000` when that is unset
+    /// too. A validator with `enable-validator-rpc` serves no plaintext.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub http_address: Option<SocketAddr>,
+
     /// Configure the address to listen on for https
     ///
     /// Defaults to `0.0.0.0:9443` if not specified.
@@ -124,6 +132,38 @@ pub struct RpcConfig {
     /// Defaults to 60 seconds. Set to `0` to disable.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grpc_timeout_ms: Option<u64>,
+
+    /// Serve gRPC from a validator, without rpc indexes: plaintext on
+    /// `http-address` when it is set, and TLS on `https-address` when `tls` is
+    /// set. At least one of the two is required. When clients connect over
+    /// networks the operator does not control, set `tls` and either leave
+    /// `http-address` unset or bind it to `127.0.0.1`.
+    ///
+    /// A request names the least settled data it accepts in the
+    /// `x-sui-finality-level` header. Served today:
+    ///
+    /// - `certified` (the default): `GetServiceInfo`, and `GetCheckpoint` for
+    ///   checkpoints above the object pruning watermark.
+    /// - `executed`: also the subscription APIs, which stream each checkpoint
+    ///   once this validator has executed it, usually before certification,
+    ///   and reads of live state (`GetObject`, `BatchGetObjects`, `GetEpoch`,
+    ///   `GetProtocolConfig`, `GetPackage`, `GetDatatype`, `GetFunction`,
+    ///   `LookupName`, `ReverseLookupName`, `VerifySignature`).
+    ///
+    /// A method requested at a level it is not served at is refused with
+    /// `UNIMPLEMENTED` / `NOT_SERVED_HERE` (`uncertified_live_state`), and
+    /// every other `sui.rpc` method with `UNIMPLEMENTED` / `NOT_SERVED_HERE`
+    /// (`no_rpc_indexes`). `TransactionExecutionService` is not mounted, so
+    /// its methods get a bare `UNIMPLEMENTED`.
+    ///
+    /// The full design adds `ordered` streams of transactions as soon as
+    /// consensus assigns them a checkpoint, before execution; `executed`
+    /// transaction streams that emit each transaction as it runs; and
+    /// certified streams from validators.
+    ///
+    /// Valid only on validators. Defaults to `false`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enable_validator_rpc: Option<bool>,
 }
 
 const DEFAULT_MAX_CONNECTION_AGE: Duration = Duration::from_secs(4 * 60 * 60);
@@ -203,7 +243,17 @@ impl RpcConfig {
     /// Validate cross-field invariants. Call once at startup to fail fast on a
     /// misconfiguration rather than surfacing it per-request.
     pub fn validate(&self) -> anyhow::Result<()> {
+        if self.enable_validator_rpc() {
+            anyhow::ensure!(
+                self.http_address.is_some() || self.tls.is_some(),
+                "rpc.enable-validator-rpc needs rpc.http-address, rpc.tls, or both"
+            );
+        }
         self.ledger_history().validate()
+    }
+
+    pub fn enable_validator_rpc(&self) -> bool {
+        self.enable_validator_rpc.unwrap_or(false)
     }
 
     pub fn display(&self) -> &DisplayConfig {
@@ -385,6 +435,31 @@ mod connection_lifecycle_tests {
         assert_eq!(config.max_connection_age(), Some(Duration::from_secs(60)));
         assert_eq!(config.max_connection_age_grace(), Duration::from_secs(5));
         assert_eq!(config.grpc_timeout(), Some(Duration::from_millis(1_500)));
+    }
+}
+
+#[cfg(test)]
+mod validator_rpc_tests {
+    use super::*;
+
+    #[test]
+    fn validator_rpc_needs_a_listener() {
+        let address = SocketAddr::from(([127, 0, 0, 1], 9000));
+        let tls = RpcTlsConfig {
+            cert: "cert.pem".to_owned(),
+            key: "key.pem".to_owned(),
+        };
+        let config = |enable, http_address, tls| RpcConfig {
+            enable_validator_rpc: enable,
+            http_address,
+            tls,
+            ..Default::default()
+        };
+
+        assert!(config(Some(true), None, None).validate().is_err());
+        assert!(config(Some(true), Some(address), None).validate().is_ok());
+        assert!(config(Some(true), None, Some(tls)).validate().is_ok());
+        assert!(config(None, Some(address), None).validate().is_ok());
     }
 }
 

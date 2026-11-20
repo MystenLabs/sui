@@ -44,7 +44,7 @@ use sui_core::execution_cache::build_execution_cache;
 use sui_core::randomness_round_receiver::{RandomnessRoundReceiver, RandomnessRoundReceiverHandle};
 use sui_network::endpoint_manager::{AddressSource, EndpointId};
 use sui_network::validator::server::SUI_TLS_SERVER_NAME;
-use sui_types::full_checkpoint_content::Checkpoint;
+use sui_types::full_checkpoint_content::{Checkpoint, LocallyBuiltCheckpoint};
 use sui_types::node_role::NodeRole;
 
 use sui_core::global_state_hasher::GlobalStateHashMetrics;
@@ -97,8 +97,9 @@ use sui_core::authority_server::{UserSubmissionPath, ValidatorService, Validator
 use sui_core::checkpoints::checkpoint_executor::metrics::CheckpointExecutorMetrics;
 use sui_core::checkpoints::checkpoint_executor::{CheckpointExecutor, StopReason};
 use sui_core::checkpoints::{
-    CheckpointMetrics, CheckpointOutput, CheckpointService, CheckpointStore, LogCheckpointOutput,
-    SendCheckpointToStateSync, SubmitCheckpointToConsensus,
+    CheckpointMetrics, CheckpointOutput, CheckpointService, CheckpointStore,
+    LocallyBuiltCheckpointPublisher, LogCheckpointOutput, SendCheckpointToStateSync,
+    SubmitCheckpointToConsensus,
 };
 use sui_core::consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics};
 use sui_core::consensus_manager::ConsensusManager;
@@ -310,6 +311,11 @@ pub struct SuiNode {
     auth_agg: Arc<ArcSwap<AuthorityAggregator<NetworkAuthorityClient>>>,
 
     subscription_service_checkpoint_sender: Option<tokio::sync::broadcast::Sender<Arc<Checkpoint>>>,
+
+    /// Publishes the checkpoints this validator builds to its RPC server's
+    /// subscriptions; present when `rpc.enable-validator-rpc` is set.
+    /// Handed to the checkpoint service of every epoch.
+    locally_built_checkpoint_publisher: Option<LocallyBuiltCheckpointPublisher>,
 
     /// The embedded `sui-rpc-store`, present when the node is a fullnode
     /// with indexing enabled. Held for the node's lifetime so its tip
@@ -896,17 +902,27 @@ impl SuiNode {
             None
         };
 
-        let (http_servers, subscription_service_checkpoint_sender) = build_http_servers(
-            state.clone(),
-            state_sync_store,
-            &transaction_orchestrator.clone(),
-            &config,
-            &prometheus_registry,
-            server_version,
-            node_role,
-            embedded_rpc_store.as_ref(),
-        )
-        .await?;
+        let (http_servers, subscription_service_checkpoint_sender, locally_built_checkpoint_sender) =
+            build_http_servers(
+                state.clone(),
+                state_sync_store,
+                &transaction_orchestrator.clone(),
+                &config,
+                &prometheus_registry,
+                server_version,
+                node_role,
+                embedded_rpc_store.as_ref(),
+            )
+            .await?;
+
+        let locally_built_checkpoint_publisher = match locally_built_checkpoint_sender {
+            Some(sender) => Some(LocallyBuiltCheckpointPublisher::spawn(
+                state.clone(),
+                checkpoint_store.get_highest_executed_checkpoint_seq_number()?,
+                sender,
+            )),
+            None => None,
+        };
 
         // Start the embedded rpc-store's tip indexer. It follows the tip
         // via the checkpoint executor's broadcast stream and backfills
@@ -985,6 +1001,7 @@ impl SuiNode {
                 checkpoint_metrics.clone(),
                 node_role,
                 randomness_receiver_handle.clone(),
+                locally_built_checkpoint_publisher.clone(),
             )
             .await?;
 
@@ -1077,6 +1094,7 @@ impl SuiNode {
 
             auth_agg,
             subscription_service_checkpoint_sender,
+            locally_built_checkpoint_publisher,
             embedded_rpc_store,
         };
 
@@ -1417,6 +1435,7 @@ impl SuiNode {
         checkpoint_metrics: Arc<CheckpointMetrics>,
         node_role: NodeRole,
         randomness_receiver_handle: Arc<RandomnessRoundReceiverHandle>,
+        locally_built_checkpoint_publisher: Option<LocallyBuiltCheckpointPublisher>,
     ) -> Result<ValidatorComponents> {
         let mut config_clone = config.clone();
         let consensus_config = config_clone
@@ -1514,6 +1533,7 @@ impl SuiNode {
             admission_queue,
             transaction_pool_context,
             node_role,
+            locally_built_checkpoint_publisher,
         )
         .await
     }
@@ -1549,6 +1569,7 @@ impl SuiNode {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn start_epoch_specific_validator_components(
         config: &NodeConfig,
         state: Arc<AuthorityState>,
@@ -1570,6 +1591,7 @@ impl SuiNode {
         admission_queue: Option<AdmissionQueueContext>,
         transaction_pool_context: Option<Arc<TransactionPoolContext>>,
         node_role: NodeRole,
+        locally_built_checkpoint_publisher: Option<LocallyBuiltCheckpointPublisher>,
     ) -> Result<ValidatorComponents> {
         let checkpoint_service = Self::build_checkpoint_service(
             config,
@@ -1581,6 +1603,7 @@ impl SuiNode {
             state_hasher,
             checkpoint_metrics.clone(),
             node_role,
+            locally_built_checkpoint_publisher,
         );
 
         // Clear the VSS public key from the previous epoch so any randomness round
@@ -1709,6 +1732,7 @@ impl SuiNode {
         state_hasher: Weak<GlobalStateHasher>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
         node_role: NodeRole,
+        locally_built_checkpoint_publisher: Option<LocallyBuiltCheckpointPublisher>,
     ) -> Arc<CheckpointService> {
         let checkpoint_output: Box<dyn CheckpointOutput> = if node_role.is_validator() {
             Box::new(SubmitCheckpointToConsensus::new(
@@ -1719,6 +1743,10 @@ impl SuiNode {
             ))
         } else {
             Box::new(LogCheckpointOutput::new(checkpoint_metrics.clone()))
+        };
+        let checkpoint_output = match locally_built_checkpoint_publisher {
+            Some(publisher) => publisher.wrap_output(checkpoint_output),
+            None => checkpoint_output,
         };
 
         let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
@@ -1951,6 +1979,7 @@ impl SuiNode {
                 self.config.checkpoint_executor_config.clone(),
                 checkpoint_executor_metrics.clone(),
                 self.subscription_service_checkpoint_sender.clone(),
+                self.locally_built_checkpoint_publisher.clone(),
             );
 
             let run_with_range = self.config.run_with_range;
@@ -2218,6 +2247,7 @@ impl SuiNode {
                         admission_queue,
                         transaction_pool_context.clone(),
                         new_role,
+                        self.locally_built_checkpoint_publisher.clone(),
                     )
                     .await?;
                     self.update_address_prober_epoch(
@@ -2264,6 +2294,7 @@ impl SuiNode {
                         self.checkpoint_metrics.clone(),
                         new_role,
                         self.randomness_receiver_handle.clone(),
+                        self.locally_built_checkpoint_publisher.clone(),
                     )
                     .await?;
 
@@ -2945,10 +2976,30 @@ async fn build_http_servers(
 ) -> Result<(
     HttpServers,
     Option<tokio::sync::broadcast::Sender<Arc<Checkpoint>>>,
+    Option<tokio::sync::broadcast::Sender<Arc<LocallyBuiltCheckpoint>>>,
 )> {
-    // Validators do not expose these APIs
     if !node_role.is_fullnode() {
-        return Ok((HttpServers::default(), None));
+        // Validators only serve RPC when they opt in.
+        let Some(rpc_config) = config.rpc().filter(|rpc| rpc.enable_validator_rpc()) else {
+            return Ok((HttpServers::default(), None, None));
+        };
+        rpc_config.validate()?;
+        let (rpc_router, locally_built_checkpoint_sender) =
+            build_validator_rpc_router(state, store, config, prometheus_registry, server_version)
+                .await;
+        return Ok((
+            serve_rpc_router(config, rpc_config.http_address, rpc_router)?,
+            None,
+            Some(locally_built_checkpoint_sender),
+        ));
+    }
+
+    if let Some(rpc_config) = config.rpc() {
+        anyhow::ensure!(
+            !rpc_config.enable_validator_rpc(),
+            "rpc.enable-validator-rpc is only valid on validators"
+        );
+        rpc_config.validate()?;
     }
 
     info!("starting rpc service with config: {:?}", config.rpc);
@@ -2990,7 +3041,6 @@ async fn build_http_servers(
         rpc_service.with_server_version(server_version);
 
         if let Some(config) = config.rpc.clone() {
-            config.validate()?;
             rpc_service.with_config(config);
         }
 
@@ -3011,42 +3061,31 @@ async fn build_http_servers(
         rpc_service.into_router().await
     };
 
-    let layers = ServiceBuilder::new()
-        .map_request(|mut request: axum::http::Request<_>| {
-            if let Some(connect_info) = request.extensions().get::<sui_http::ConnectInfo>() {
-                let axum_connect_info = axum::extract::ConnectInfo(connect_info.remote_addr);
-                request.extensions_mut().insert(axum_connect_info);
-            }
-            request
-        })
-        .layer(axum::middleware::from_fn(server_timing_middleware))
-        // Setup a permissive CORS policy
-        .layer(
-            tower_http::cors::CorsLayer::new()
-                .allow_methods([http::Method::GET, http::Method::POST])
-                .allow_origin(tower_http::cors::Any)
-                .allow_headers(tower_http::cors::Any)
-                .expose_headers(tower_http::cors::Any),
+    let http_address = config.fullnode_http_address();
+    if let Some(json_rpc_address) = config.json_rpc_address {
+        warn!(
+            %json_rpc_address,
+            "json-rpc-address is deprecated and will be removed; set rpc.http-address instead, \
+             which takes precedence"
         );
+    }
 
-    let router = rpc_router.layer(layers);
+    Ok((
+        serve_rpc_router(config, Some(http_address), rpc_router)?,
+        Some(subscription_service_checkpoint_sender),
+        None,
+    ))
+}
 
-    // On top of sui-http's hardened defaults (bounded concurrent streams;
-    // transport keepalives stay disabled by default), bound connection
-    // lifetime: GOAWAY at the configured age and force-close after the grace
-    // period. The hard close is the only server-side mechanism that reclaims
-    // streams wedged behind HTTP/2 flow-control windows that a stalled peer
-    // never reopens, and connection age also bounds how long a vanished peer
-    // can pin connection state, which keepalives would otherwise detect.
-    let server_config = {
-        let rpc_config = config.rpc().cloned().unwrap_or_default();
-        let mut server_config = sui_http::Config::default()
-            .max_connection_age_grace(rpc_config.max_connection_age_grace());
-        if let Some(age) = rpc_config.max_connection_age() {
-            server_config = server_config.max_connection_age(age);
-        }
-        server_config
-    };
+/// Serves `rpc_router` over plain HTTP on `http_address` when it is given, and
+/// over TLS on `rpc.https-address` when `rpc.tls` is set.
+fn serve_rpc_router(
+    config: &NodeConfig,
+    http_address: Option<std::net::SocketAddr>,
+    rpc_router: axum::Router,
+) -> Result<HttpServers> {
+    let router = with_rpc_http_layers(rpc_router);
+    let server_config = rpc_server_config(config);
 
     let https = if let Some((tls_config, https_address)) = config
         .rpc()
@@ -3070,24 +3109,101 @@ async fn build_http_servers(
         None
     };
 
-    let http = sui_http::Builder::new()
-        .config(server_config)
-        .serve(&config.json_rpc_address, router)
-        .map_err(|e| anyhow::anyhow!(e))?;
+    let http = http_address
+        .map(|http_address| -> Result<_> {
+            let http = sui_http::Builder::new()
+                .config(server_config)
+                .serve(http_address, router)
+                .map_err(|e| anyhow::anyhow!(e))?;
 
-    info!(
-        http_address =? http.local_addr(),
-        "HTTP rpc server listening on {}",
-        http.local_addr()
-    );
+            info!(
+                http_address =? http.local_addr(),
+                "HTTP rpc server listening on {}",
+                http.local_addr()
+            );
 
-    Ok((
-        HttpServers {
-            http: Some(http),
-            https,
-        },
-        Some(subscription_service_checkpoint_sender),
-    ))
+            Ok(http)
+        })
+        .transpose()?;
+
+    Ok(HttpServers { http, https })
+}
+
+/// Builds the RPC router a validator serves, which streams each checkpoint as
+/// soon as the validator builds it; see `RpcConfig::enable_validator_rpc` for
+/// what it serves. Returns the router and the sender that feeds it locally
+/// built checkpoints.
+async fn build_validator_rpc_router(
+    state: Arc<AuthorityState>,
+    store: RocksDbStore,
+    config: &NodeConfig,
+    prometheus_registry: &Registry,
+    server_version: ServerVersion,
+) -> (
+    axum::Router,
+    tokio::sync::broadcast::Sender<Arc<LocallyBuiltCheckpoint>>,
+) {
+    let rpc_config = config.rpc().cloned().unwrap_or_default();
+    info!("starting validator rpc service with config: {rpc_config:?}");
+
+    let (locally_built_checkpoint_sender, subscription_service_handle) =
+        SubscriptionService::build_for_locally_built_checkpoints(
+            prometheus_registry,
+            rpc_config.subscription_watermark_interval,
+            rpc_config.subscription_max_subscribers,
+            rpc_config.subscription_shards,
+        );
+
+    let mut rpc_service = sui_rpc_api::RpcService::new(Arc::new(RestReadStore::new(state, store)));
+    rpc_service.with_server_version(server_version);
+    rpc_service.with_config(rpc_config);
+    rpc_service.with_metrics(prometheus_registry);
+    rpc_service.with_subscription_service(subscription_service_handle);
+    rpc_service.with_validator_role();
+
+    (
+        rpc_service.into_router().await,
+        locally_built_checkpoint_sender,
+    )
+}
+
+fn with_rpc_http_layers(router: axum::Router) -> axum::Router {
+    let layers = ServiceBuilder::new()
+        .map_request(|mut request: axum::http::Request<_>| {
+            if let Some(connect_info) = request.extensions().get::<sui_http::ConnectInfo>() {
+                let axum_connect_info = axum::extract::ConnectInfo(connect_info.remote_addr);
+                request.extensions_mut().insert(axum_connect_info);
+            }
+            request
+        })
+        .layer(axum::middleware::from_fn(server_timing_middleware))
+        // Setup a permissive CORS policy
+        .layer(
+            tower_http::cors::CorsLayer::new()
+                .allow_methods([http::Method::GET, http::Method::POST])
+                .allow_origin(tower_http::cors::Any)
+                .allow_headers(tower_http::cors::Any)
+                .expose_headers(tower_http::cors::Any),
+        );
+
+    router.layer(layers)
+}
+
+/// On top of sui-http's hardened defaults (bounded concurrent streams;
+/// transport keepalives stay disabled by default), bound connection
+/// lifetime: GOAWAY at the configured age and force-close after the grace
+/// period. The hard close is the only server-side mechanism that reclaims
+/// streams wedged behind HTTP/2 flow-control windows that a stalled peer
+/// never reopens, and connection age also bounds how long a vanished peer
+/// can pin connection state, which keepalives would otherwise detect.
+fn rpc_server_config(config: &NodeConfig) -> sui_http::Config {
+    let rpc_config = config.rpc().cloned().unwrap_or_default();
+    let mut server_config =
+        sui_http::Config::default().max_connection_age_grace(rpc_config.max_connection_age_grace());
+    if let Some(age) = rpc_config.max_connection_age() {
+        server_config = server_config.max_connection_age(age);
+    }
+    server_config
 }
 
 /// Action to take with our deny-config network vote at a startup or epoch-change

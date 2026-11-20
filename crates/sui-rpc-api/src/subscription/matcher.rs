@@ -30,7 +30,6 @@ use std::collections::hash_map::RandomState;
 use std::hash::BuildHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
-use std::sync::Arc;
 use std::sync::LazyLock;
 
 use sui_inverted_index::BitmapKey;
@@ -41,12 +40,12 @@ use sui_inverted_index::TX_UNIVERSE_VALUE;
 use sui_inverted_index::encode_dimension_key;
 use sui_inverted_index::for_each_event_dimension;
 use sui_inverted_index::for_each_transaction_dimension;
-use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::transaction::TransactionDataAPI as _;
 use tokio::sync::mpsc;
 use tracing::trace;
 
 use super::MatchedCheckpoint;
+use super::SubscriptionCheckpoint;
 use super::SubscriptionKind;
 use super::SubscriptionLifecycleGuard;
 use super::SubscriptionMatches;
@@ -133,14 +132,14 @@ pub(crate) struct CheckpointKeys {
 /// have at least one filtered subscriber, using the same `sui-inverted-index`
 /// visitors the persistent index uses.
 pub(crate) fn extract_checkpoint_keys(
-    checkpoint: &Checkpoint,
+    checkpoint: &SubscriptionCheckpoint,
     tx_space: bool,
     event_space: bool,
 ) -> CheckpointKeys {
     CheckpointKeys {
         tx: tx_space.then(|| {
             checkpoint
-                .transactions
+                .transactions()
                 .iter()
                 .map(|tx| {
                     let mut keys = KeySet::default();
@@ -154,7 +153,7 @@ pub(crate) fn extract_checkpoint_keys(
                         &tx.transaction,
                         &tx.effects,
                         tx.events.as_ref(),
-                        &checkpoint.object_set,
+                        checkpoint.object_set(),
                         |dim, value| {
                             keys.insert(PrehashedKey::new(encode_dimension_key(dim, value)));
                         },
@@ -165,7 +164,7 @@ pub(crate) fn extract_checkpoint_keys(
         }),
         events: event_space.then(|| {
             checkpoint
-                .transactions
+                .transactions()
                 .iter()
                 .map(|tx| {
                     let event_count = tx.events.as_ref().map(|e| e.data.len()).unwrap_or(0);
@@ -350,7 +349,7 @@ impl SubscriptionMatcher {
     /// matcher holds a filtered subscriber in that space.
     pub(crate) fn dispatch_with_keys(
         &mut self,
-        checkpoint: &Arc<Checkpoint>,
+        checkpoint: &SubscriptionCheckpoint,
         keys: &CheckpointKeys,
         interval: u32,
     ) -> usize {
@@ -358,9 +357,9 @@ impl SubscriptionMatcher {
             return 0;
         }
 
-        let cp = checkpoint.summary.sequence_number;
-        let tx_hi = checkpoint.summary.data().network_total_transactions;
-        let tx_lo = tx_hi - checkpoint.transactions.len() as u64;
+        let cp = checkpoint.summary().sequence_number;
+        let tx_hi = checkpoint.summary().network_total_transactions;
+        let tx_lo = tx_hi - checkpoint.transactions().len() as u64;
 
         let mut matches: HashMap<u64, SubscriptionMatches> = HashMap::new();
 
@@ -469,7 +468,7 @@ impl SubscriptionMatcher {
         // Whether any transaction carries events, computed once for the
         // unfiltered-events synthesis below.
         let any_events = checkpoint
-            .transactions
+            .transactions()
             .iter()
             .any(|tx| tx.events.as_ref().is_some_and(|e| !e.data.is_empty()));
 
@@ -519,7 +518,7 @@ impl SubscriptionMatcher {
                 // empty checkpoints on the watermark-tick path.
                 match sub.spec.kind {
                     SubscriptionKind::Checkpoints => Some(SubscriptionMatches::Checkpoint),
-                    SubscriptionKind::Transactions => (!checkpoint.transactions.is_empty())
+                    SubscriptionKind::Transactions => (!checkpoint.transactions().is_empty())
                         .then_some(SubscriptionMatches::AllTransactions),
                     SubscriptionKind::Events => {
                         any_events.then_some(SubscriptionMatches::AllEvents)
@@ -531,7 +530,7 @@ impl SubscriptionMatcher {
 
             let update = match payload {
                 Some(matched) => SubscriptionUpdate::Matched(MatchedCheckpoint {
-                    checkpoint: Arc::clone(checkpoint),
+                    checkpoint: checkpoint.clone(),
                     matches: matched,
                 }),
                 None => {
@@ -630,6 +629,7 @@ mod tests {
     use move_core_types::account_address::AccountAddress;
     use move_core_types::identifier::Identifier;
     use move_core_types::language_storage::StructTag;
+    use std::sync::Arc;
     use std::sync::atomic::Ordering;
     use sui_inverted_index::BitmapQuery;
     use sui_rpc::proto::sui::rpc::v2 as proto;
@@ -738,7 +738,11 @@ mod tests {
     /// Extract this matcher's own keys, then dispatch: the standalone-driver
     /// convenience these unit tests use. Production extracts once in the
     /// dispatcher and calls `dispatch_with_keys` directly.
-    fn dispatch(matcher: &mut SubscriptionMatcher, checkpoint: &Arc<Checkpoint>, interval: u32) {
+    fn dispatch(
+        matcher: &mut SubscriptionMatcher,
+        checkpoint: &SubscriptionCheckpoint,
+        interval: u32,
+    ) {
         let keys = extract_checkpoint_keys(
             checkpoint,
             !matcher.tx_anchor.is_empty(),
@@ -748,7 +752,7 @@ mod tests {
     }
 
     /// One checkpoint with one transaction per sender index, in order.
-    fn checkpoint(seq: u64, senders: &[u8]) -> Arc<Checkpoint> {
+    fn checkpoint(seq: u64, senders: &[u8]) -> SubscriptionCheckpoint {
         let mut builder = TestCheckpointBuilder::new(seq);
         for &sender in senders {
             builder = builder.start_transaction(sender).finish_transaction();
@@ -756,7 +760,7 @@ mod tests {
         // `build_checkpoint` adds this checkpoint's tx count on top, so the
         // built summary reports `network_total_transactions = 100 + len`.
         builder = builder.with_network_total_transactions(100);
-        Arc::new(builder.build_checkpoint())
+        Arc::new(builder.build_checkpoint()).into()
     }
 
     fn recv_matches(receiver: &mut mpsc::Receiver<SubscriptionUpdate>) -> SubscriptionMatches {
@@ -773,11 +777,14 @@ mod tests {
         }
     }
 
-    fn recv_start_tick(receiver: &mut mpsc::Receiver<SubscriptionUpdate>, checkpoint: &Checkpoint) {
-        let cp = checkpoint.summary.sequence_number;
+    fn recv_start_tick(
+        receiver: &mut mpsc::Receiver<SubscriptionUpdate>,
+        checkpoint: &SubscriptionCheckpoint,
+    ) {
+        let cp = checkpoint.summary().sequence_number;
         assert!(cp > 0, "a start tick requires a pre-checkpoint position");
-        let tx_lo = checkpoint.summary.data().network_total_transactions
-            - checkpoint.transactions.len() as u64;
+        let tx_lo = checkpoint.summary().network_total_transactions
+            - checkpoint.transactions().len() as u64;
         assert_eq!(recv_tick(receiver), (cp - 1, tx_lo));
     }
 
@@ -958,7 +965,7 @@ mod tests {
             .start_transaction(1)
             .with_events(vec![test_event(package, "EventA")])
             .finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint());
+        let checkpoint = Arc::new(builder.build_checkpoint()).into();
 
         let mut matcher = SubscriptionMatcher::default();
         let metrics = metrics();
@@ -1046,7 +1053,7 @@ mod tests {
             .start_transaction(0)
             .with_events(vec![test_event(package, "EventA")])
             .finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint());
+        let checkpoint = Arc::new(builder.build_checkpoint()).into();
 
         let mut matcher = SubscriptionMatcher::default();
         let metrics = metrics();

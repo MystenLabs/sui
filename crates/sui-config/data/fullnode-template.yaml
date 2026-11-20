@@ -4,8 +4,8 @@ db-path: "/opt/sui/db"
 # For ipv4, update this to "/ip4/X.X.X.X/tcp/8080/http"
 network-address: "/dns/localhost/tcp/8080/http"
 metrics-address: "0.0.0.0:9184"
-# this address is also used for web socket connections
-json-rpc-address: "0.0.0.0:9000"
+rpc:
+  http-address: "0.0.0.0:9000"
 enable-event-processing: true
 
 p2p-config:

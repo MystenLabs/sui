@@ -172,9 +172,9 @@ impl TestCluster {
     }
 
     pub async fn start_fullnode_from_config(&mut self, config: NodeConfig) -> FullNodeHandle {
-        let json_rpc_address = config.json_rpc_address;
+        let http_address = config.fullnode_http_address();
         let node = self.swarm.spawn_new_node(config).await;
-        FullNodeHandle::new(node, json_rpc_address).await
+        FullNodeHandle::new(node, http_address).await
     }
 
     pub fn all_node_handles(&self) -> Vec<SuiNodeHandle> {
@@ -1786,9 +1786,9 @@ impl TestClusterBuilder {
         let working_dir = swarm.dir().to_path_buf();
 
         let fullnode = swarm.fullnodes().next().unwrap();
-        let json_rpc_address = fullnode.config().json_rpc_address;
+        let http_address = fullnode.config().fullnode_http_address();
         let fullnode_handle =
-            FullNodeHandle::new(fullnode.get_node_handle().unwrap(), json_rpc_address).await;
+            FullNodeHandle::new(fullnode.get_node_handle().unwrap(), http_address).await;
 
         if self.observer_fullnode {
             // Boxed so the frame (NodeConfig by value, held across the await) lives on

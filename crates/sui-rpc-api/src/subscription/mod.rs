@@ -9,6 +9,10 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use sui_inverted_index::BitmapQuery;
 use sui_types::full_checkpoint_content::Checkpoint;
+use sui_types::full_checkpoint_content::ExecutedTransaction;
+use sui_types::full_checkpoint_content::LocallyBuiltCheckpoint;
+use sui_types::full_checkpoint_content::ObjectSet;
+use sui_types::messages_checkpoint::CheckpointSummary;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
@@ -81,6 +85,10 @@ pub(crate) enum SubscriptionTerminationReason {
     ClientClosed,
     SlowConsumer,
     SourceLag,
+    /// The locally built checkpoint stream did not continue from the last
+    /// checkpoint delivered (see
+    /// [`SubscriptionService::build_for_locally_built_checkpoints`]).
+    SourceGap,
     ServiceShutdown,
 }
 
@@ -90,6 +98,7 @@ impl SubscriptionTerminationReason {
             Self::ClientClosed => "client_closed",
             Self::SlowConsumer => "slow_consumer",
             Self::SourceLag => "source_lag",
+            Self::SourceGap => "source_gap",
             Self::ServiceShutdown => "service_shutdown",
         }
     }
@@ -172,8 +181,69 @@ pub enum SubscriptionUpdate {
 }
 
 pub struct MatchedCheckpoint {
-    pub checkpoint: Arc<Checkpoint>,
+    pub checkpoint: SubscriptionCheckpoint,
     pub matches: SubscriptionMatches,
+}
+
+/// A checkpoint the subscription service streams to its subscribers.
+#[derive(Clone)]
+pub enum SubscriptionCheckpoint {
+    /// Certified by a quorum of validators and executed by this node.
+    Certified(Arc<Checkpoint>),
+    /// Built by this validator before the network certified it, so it has no
+    /// quorum signature.
+    LocallyBuilt(Arc<LocallyBuiltCheckpoint>),
+}
+
+impl SubscriptionCheckpoint {
+    pub fn summary(&self) -> &CheckpointSummary {
+        match self {
+            Self::Certified(checkpoint) => checkpoint.summary.data(),
+            Self::LocallyBuilt(checkpoint) => &checkpoint.summary,
+        }
+    }
+
+    pub fn transactions(&self) -> &[ExecutedTransaction] {
+        match self {
+            Self::Certified(checkpoint) => &checkpoint.transactions,
+            Self::LocallyBuilt(checkpoint) => &checkpoint.transactions,
+        }
+    }
+
+    pub fn object_set(&self) -> &ObjectSet {
+        match self {
+            Self::Certified(checkpoint) => &checkpoint.object_set,
+            Self::LocallyBuilt(checkpoint) => &checkpoint.object_set,
+        }
+    }
+}
+
+impl From<Arc<Checkpoint>> for SubscriptionCheckpoint {
+    fn from(checkpoint: Arc<Checkpoint>) -> Self {
+        Self::Certified(checkpoint)
+    }
+}
+
+impl From<Arc<LocallyBuiltCheckpoint>> for SubscriptionCheckpoint {
+    fn from(checkpoint: Arc<LocallyBuiltCheckpoint>) -> Self {
+        Self::LocallyBuilt(checkpoint)
+    }
+}
+
+/// The broadcast stream a [`SubscriptionService`] reads checkpoints from.
+enum CheckpointMailbox {
+    Certified(broadcast::Receiver<Arc<Checkpoint>>),
+    LocallyBuilt(broadcast::Receiver<Arc<LocallyBuiltCheckpoint>>),
+}
+
+impl CheckpointMailbox {
+    /// Cancel-safe, like [`broadcast::Receiver::recv`].
+    async fn recv(&mut self) -> Result<SubscriptionCheckpoint, broadcast::error::RecvError> {
+        match self {
+            Self::Certified(receiver) => receiver.recv().await.map(SubscriptionCheckpoint::from),
+            Self::LocallyBuilt(receiver) => receiver.recv().await.map(SubscriptionCheckpoint::from),
+        }
+    }
 }
 
 /// Kind-specific match payload. Indices are within-checkpoint and ascending.
@@ -220,7 +290,7 @@ impl SubscriptionMatches {
     /// kinds. `checkpoint` is used to expand [`Self::AllEvents`].
     pub fn event_indices<'a>(
         &'a self,
-        checkpoint: &'a Checkpoint,
+        checkpoint: &'a SubscriptionCheckpoint,
     ) -> Option<Box<dyn Iterator<Item = (u32, u32)> + Send + 'a>> {
         match self {
             Self::Events(txs) => Some(Box::new(
@@ -229,7 +299,7 @@ impl SubscriptionMatches {
             )),
             Self::AllEvents => Some(Box::new(
                 checkpoint
-                    .transactions
+                    .transactions()
                     .iter()
                     .enumerate()
                     .flat_map(|(tx_idx, tx)| {
@@ -266,7 +336,7 @@ enum AdmissionState {
 }
 
 enum SubscriptionServiceEvent {
-    Checkpoint(Result<Arc<Checkpoint>, broadcast::error::RecvError>),
+    Checkpoint(Result<SubscriptionCheckpoint, broadcast::error::RecvError>),
     AdmissionRequest(SubscriptionRequest),
     AdmissionClosed,
     ShardCapacity {
@@ -402,7 +472,7 @@ impl Drop for SubscriberReservation {
 
 enum ShardMsg {
     /// A checkpoint plus its pre-extracted dimension keys.
-    Checkpoint(Arc<Checkpoint>, Arc<matcher::CheckpointKeys>),
+    Checkpoint(SubscriptionCheckpoint, Arc<matcher::CheckpointKeys>),
     /// An admitted subscriber (handshake already completed by the dispatcher).
     Register {
         spec: SubscriptionSpec,
@@ -463,12 +533,14 @@ impl SubscriptionShard {
 }
 
 pub struct SubscriptionService {
-    // Broadcast receiver for `Checkpoint`s published by the Checkpoint Executor.
+    // Broadcast receiver for the checkpoints this service streams: certified
+    // checkpoints published by the Checkpoint Executor, or locally built ones
+    // published by a validator's checkpoint builder.
     //
-    // The executor publishes non-blocking, so a slow service can fall behind
-    // and observe `RecvError::Lagged`; checkpoints delivered between lags arrive
+    // Publishers send non-blocking, so a slow service can fall behind and
+    // observe `RecvError::Lagged`; checkpoints delivered between lags arrive
     // in-order.
-    checkpoint_mailbox: broadcast::Receiver<Arc<Checkpoint>>,
+    checkpoint_mailbox: CheckpointMailbox,
     admission_mailbox: mpsc::UnboundedReceiver<SubscriptionRequest>,
     /// Registration targets: one mailbox per shard task, each owning a
     /// partition of the subscribers.
@@ -488,6 +560,9 @@ pub struct SubscriptionService {
 }
 
 impl SubscriptionService {
+    /// Builds a service that streams certified checkpoints, which the
+    /// checkpoint executor publishes in sequence order without gaps.
+    ///
     /// `None` defaults `watermark_interval` to 25 checkpoints,
     /// `max_subscribers` to 1024, and `shards` to the host's available
     /// parallelism, with a minimum of one shard.
@@ -501,9 +576,57 @@ impl SubscriptionService {
         broadcast::Sender<Arc<Checkpoint>>,
         SubscriptionServiceHandle,
     ) {
+        let (checkpoint_sender, checkpoint_mailbox) = broadcast::channel(CHECKPOINT_MAILBOX_SIZE);
+        let handle = Self::spawn(
+            registry,
+            CheckpointMailbox::Certified(checkpoint_mailbox),
+            indexed_checkpoint,
+            watermark_interval,
+            max_subscribers,
+            shards,
+        );
+        (checkpoint_sender, handle)
+    }
+
+    /// Builds a service that streams the checkpoints a validator builds or
+    /// executes, usually before the network certifies them. Publishers send
+    /// these in increasing sequence order, but may skip sequence numbers: the
+    /// validator's publisher drops a checkpoint when it falls behind or fails
+    /// to load one. A skip drops every subscriber, as a lag does, since none of
+    /// them can receive a gap-free stream any more.
+    ///
+    /// The optional parameters default as in [`Self::build`].
+    pub fn build_for_locally_built_checkpoints(
+        registry: &prometheus::Registry,
+        watermark_interval: Option<u32>,
+        max_subscribers: Option<usize>,
+        shards: Option<u32>,
+    ) -> (
+        broadcast::Sender<Arc<LocallyBuiltCheckpoint>>,
+        SubscriptionServiceHandle,
+    ) {
+        let (checkpoint_sender, checkpoint_mailbox) = broadcast::channel(CHECKPOINT_MAILBOX_SIZE);
+        let handle = Self::spawn(
+            registry,
+            CheckpointMailbox::LocallyBuilt(checkpoint_mailbox),
+            None,
+            watermark_interval,
+            max_subscribers,
+            shards,
+        );
+        (checkpoint_sender, handle)
+    }
+
+    fn spawn(
+        registry: &prometheus::Registry,
+        checkpoint_mailbox: CheckpointMailbox,
+        indexed_checkpoint: Option<IndexedCheckpointFn>,
+        watermark_interval: Option<u32>,
+        max_subscribers: Option<usize>,
+        shards: Option<u32>,
+    ) -> SubscriptionServiceHandle {
         let metrics = SubscriptionMetrics::new(registry);
         let max_subscribers = max_subscribers.unwrap_or(DEFAULT_MAX_SUBSCRIBERS);
-        let (checkpoint_sender, checkpoint_mailbox) = broadcast::channel(CHECKPOINT_MAILBOX_SIZE);
         let (admission_sender, admission_mailbox) = subscription_admission_channel();
         let counters = Arc::new(SubscriberCounts::new(max_subscribers));
         let handle = SubscriptionServiceHandle {
@@ -543,7 +666,7 @@ impl SubscriptionService {
             .start(),
         );
 
-        (checkpoint_sender, handle)
+        handle
     }
 
     async fn start(mut self) {
@@ -603,7 +726,7 @@ impl SubscriptionService {
                 ))) => {
                     self.handle_lag(skipped).await;
                 }
-                // Once the executor drops the sender this yields `Closed`
+                // Once the publisher drops the sender this yields `Closed`
                 // and we can terminate the event loop.
                 SubscriptionServiceEvent::Checkpoint(Err(broadcast::error::RecvError::Closed)) => {
                     break;
@@ -644,32 +767,49 @@ impl SubscriptionService {
         info!("RPC Subscription Services ended");
     }
 
-    async fn handle_checkpoint(&mut self, checkpoint: Arc<Checkpoint>) {
+    async fn handle_checkpoint(&mut self, checkpoint: SubscriptionCheckpoint) {
+        let sequence_number = checkpoint.summary().sequence_number;
+
         // Check that we recieved checkpoints in-order. The broadcast stream
         // preserves send order, and any gap surfaces separately as `Lagged`
-        // (see `handle_lag`), so reaching here out-of-order indicates an
-        // executor bug.
+        // (see `handle_lag`), so reaching here out-of-order indicates a
+        // publisher bug. A locally built stream may also skip ahead (see
+        // `build_for_locally_built_checkpoints`), and runs on a validator,
+        // which must not abort over a streaming bug: any break in it drops
+        // the subscribers instead of panicking.
         {
             let last_sequence_number = self.metrics.last_recieved_checkpoint.get();
-            let sequence_number = *checkpoint.summary.sequence_number() as i64;
+            let expected_sequence_number = last_sequence_number + 1;
 
-            if last_sequence_number != 0 && (last_sequence_number + 1) != sequence_number {
-                panic!(
-                    "recieved checkpoint out-of-order. expected checkpoint {}, recieved {}",
-                    last_sequence_number + 1,
-                    sequence_number
-                );
+            if last_sequence_number != 0 && expected_sequence_number != sequence_number as i64 {
+                match checkpoint {
+                    SubscriptionCheckpoint::LocallyBuilt(_) => {
+                        warn!(
+                            expected = expected_sequence_number,
+                            received = sequence_number,
+                            "locally built checkpoint stream broke sequence; \
+                             dropping all in-progress subscriptions"
+                        );
+                        self.clear_subscribers(SubscriptionTerminationReason::SourceGap)
+                            .await;
+                    }
+                    SubscriptionCheckpoint::Certified(_) => panic!(
+                        "recieved checkpoint out-of-order. expected checkpoint {}, recieved {}",
+                        expected_sequence_number, sequence_number
+                    ),
+                }
             }
 
             // Update the metric marking the latest checkpoint we've seen
-            self.metrics.last_recieved_checkpoint.set(sequence_number);
+            self.metrics
+                .last_recieved_checkpoint
+                .set(sequence_number as i64);
         }
 
         // Hold the checkpoint back until the index has committed it, so a
         // client that observes this checkpoint can immediately read its
         // indexed state. No-op unless an index gate was configured.
-        self.wait_until_indexed(*checkpoint.summary.sequence_number())
-            .await;
+        self.wait_until_indexed(sequence_number).await;
 
         // No live subscriber or admitted registration pending in a shard:
         // skip fan-out. Requests merely queued in the admission lane are not
@@ -690,10 +830,7 @@ impl SubscriptionService {
         ));
         for shard in &self.shards {
             shard
-                .send(ShardMsg::Checkpoint(
-                    Arc::clone(&checkpoint),
-                    Arc::clone(&keys),
-                ))
+                .send(ShardMsg::Checkpoint(checkpoint.clone(), Arc::clone(&keys)))
                 .await
                 .expect("subscription shard terminated unexpectedly");
         }
@@ -750,18 +887,25 @@ impl SubscriptionService {
             "subscription service lagged behind the checkpoint stream; \
              dropping all in-progress subscriptions"
         );
+        self.clear_subscribers(SubscriptionTerminationReason::SourceLag)
+            .await;
+        // The next delivered checkpoint jumps ahead by `skipped`; reset the
+        // in-order tracker so it is not mistaken for an out-of-order delivery.
+        self.metrics.last_recieved_checkpoint.set(0);
+    }
+
+    /// Drop every in-progress subscription before the next checkpoint, which
+    /// does not follow the last one delivered.
+    async fn clear_subscribers(&mut self, reason: SubscriptionTerminationReason) {
         // Per-shard FIFO ordering guarantees no shard delivers a post-gap
         // checkpoint to a pre-gap subscriber: Clear is enqueued behind all
         // pre-gap checkpoints and ahead of all post-gap ones.
         for shard in &self.shards {
             shard
-                .send(ShardMsg::Clear(SubscriptionTerminationReason::SourceLag))
+                .send(ShardMsg::Clear(reason))
                 .await
                 .expect("subscription shard terminated unexpectedly");
         }
-        // The next delivered checkpoint jumps ahead by `skipped`; reset the
-        // in-order tracker so it is not mistaken for an out-of-order delivery.
-        self.metrics.last_recieved_checkpoint.set(0);
     }
 
     fn try_reserve_least_backlogged_shard(&self) -> Option<(usize, mpsc::OwnedPermit<ShardMsg>)> {
@@ -962,7 +1106,7 @@ mod tests {
         }
 
         let service = SubscriptionService {
-            checkpoint_mailbox,
+            checkpoint_mailbox: CheckpointMailbox::Certified(checkpoint_mailbox),
             admission_mailbox,
             shards: shard_senders,
             next_shard: 0,
@@ -975,6 +1119,17 @@ mod tests {
 
     fn checkpoint(sequence_number: u64) -> Arc<Checkpoint> {
         Arc::new(TestCheckpointBuilder::new(sequence_number).build_checkpoint())
+    }
+
+    fn locally_built_checkpoint(sequence_number: u64) -> SubscriptionCheckpoint {
+        let checkpoint = TestCheckpointBuilder::new(sequence_number).build_checkpoint();
+        Arc::new(LocallyBuiltCheckpoint {
+            summary: checkpoint.summary.into_data(),
+            contents: checkpoint.contents,
+            transactions: checkpoint.transactions,
+            object_set: checkpoint.object_set,
+        })
+        .into()
     }
 
     /// One checkpoint with one transaction per sender index, in order.
@@ -1117,7 +1272,7 @@ mod tests {
         match update {
             SubscriptionUpdate::Matched(matched) => {
                 assert!(matches!(matched.matches, SubscriptionMatches::Checkpoint));
-                *matched.checkpoint.summary.sequence_number()
+                matched.checkpoint.summary().sequence_number
             }
             SubscriptionUpdate::WatermarkTick { .. } => {
                 panic!("expected a matched checkpoint, got a watermark tick")
@@ -1635,7 +1790,7 @@ mod tests {
         }
 
         drop(receivers);
-        service.handle_checkpoint(checkpoint(1)).await;
+        service.handle_checkpoint(checkpoint(1).into()).await;
         drain(&mut shards);
         assert_eq!(inflight_subscribers(&service.metrics), 0);
         assert_eq!(service.counters.total.load(Ordering::Relaxed), 0);
@@ -1655,8 +1810,8 @@ mod tests {
         let (mut service, mut shards) = test_service(1);
         let mut receiver = register(&mut service, unfiltered()).await.unwrap();
 
-        service.handle_checkpoint(checkpoint(1)).await;
-        service.handle_checkpoint(checkpoint(2)).await;
+        service.handle_checkpoint(checkpoint(1).into()).await;
+        service.handle_checkpoint(checkpoint(2).into()).await;
         drain(&mut shards);
 
         assert_eq!(matched_sequence_number(receiver.recv().await.unwrap()), 1);
@@ -1670,7 +1825,7 @@ mod tests {
         let receiver = register(&mut service, unfiltered()).await.unwrap();
         drop(receiver);
 
-        service.handle_checkpoint(checkpoint(1)).await;
+        service.handle_checkpoint(checkpoint(1).into()).await;
         drain(&mut shards);
 
         assert!(shards[0].matcher.is_empty());
@@ -1694,7 +1849,7 @@ mod tests {
         );
         let mut receiver = register(&mut service, unfiltered()).await.unwrap();
 
-        service.handle_checkpoint(checkpoint(4)).await;
+        service.handle_checkpoint(checkpoint(4).into()).await;
         drain(&mut shards);
         assert_eq!(matched_sequence_number(receiver.recv().await.unwrap()), 4);
         assert_eq!(service.metrics.index_wait_seconds.get_sample_count(), 0);
@@ -1702,7 +1857,7 @@ mod tests {
 
         // Delivery of checkpoint 5 blocks until the index catches up to it.
         {
-            let mut deliver = std::pin::pin!(service.handle_checkpoint(checkpoint(5)));
+            let mut deliver = std::pin::pin!(service.handle_checkpoint(checkpoint(5).into()));
             assert!(
                 futures::poll!(&mut deliver).is_pending(),
                 "delivery should block while checkpoint 5 is unindexed"
@@ -1736,7 +1891,7 @@ mod tests {
         let mut receiver = register(&mut service, unfiltered()).await.unwrap();
 
         {
-            let mut deliver = std::pin::pin!(service.handle_checkpoint(checkpoint(5)));
+            let mut deliver = std::pin::pin!(service.handle_checkpoint(checkpoint(5).into()));
             assert!(
                 futures::poll!(&mut deliver).is_pending(),
                 "delivery should block while checkpoint 5 is unindexed"
@@ -1760,7 +1915,7 @@ mod tests {
         let mut receiver_1 = register(&mut service, unfiltered()).await.unwrap();
         let mut receiver_2 = register(&mut service, unfiltered()).await.unwrap();
 
-        service.handle_checkpoint(checkpoint(5)).await;
+        service.handle_checkpoint(checkpoint(5).into()).await;
         drain(&mut shards);
         assert_eq!(service.metrics.last_recieved_checkpoint.get(), 5);
 
@@ -1792,12 +1947,47 @@ mod tests {
         );
 
         let mut receiver_3 = register(&mut service, unfiltered()).await.unwrap();
-        service.handle_checkpoint(checkpoint(100)).await;
+        service.handle_checkpoint(checkpoint(100).into()).await;
         drain(&mut shards);
         assert_eq!(
             matched_sequence_number(receiver_3.recv().await.unwrap()),
             100
         );
+    }
+
+    #[tokio::test]
+    async fn locally_built_gap_drops_subscribers() {
+        let (mut service, mut shards) = test_service(2);
+        let mut before_gap = register(&mut service, unfiltered()).await.unwrap();
+
+        service.handle_checkpoint(locally_built_checkpoint(5)).await;
+        service.handle_checkpoint(locally_built_checkpoint(9)).await;
+        drain(&mut shards);
+
+        // The subscriber sees checkpoint 5, then its stream closes without
+        // ever delivering checkpoint 9.
+        assert_eq!(matched_sequence_number(before_gap.recv().await.unwrap()), 5);
+        assert!(before_gap.recv().await.is_none());
+        assert_eq!(
+            terminations(&service.metrics, "checkpoint", "source_gap"),
+            1
+        );
+        assert_eq!(service.metrics.last_recieved_checkpoint.get(), 9);
+
+        let mut after_gap = register(&mut service, unfiltered()).await.unwrap();
+        service
+            .handle_checkpoint(locally_built_checkpoint(10))
+            .await;
+        drain(&mut shards);
+        assert_eq!(matched_sequence_number(after_gap.recv().await.unwrap()), 10);
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "out-of-order")]
+    async fn certified_gap_panics() {
+        let (mut service, _shards) = test_service(1);
+        service.handle_checkpoint(checkpoint(5).into()).await;
+        service.handle_checkpoint(checkpoint(9).into()).await;
     }
 
     #[tokio::test]
@@ -1848,7 +2038,7 @@ mod tests {
         assert_eq!(shards[0].matcher.len(), 2);
         assert_eq!(shards[1].matcher.len(), 2);
 
-        service.handle_checkpoint(checkpoint(1)).await;
+        service.handle_checkpoint(checkpoint(1).into()).await;
         drain(&mut shards);
         for receiver in &mut receivers {
             assert_eq!(matched_sequence_number(receiver.recv().await.unwrap()), 1);
@@ -1885,7 +2075,7 @@ mod tests {
         let checkpoint = checkpoint_with_senders(1, &[0, 1]);
         let tx_lo = checkpoint.summary.data().network_total_transactions
             - checkpoint.transactions.len() as u64;
-        service.handle_checkpoint(checkpoint).await;
+        service.handle_checkpoint(checkpoint.into()).await;
         drain(&mut shards);
 
         assert!(matches!(
@@ -1952,7 +2142,7 @@ mod tests {
         );
 
         drop(receivers);
-        service.handle_checkpoint(checkpoint(1)).await;
+        service.handle_checkpoint(checkpoint(1).into()).await;
         drain(&mut shards);
         assert_eq!(service.counters.total.load(Ordering::Relaxed), 0);
         assert_eq!(service.counters.reserved(), 0);
@@ -1964,7 +2154,7 @@ mod tests {
         assert_eq!(service.counters.reserved(), 1);
 
         drop(replacement);
-        service.handle_checkpoint(checkpoint(2)).await;
+        service.handle_checkpoint(checkpoint(2).into()).await;
         drain(&mut shards);
         assert_eq!(service.counters.total.load(Ordering::Relaxed), 0);
         assert_eq!(service.counters.reserved(), 0);
@@ -1996,9 +2186,9 @@ mod tests {
     async fn registration_racing_dispatch_lands_at_the_next_checkpoint() {
         let (mut service, mut shards) = test_service(1);
         let mut receiver_a = register(&mut service, unfiltered()).await.unwrap();
-        service.handle_checkpoint(checkpoint(1)).await;
+        service.handle_checkpoint(checkpoint(1).into()).await;
         let mut receiver_b = register(&mut service, unfiltered()).await.unwrap();
-        service.handle_checkpoint(checkpoint(2)).await;
+        service.handle_checkpoint(checkpoint(2).into()).await;
         drain(&mut shards);
 
         // Per-shard FIFO: B's Register is queued behind checkpoint 1, so B
@@ -2039,7 +2229,7 @@ mod tests {
         // guards when the next dispatch observes the closed channels.
         drop(tx_rx);
         drop(event_rx);
-        service.handle_checkpoint(checkpoint(1)).await;
+        service.handle_checkpoint(checkpoint(1).into()).await;
         drain(&mut shards);
 
         assert_eq!(service.counters.filtered_tx.load(Ordering::Relaxed), 0);
@@ -2072,7 +2262,7 @@ mod tests {
         let event_checkpoint = checkpoint_with_events(1);
         let tx_lo = event_checkpoint.summary.data().network_total_transactions
             - event_checkpoint.transactions.len() as u64;
-        service.handle_checkpoint(event_checkpoint).await;
+        service.handle_checkpoint(event_checkpoint.into()).await;
         drain(&mut shards);
 
         assert!(matches!(
@@ -2100,7 +2290,7 @@ mod tests {
             matched.matches,
             SubscriptionMatches::AllTransactions
         ));
-        let tx_count = matched.checkpoint.transactions.len() as u32;
+        let tx_count = matched.checkpoint.transactions().len() as u32;
         assert_eq!(
             matched
                 .matches
@@ -2126,7 +2316,7 @@ mod tests {
 
         // A checkpoint with no transactions yields no frame for either
         // subscriber: empty match sets stay on the watermark-tick path.
-        service.handle_checkpoint(checkpoint(2)).await;
+        service.handle_checkpoint(checkpoint(2).into()).await;
         drain(&mut shards);
         assert!(tx_rx.try_recv().is_err());
         assert!(ev_rx.try_recv().is_err());
@@ -2135,7 +2325,7 @@ mod tests {
     #[test]
     fn event_indices_flatten_sparse_matches_in_order() {
         let matches = SubscriptionMatches::Events(vec![(0, vec![1, 2]), (3, vec![0])]);
-        let checkpoint = checkpoint(1);
+        let checkpoint = checkpoint(1).into();
         assert_eq!(
             matches
                 .event_indices(&checkpoint)

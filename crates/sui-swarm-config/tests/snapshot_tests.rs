@@ -124,7 +124,6 @@ fn network_config_snapshot_matches() {
         validator_config.db_path = PathBuf::from("/tmp/foo/");
         validator_config.network_address = Multiaddr::empty();
         let fake_socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 1);
-        validator_config.json_rpc_address = fake_socket;
         validator_config.metrics_address = fake_socket;
         validator_config.p2p_config.listen_address = fake_socket;
         validator_config.p2p_config.external_address = None;

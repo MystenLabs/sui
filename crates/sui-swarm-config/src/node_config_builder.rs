@@ -250,9 +250,7 @@ impl ValidatorConfigBuilder {
             network_address,
             metrics_address: validator.metrics_address,
             admin_interface_port: local_ip_utils::get_available_port(&localhost),
-            json_rpc_address: local_ip_utils::new_tcp_address_for_testing(&localhost)
-                .to_socket_addr()
-                .unwrap(),
+            json_rpc_address: None,
             consensus_config: Some(consensus_config),
             fullnode_sync_mode: None,
             genesis: sui_config::node::Genesis::new(genesis),
@@ -319,7 +317,7 @@ impl ValidatorConfigBuilder {
 #[derive(Clone, Debug, Default)]
 pub struct FullnodeConfigBuilder {
     config_directory: Option<PathBuf>,
-    // port for json rpc api
+    // Address (or port) for plaintext rpc, written to `rpc.http-address`.
     rpc_port: Option<u16>,
     rpc_addr: Option<SocketAddr>,
     supported_protocol_versions: Option<SupportedProtocolVersions>,
@@ -327,7 +325,6 @@ pub struct FullnodeConfigBuilder {
     expensive_safety_check_config: Option<ExpensiveSafetyCheckConfig>,
     db_path: Option<PathBuf>,
     network_address: Option<Multiaddr>,
-    json_rpc_address: Option<SocketAddr>,
     metrics_address: Option<SocketAddr>,
     admin_interface_port: Option<u16>,
     genesis: Option<Genesis>,
@@ -441,11 +438,6 @@ impl FullnodeConfigBuilder {
 
     pub fn with_network_address(mut self, network_address: Multiaddr) -> Self {
         self.network_address = Some(network_address);
-        self
-    }
-
-    pub fn with_json_rpc_address(mut self, json_rpc_address: SocketAddr) -> Self {
-        self.json_rpc_address = Some(json_rpc_address);
         self
     }
 
@@ -631,7 +623,7 @@ impl FullnodeConfigBuilder {
         };
 
         let localhost = local_ip_utils::localhost_for_testing();
-        let json_rpc_address = self.rpc_addr.unwrap_or_else(|| {
+        let http_address = self.rpc_addr.unwrap_or_else(|| {
             let rpc_port = self
                 .rpc_port
                 .unwrap_or_else(|| local_ip_utils::get_available_port(&ip));
@@ -643,10 +635,11 @@ impl FullnodeConfigBuilder {
             ..Default::default()
         };
 
-        let rpc_config = self.rpc_config.unwrap_or_else(|| sui_rpc_api::Config {
+        let mut rpc_config = self.rpc_config.unwrap_or_else(|| sui_rpc_api::Config {
             enable_indexing: Some(true),
             ..Default::default()
         });
+        rpc_config.http_address = rpc_config.http_address.or(Some(http_address));
 
         let mut pruning_config = AuthorityStorePruningConfig::default();
         if self.disable_pruning {
@@ -683,7 +676,7 @@ impl FullnodeConfigBuilder {
             admin_interface_port: self
                 .admin_interface_port
                 .unwrap_or(local_ip_utils::get_available_port(&localhost)),
-            json_rpc_address: self.json_rpc_address.unwrap_or(json_rpc_address),
+            json_rpc_address: None,
             fullnode_sync_mode,
             consensus_config,
             genesis: self.genesis.unwrap_or(sui_config::node::Genesis::new(
