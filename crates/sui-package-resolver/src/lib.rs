@@ -56,12 +56,12 @@ use sui_types::type_input::StructInput;
 use sui_types::type_input::TypeInput;
 
 use crate::error::Error;
-use crate::limits::{LayoutBudget, LayoutMeter};
+use crate::limits::{LayoutBudget, LayoutMeter, TagBudget};
 
 pub mod error;
 mod limits;
 
-pub use limits::DEFAULT_MAX_LAYOUT_WORK;
+pub use limits::DEFAULT_MAX_TYPE_RESOLUTION_WORK;
 pub use limits::Limits;
 
 // TODO Move to ServiceConfig
@@ -87,10 +87,16 @@ pub struct SyncResolver<S> {
     limits: Option<Limits>,
 }
 
+/// A resolved layout with cached size and depth information for substitution and copying.
 struct ResolvedLayout {
+    /// The annotated layout contains canonical struct and enum tags.
     layout: MoveTypeLayout,
+    /// The maximum value-layout depth includes the root, but excludes embedded tag nesting.
     depth: usize,
-    nodes: usize,
+    /// Layout nodes and embedded type-tag nodes copied when cloning the layout.
+    work: usize,
+    /// Number of nodes in `TypeTag::from(&layout)`, excluding tags in field layouts.
+    root_tag_nodes: usize,
 }
 
 impl ResolvedLayout {
@@ -98,7 +104,8 @@ impl ResolvedLayout {
         Self {
             layout,
             depth: 1,
-            nodes: 1,
+            work: 1,
+            root_tag_nodes: 1,
         }
     }
 }
@@ -470,7 +477,20 @@ impl<S: PackageStore> Resolver<S> {
     /// Return the type layout corresponding to the given type tag.  The layout always refers to
     /// structs in terms of their defining ID (i.e. their package ID always points to the first
     /// package that introduced them).
-    pub async fn type_layout(&self, mut tag: TypeTag) -> Result<MoveTypeLayout> {
+    pub async fn type_layout(&self, tag: TypeTag) -> Result<MoveTypeLayout> {
+        let mut budget = self
+            .limits
+            .as_ref()
+            .map_or_else(LayoutBudget::unlimited, Limits::layout_budget);
+        Ok(self.type_layout_with_budget(tag, &mut budget).await?.layout)
+    }
+
+    /// Resolves a layout using the caller's cumulative work budget.
+    async fn type_layout_with_budget(
+        &self,
+        mut tag: TypeTag,
+        budget: &mut LayoutBudget,
+    ) -> Result<ResolvedLayout> {
         let mut context = ResolutionContext::new(self.limits.as_ref());
 
         // (1). Fetch all the information from this store that is necessary to resolve types
@@ -489,19 +509,17 @@ impl<S: PackageStore> Resolver<S> {
             .limits
             .as_ref()
             .map(|limits| limits.max_move_value_depth);
-        let mut budget = self
-            .limits
-            .as_ref()
-            .map_or_else(LayoutBudget::unlimited, Limits::layout_budget);
-        let mut meter = LayoutMeter::new(max_depth, &mut budget);
+        let mut meter = LayoutMeter::new(max_depth, budget);
 
-        Ok(context.resolve_type_layout(&tag, &mut meter)?.layout)
+        context.resolve_type_layout(&tag, &mut meter)
     }
 
     /// Return the datatype layout (struct or enum) corresponding to the given struct tag. This is
     /// a convenience wrapper around [`Self::type_layout`] that mirrors the signature of the legacy
     /// `LayoutResolver::get_annotated_layout` method for easier migration.
     pub async fn datatype_layout(&self, struct_tag: &StructTag) -> Result<A::MoveDatatypeLayout> {
+        TagBudget::new(self.limits.as_ref().map(|limits| limits.max_type_nodes))
+            .check_struct_tag(struct_tag)?;
         let type_tag = TypeTag::Struct(Box::new(struct_tag.clone()));
         let layout = self.type_layout(type_tag).await?;
         match layout {
@@ -597,33 +615,36 @@ impl<S: PackageStore> Resolver<S> {
         &self,
         tx: &ProgrammableTransaction,
     ) -> Result<Vec<Option<MoveTypeLayout>>> {
+        let mut budget = self
+            .limits
+            .as_ref()
+            .map_or_else(LayoutBudget::unlimited, Limits::layout_budget);
         let mut tags = vec![None; tx.inputs.len()];
-        let mut register_type = |arg: &Argument, tag: &TypeTag| {
-            let &Argument::Input(ix) = arg else {
-                return;
-            };
-
-            if !matches!(tx.inputs.get(ix as usize), Some(CallArg::Pure(_))) {
-                return;
-            }
-
-            let Some(type_) = tags.get_mut(ix as usize) else {
-                return;
-            };
-
-            // Types are initially `None`, and are set to `Some(Ok(_))` as long as the input can be
-            // mapped to a unique type, and to `Some(Err(()))` if the input is used with
-            // conflicting types at some point.
-            match type_ {
-                None => *type_ = Some(Ok(tag.clone())),
-                Some(Err(())) => {}
-                Some(Ok(prev)) => {
-                    if prev != tag {
-                        *type_ = Some(Err(()));
+        let mut register_type =
+            |arg: &Argument, tag: &TypeTag, budget: &mut LayoutBudget| -> Result<()> {
+                let &Argument::Input(ix) = arg else {
+                    return Ok(());
+                };
+                if !matches!(tx.inputs.get(ix as usize), Some(CallArg::Pure(_))) {
+                    return Ok(());
+                }
+                let Some(type_) = tags.get_mut(ix as usize) else {
+                    return Ok(());
+                };
+                match type_ {
+                    None => {
+                        budget.charge_tag(tag)?;
+                        *type_ = Some(Ok(tag.clone()));
+                    }
+                    Some(Err(())) => {}
+                    Some(Ok(prev)) => {
+                        if prev != tag {
+                            *type_ = Some(Err(()));
+                        }
                     }
                 }
-            }
-        };
+                Ok(())
+            };
 
         // (1). Infer type tags for pure inputs from their uses.
         for cmd in &tx.commands {
@@ -641,24 +662,28 @@ impl<S: PackageStore> Resolver<S> {
                     #[allow(clippy::disallowed_methods)]
                     // Intentional zip: params includes implicit TxContext param not in arguments
                     for (open_sig, arg) in params.iter().zip(call.arguments.iter()) {
-                        let sig = open_sig.instantiate(&call.type_arguments)?;
-                        register_type(arg, &sig.body);
+                        let sig =
+                            open_sig.instantiate_with_budget(&call.type_arguments, &mut budget)?;
+                        register_type(arg, &sig.body, &mut budget)?;
                     }
                 }
 
-                Command::TransferObjects(_, arg) => register_type(arg, &TypeTag::Address),
+                Command::TransferObjects(_, arg) => {
+                    register_type(arg, &TypeTag::Address, &mut budget)?
+                }
 
                 Command::SplitCoins(_, amounts) => {
                     for amount in amounts {
-                        register_type(amount, &TypeTag::U64);
+                        register_type(amount, &TypeTag::U64, &mut budget)?;
                     }
                 }
 
                 Command::MakeMoveVec(Some(tag), elems) => {
-                    let tag = as_type_tag(tag)?;
+                    let mut tag_budget = budget.tag_budget();
+                    let tag = as_type_tag_with_budget(tag, &mut budget, &mut tag_budget)?;
                     if is_primitive_type_tag(&tag) {
                         for elem in elems {
-                            register_type(elem, &tag);
+                            register_type(elem, &tag, &mut budget)?;
                         }
                     }
                 }
@@ -671,26 +696,32 @@ impl<S: PackageStore> Resolver<S> {
         // primitive types so this is worth doing to avoid redundant work.
         let unique_tags: BTreeSet<_> = tags
             .iter()
-            .flat_map(|t| t.clone())
-            .flat_map(|t| t.ok())
+            .filter_map(|t| t.as_ref()?.as_ref().ok())
             .collect();
 
         // (3). Convert the type tags into layouts.
         let mut layouts = BTreeMap::new();
         for tag in unique_tags {
-            let layout = self.type_layout(tag.clone()).await?;
-            layouts.insert(tag, layout);
+            budget.charge_tag(tag)?;
+            let resolved = self
+                .type_layout_with_budget(tag.clone(), &mut budget)
+                .await?;
+            layouts.insert(tag, resolved);
         }
 
         // (4) Prepare the result vector.
-        Ok(tags
-            .iter()
-            .map(|t| -> Option<_> {
-                let t = t.as_ref()?;
-                let t = t.as_ref().ok()?;
-                layouts.get(t).cloned()
-            })
-            .collect())
+        let mut result = Vec::with_capacity(tags.len());
+        for tag in &tags {
+            let resolved = tag
+                .as_ref()
+                .and_then(|t| t.as_ref().ok())
+                .and_then(|t| layouts.get(t));
+            if let Some(resolved) = resolved {
+                budget.charge_nodes(resolved.work)?;
+            }
+            result.push(resolved.map(|resolved| resolved.layout.clone()));
+        }
+        Ok(result)
     }
 
     /// Resolves a runtime address in a `ModuleId` to a storage `ModuleId` according to the linkage
@@ -766,7 +797,20 @@ impl<S: SyncPackageStore> SyncResolver<S> {
     /// Return the type layout corresponding to the given type tag. The layout always refers to
     /// structs in terms of their defining ID (i.e. their package ID always points to the first
     /// package that introduced them).
-    pub fn type_layout(&self, mut tag: TypeTag) -> Result<MoveTypeLayout> {
+    pub fn type_layout(&self, tag: TypeTag) -> Result<MoveTypeLayout> {
+        let mut budget = self
+            .limits
+            .as_ref()
+            .map_or_else(LayoutBudget::unlimited, Limits::layout_budget);
+        Ok(self.type_layout_with_budget(tag, &mut budget)?.layout)
+    }
+
+    /// Resolves a layout using the caller's cumulative work budget.
+    fn type_layout_with_budget(
+        &self,
+        mut tag: TypeTag,
+        budget: &mut LayoutBudget,
+    ) -> Result<ResolvedLayout> {
         let mut context = ResolutionContext::new(self.limits.as_ref());
 
         // (1). Fetch all the information from this store that is necessary to resolve types
@@ -783,19 +827,17 @@ impl<S: SyncPackageStore> SyncResolver<S> {
             .limits
             .as_ref()
             .map(|limits| limits.max_move_value_depth);
-        let mut budget = self
-            .limits
-            .as_ref()
-            .map_or_else(LayoutBudget::unlimited, Limits::layout_budget);
-        let mut meter = LayoutMeter::new(max_depth, &mut budget);
+        let mut meter = LayoutMeter::new(max_depth, budget);
 
-        Ok(context.resolve_type_layout(&tag, &mut meter)?.layout)
+        context.resolve_type_layout(&tag, &mut meter)
     }
 
     /// Return the datatype layout (struct or enum) corresponding to the given struct tag. This is
     /// a convenience wrapper around [`Self::type_layout`] that mirrors the signature of the legacy
     /// `LayoutResolver::get_annotated_layout` method for easier migration.
     pub fn datatype_layout(&self, struct_tag: &StructTag) -> Result<A::MoveDatatypeLayout> {
+        TagBudget::new(self.limits.as_ref().map(|limits| limits.max_type_nodes))
+            .check_struct_tag(struct_tag)?;
         let type_tag = TypeTag::Struct(Box::new(struct_tag.clone()));
         let layout = self.type_layout(type_tag)?;
         match layout {
@@ -887,33 +929,36 @@ impl<S: SyncPackageStore> SyncResolver<S> {
         &self,
         tx: &ProgrammableTransaction,
     ) -> Result<Vec<Option<MoveTypeLayout>>> {
+        let mut budget = self
+            .limits
+            .as_ref()
+            .map_or_else(LayoutBudget::unlimited, Limits::layout_budget);
         let mut tags = vec![None; tx.inputs.len()];
-        let mut register_type = |arg: &Argument, tag: &TypeTag| {
-            let &Argument::Input(ix) = arg else {
-                return;
-            };
-
-            if !matches!(tx.inputs.get(ix as usize), Some(CallArg::Pure(_))) {
-                return;
-            }
-
-            let Some(type_) = tags.get_mut(ix as usize) else {
-                return;
-            };
-
-            // Types are initially `None`, and are set to `Some(Ok(_))` as long as the input can be
-            // mapped to a unique type, and to `Some(Err(()))` if the input is used with
-            // conflicting types at some point.
-            match type_ {
-                None => *type_ = Some(Ok(tag.clone())),
-                Some(Err(())) => {}
-                Some(Ok(prev)) => {
-                    if prev != tag {
-                        *type_ = Some(Err(()));
+        let mut register_type =
+            |arg: &Argument, tag: &TypeTag, budget: &mut LayoutBudget| -> Result<()> {
+                let &Argument::Input(ix) = arg else {
+                    return Ok(());
+                };
+                if !matches!(tx.inputs.get(ix as usize), Some(CallArg::Pure(_))) {
+                    return Ok(());
+                }
+                let Some(type_) = tags.get_mut(ix as usize) else {
+                    return Ok(());
+                };
+                match type_ {
+                    None => {
+                        budget.charge_tag(tag)?;
+                        *type_ = Some(Ok(tag.clone()));
+                    }
+                    Some(Err(())) => {}
+                    Some(Ok(prev)) => {
+                        if prev != tag {
+                            *type_ = Some(Err(()));
+                        }
                     }
                 }
-            }
-        };
+                Ok(())
+            };
 
         // (1). Infer type tags for pure inputs from their uses.
         for cmd in &tx.commands {
@@ -930,24 +975,28 @@ impl<S: SyncPackageStore> SyncResolver<S> {
                     #[allow(clippy::disallowed_methods)]
                     // Intentional zip: params includes implicit TxContext param not in arguments
                     for (open_sig, arg) in params.iter().zip(call.arguments.iter()) {
-                        let sig = open_sig.instantiate(&call.type_arguments)?;
-                        register_type(arg, &sig.body);
+                        let sig =
+                            open_sig.instantiate_with_budget(&call.type_arguments, &mut budget)?;
+                        register_type(arg, &sig.body, &mut budget)?;
                     }
                 }
 
-                Command::TransferObjects(_, arg) => register_type(arg, &TypeTag::Address),
+                Command::TransferObjects(_, arg) => {
+                    register_type(arg, &TypeTag::Address, &mut budget)?
+                }
 
                 Command::SplitCoins(_, amounts) => {
                     for amount in amounts {
-                        register_type(amount, &TypeTag::U64);
+                        register_type(amount, &TypeTag::U64, &mut budget)?;
                     }
                 }
 
                 Command::MakeMoveVec(Some(tag), elems) => {
-                    let tag = as_type_tag(tag)?;
+                    let mut tag_budget = budget.tag_budget();
+                    let tag = as_type_tag_with_budget(tag, &mut budget, &mut tag_budget)?;
                     if is_primitive_type_tag(&tag) {
                         for elem in elems {
-                            register_type(elem, &tag);
+                            register_type(elem, &tag, &mut budget)?;
                         }
                     }
                 }
@@ -960,26 +1009,30 @@ impl<S: SyncPackageStore> SyncResolver<S> {
         // primitive types so this is worth doing to avoid redundant work.
         let unique_tags: BTreeSet<_> = tags
             .iter()
-            .flat_map(|t| t.clone())
-            .flat_map(|t| t.ok())
+            .filter_map(|t| t.as_ref()?.as_ref().ok())
             .collect();
 
         // (3). Convert the type tags into layouts.
         let mut layouts = BTreeMap::new();
         for tag in unique_tags {
-            let layout = self.type_layout(tag.clone())?;
-            layouts.insert(tag, layout);
+            budget.charge_tag(tag)?;
+            let resolved = self.type_layout_with_budget(tag.clone(), &mut budget)?;
+            layouts.insert(tag, resolved);
         }
 
         // (4) Prepare the result vector.
-        Ok(tags
-            .iter()
-            .map(|t| -> Option<_> {
-                let t = t.as_ref()?;
-                let t = t.as_ref().ok()?;
-                layouts.get(t).cloned()
-            })
-            .collect())
+        let mut result = Vec::with_capacity(tags.len());
+        for tag in &tags {
+            let resolved = tag
+                .as_ref()
+                .and_then(|t| t.as_ref().ok())
+                .and_then(|t| layouts.get(t));
+            if let Some(resolved) = resolved {
+                budget.charge_nodes(resolved.work)?;
+            }
+            result.push(resolved.map(|resolved| resolved.layout.clone()));
+        }
+        Ok(result)
     }
 
     /// Resolves a runtime address in a `ModuleId` to a storage `ModuleId` according to the linkage
@@ -1545,14 +1598,17 @@ impl OpenSignature {
         })
     }
 
-    /// Return a specific instantiation of this signature, with `type_params` as the actual type
-    /// parameters. This function does not check that the supplied type parameters are valid (meet
-    /// the ability constraints of the struct or function this signature is part of), but will
-    /// produce an error if the signature references a type parameter that is out of bounds.
-    pub fn instantiate(&self, type_params: &[TypeInput]) -> Result<Signature> {
+    fn instantiate_with_budget(
+        &self,
+        type_params: &[TypeInput],
+        budget: &mut LayoutBudget,
+    ) -> Result<Signature> {
+        let mut tag_budget = budget.tag_budget();
         Ok(Signature {
             ref_: self.ref_,
-            body: self.body.instantiate(type_params)?,
+            body: self
+                .body
+                .instantiate_with_budget(type_params, budget, &mut tag_budget)?,
         })
     }
 }
@@ -1592,10 +1648,19 @@ impl OpenSignatureBody {
         })
     }
 
-    fn instantiate(&self, type_params: &[TypeInput]) -> Result<TypeTag> {
+    fn instantiate_with_budget(
+        &self,
+        type_params: &[TypeInput],
+        budget: &mut LayoutBudget,
+        tag_budget: &mut TagBudget,
+    ) -> Result<TypeTag> {
         use OpenSignatureBody as O;
         use TypeTag as T;
 
+        if !matches!(self, O::TypeParameter(_)) {
+            tag_budget.charge_nodes(1)?;
+            budget.charge_node()?;
+        }
         Ok(match self {
             O::Address => T::Address,
             O::Bool => T::Bool,
@@ -1605,7 +1670,11 @@ impl OpenSignatureBody {
             O::U64 => T::U64,
             O::U128 => T::U128,
             O::U256 => T::U256,
-            O::Vector(s) => T::Vector(Box::new(s.instantiate(type_params)?)),
+            O::Vector(s) => T::Vector(Box::new(s.instantiate_with_budget(
+                type_params,
+                budget,
+                tag_budget,
+            )?)),
 
             O::Datatype(key, dty_params) => T::Struct(Box::new(StructTag {
                 address: key.package,
@@ -1613,14 +1682,16 @@ impl OpenSignatureBody {
                 name: ident(&key.name)?,
                 type_params: dty_params
                     .iter()
-                    .map(|p| p.instantiate(type_params))
+                    .map(|p| p.instantiate_with_budget(type_params, budget, tag_budget))
                     .collect::<Result<_>>()?,
             })),
 
-            O::TypeParameter(ix) => as_type_tag(
+            O::TypeParameter(ix) => as_type_tag_with_budget(
                 type_params
                     .get(*ix as usize)
                     .ok_or_else(|| Error::TypeParamOOB(*ix, type_params.len()))?,
+                budget,
+                tag_budget,
             )?,
         })
     }
@@ -1686,8 +1757,14 @@ impl<'l> ResolutionContext<'l> {
             depth: usize,
         }
 
+        let mut tag_budget = TagBudget::new(
+            self.limits
+                .filter(|_| visit_phantoms)
+                .map(|limits| limits.max_type_nodes),
+        );
         let mut frontier = vec![ToVisit { tag, depth: 0 }];
         while let Some(ToVisit { tag, depth }) = frontier.pop() {
+            tag_budget.charge_nodes(1)?;
             macro_rules! push_ty_param {
                 ($tag:expr) => {{
                     check_max_limit!(
@@ -1802,8 +1879,14 @@ impl<'l> ResolutionContext<'l> {
             depth: usize,
         }
 
+        let mut tag_budget = TagBudget::new(
+            self.limits
+                .filter(|_| visit_phantoms)
+                .map(|limits| limits.max_type_nodes),
+        );
         let mut frontier = vec![ToVisit { tag, depth: 0 }];
         while let Some(ToVisit { tag, depth }) = frontier.pop() {
+            tag_budget.charge_nodes(1)?;
             macro_rules! push_ty_param {
                 ($tag:expr) => {{
                     check_max_limit!(
@@ -2127,10 +2210,13 @@ impl<'l> ResolutionContext<'l> {
             T::Vector(tag) => {
                 let mut child = meter.nest()?;
                 let element = self.resolve_type_layout(tag, &mut child)?;
+                let root_tag_nodes = element.root_tag_nodes.saturating_add(1);
+                meter.budget().tag_budget().charge_nodes(root_tag_nodes)?;
                 ResolvedLayout {
                     layout: L::Vector(Box::new(element.layout)),
                     depth: element.depth.saturating_add(1),
-                    nodes: element.nodes.saturating_add(1),
+                    work: element.work.saturating_add(1),
+                    root_tag_nodes,
                 }
             }
 
@@ -2148,6 +2234,12 @@ impl<'l> ResolutionContext<'l> {
                 let key = DatatypeRef::from(s.as_ref());
                 let def = &self.datatypes[&key];
 
+                meter.charge_node()?;
+                let param_tag_nodes = s
+                    .type_params
+                    .iter()
+                    .map(|tag| meter.budget().charge_tag(tag))
+                    .collect::<Result<Vec<_>>>()?;
                 let mut type_params = s.type_params.clone();
                 for type_param in &mut type_params {
                     self.canonicalize_type(type_param)?;
@@ -2174,12 +2266,12 @@ impl<'l> ResolutionContext<'l> {
                     type_params,
                 };
 
-                self.resolve_datatype_signature(def, type_, param_layouts, meter)?
+                self.resolve_datatype_signature(def, type_, param_tag_nodes, param_layouts, meter)?
             }
         })
     }
 
-    /// Resolve a signature to its canonical type tag without producing a layout.
+    /// Resolve a signature to its canonical type tag and node count without producing a layout.
     ///
     /// Phantom type parameters do not affect runtime layout, so their layouts are skipped. They
     /// must still be retained in enclosing `StructTag`s, so this resolves their tags from the
@@ -2188,39 +2280,72 @@ impl<'l> ResolutionContext<'l> {
         &self,
         sig: &OpenSignatureBody,
         param_type_tags: &[TypeTag],
-    ) -> Result<TypeTag> {
+        param_tag_nodes: &[usize],
+        budget: &mut LayoutBudget,
+        tag_budget: &mut TagBudget,
+    ) -> Result<(TypeTag, usize)> {
         use OpenSignatureBody as O;
 
+        if !matches!(sig, O::TypeParameter(_)) {
+            tag_budget.charge_nodes(1)?;
+            budget.charge_node()?;
+        }
         Ok(match sig {
-            O::Address => TypeTag::Address,
-            O::Bool => TypeTag::Bool,
-            O::U8 => TypeTag::U8,
-            O::U16 => TypeTag::U16,
-            O::U32 => TypeTag::U32,
-            O::U64 => TypeTag::U64,
-            O::U128 => TypeTag::U128,
-            O::U256 => TypeTag::U256,
-            O::TypeParameter(ix) => param_type_tags
-                .get(*ix as usize)
-                .ok_or_else(|| Error::TypeParamOOB(*ix, param_type_tags.len()))?
-                .clone(),
-            O::Vector(sig) => TypeTag::Vector(Box::new(
-                self.resolve_signature_type_tag(sig, param_type_tags)?,
-            )),
+            O::Address => (TypeTag::Address, 1),
+            O::Bool => (TypeTag::Bool, 1),
+            O::U8 => (TypeTag::U8, 1),
+            O::U16 => (TypeTag::U16, 1),
+            O::U32 => (TypeTag::U32, 1),
+            O::U64 => (TypeTag::U64, 1),
+            O::U128 => (TypeTag::U128, 1),
+            O::U256 => (TypeTag::U256, 1),
+            O::TypeParameter(ix) => {
+                let tag = param_type_tags
+                    .get(*ix as usize)
+                    .ok_or_else(|| Error::TypeParamOOB(*ix, param_type_tags.len()))?;
+                let nodes = *param_tag_nodes
+                    .get(*ix as usize)
+                    .ok_or_else(|| Error::TypeParamOOB(*ix, param_tag_nodes.len()))?;
+                tag_budget.charge_nodes(nodes)?;
+                budget.charge_nodes(nodes)?;
+                (tag.clone(), nodes)
+            }
+            O::Vector(sig) => {
+                let (tag, nodes) = self.resolve_signature_type_tag(
+                    sig,
+                    param_type_tags,
+                    param_tag_nodes,
+                    budget,
+                    tag_budget,
+                )?;
+                (TypeTag::Vector(Box::new(tag)), nodes.saturating_add(1))
+            }
             O::Datatype(key, params) => {
                 // SAFETY: `add_signature` ensures `datatypes` has an element with this key.
                 let def = &self.datatypes[key];
-                let type_params = params
-                    .iter()
-                    .map(|param| self.resolve_signature_type_tag(param, param_type_tags))
-                    .collect::<Result<Vec<_>>>()?;
+                let mut nodes = 1usize;
+                let mut type_params = Vec::with_capacity(params.len());
+                for param in params {
+                    let (tag, tag_nodes) = self.resolve_signature_type_tag(
+                        param,
+                        param_type_tags,
+                        param_tag_nodes,
+                        budget,
+                        tag_budget,
+                    )?;
+                    nodes = nodes.saturating_add(tag_nodes);
+                    type_params.push(tag);
+                }
 
-                TypeTag::Struct(Box::new(StructTag {
-                    address: def.defining_id,
-                    module: ident(&key.module)?,
-                    name: ident(&key.name)?,
-                    type_params,
-                }))
+                (
+                    TypeTag::Struct(Box::new(StructTag {
+                        address: def.defining_id,
+                        module: ident(&key.module)?,
+                        name: ident(&key.name)?,
+                        type_params,
+                    })),
+                    nodes,
+                )
             }
         })
     }
@@ -2231,14 +2356,18 @@ impl<'l> ResolutionContext<'l> {
         &self,
         data_def: &DataDef,
         type_: StructTag,
+        param_tag_nodes: Vec<usize>,
         param_layouts: Vec<Option<ResolvedLayout>>,
         meter: &mut LayoutMeter,
     ) -> Result<ResolvedLayout> {
+        let root_tag_nodes = param_tag_nodes
+            .iter()
+            .fold(1usize, |sum, nodes| sum.saturating_add(*nodes));
         Ok(match &data_def.data {
             MoveData::Struct(fields) => {
                 let mut resolved_fields = Vec::with_capacity(fields.len());
                 let mut field_depth = 0;
-                let mut field_nodes = 0usize;
+                let mut field_work = 0usize;
 
                 for (name, sig) in fields {
                     let mut child = meter.nest()?;
@@ -2246,11 +2375,12 @@ impl<'l> ResolutionContext<'l> {
                         sig,
                         &param_layouts,
                         &type_.type_params,
+                        &param_tag_nodes,
                         &mut child,
                     )?;
 
                     field_depth = field_depth.max(resolved.depth);
-                    field_nodes = field_nodes.saturating_add(resolved.nodes);
+                    field_work = field_work.saturating_add(resolved.work);
                     resolved_fields.push(MoveFieldLayout {
                         name: ident(name.as_str())?,
                         layout: resolved.layout,
@@ -2263,14 +2393,15 @@ impl<'l> ResolutionContext<'l> {
                         fields: resolved_fields,
                     })),
                     depth: field_depth.saturating_add(1),
-                    nodes: field_nodes.saturating_add(1),
+                    work: field_work.saturating_add(root_tag_nodes).saturating_add(1),
+                    root_tag_nodes,
                 }
             }
             MoveData::Enum(variants) => {
                 meter.charge_nodes(variants.len())?;
 
                 let mut field_depth = 0;
-                let mut field_nodes = 0usize;
+                let mut field_work = 0usize;
                 let mut resolved_variants = BTreeMap::new();
 
                 for (tag, variant) in variants.iter().enumerate() {
@@ -2281,11 +2412,12 @@ impl<'l> ResolutionContext<'l> {
                             sig,
                             &param_layouts,
                             &type_.type_params,
+                            &param_tag_nodes,
                             &mut child,
                         )?;
 
                         field_depth = field_depth.max(resolved.depth);
-                        field_nodes = field_nodes.saturating_add(resolved.nodes);
+                        field_work = field_work.saturating_add(resolved.work);
                         fields.push(MoveFieldLayout {
                             name: ident(name.as_str())?,
                             layout: resolved.layout,
@@ -2300,7 +2432,11 @@ impl<'l> ResolutionContext<'l> {
                         variants: resolved_variants,
                     })),
                     depth: field_depth.saturating_add(1),
-                    nodes: field_nodes.saturating_add(variants.len()).saturating_add(1),
+                    work: field_work
+                        .saturating_add(root_tag_nodes)
+                        .saturating_add(variants.len())
+                        .saturating_add(1),
+                    root_tag_nodes,
                 }
             }
         })
@@ -2313,6 +2449,7 @@ impl<'l> ResolutionContext<'l> {
         sig: &OpenSignatureBody,
         param_layouts: &[Option<ResolvedLayout>],
         param_type_tags: &[TypeTag],
+        param_tag_nodes: &[usize],
         meter: &mut LayoutMeter,
     ) -> Result<ResolvedLayout> {
         use MoveTypeLayout as L;
@@ -2339,7 +2476,7 @@ impl<'l> ResolutionContext<'l> {
                     .get(*ix as usize)
                     .and_then(Option::as_ref)
                     .ok_or_else(|| Error::TypeParamOOB(*ix, param_layouts.len()))?;
-                meter.charge_nodes(resolved.nodes)?;
+                meter.charge_nodes(resolved.work)?;
 
                 // We need to re-check the type parameter before we use it because it might have
                 // been fine when it was created, but result in too deep a layout when we use it at
@@ -2349,7 +2486,8 @@ impl<'l> ResolutionContext<'l> {
                 ResolvedLayout {
                     layout: resolved.layout.clone(),
                     depth: resolved.depth,
-                    nodes: resolved.nodes,
+                    work: resolved.work,
+                    root_tag_nodes: resolved.root_tag_nodes,
                 }
             }
 
@@ -2359,13 +2497,17 @@ impl<'l> ResolutionContext<'l> {
                     sig.as_ref(),
                     param_layouts,
                     param_type_tags,
+                    param_tag_nodes,
                     &mut child,
                 )?;
+                let root_tag_nodes = element.root_tag_nodes.saturating_add(1);
+                meter.budget().tag_budget().charge_nodes(root_tag_nodes)?;
 
                 ResolvedLayout {
                     layout: L::Vector(Box::new(element.layout)),
                     depth: element.depth.saturating_add(1),
-                    nodes: element.nodes.saturating_add(1),
+                    work: element.work.saturating_add(1),
+                    root_tag_nodes,
                 }
             }
 
@@ -2379,11 +2521,22 @@ impl<'l> ResolutionContext<'l> {
                     ));
                 }
 
+                let mut tag_budget = meter.budget().tag_budget();
+                tag_budget.charge_nodes(1)?;
                 let mut type_params = Vec::with_capacity(params.len());
+                let mut type_param_nodes = Vec::with_capacity(params.len());
                 let mut resolved_params = Vec::with_capacity(params.len());
                 for (sig, param) in params.iter().zip_eq(def.type_params.iter()) {
                     if param.is_phantom {
-                        type_params.push(self.resolve_signature_type_tag(sig, param_type_tags)?);
+                        let (tag, nodes) = self.resolve_signature_type_tag(
+                            sig,
+                            param_type_tags,
+                            param_tag_nodes,
+                            meter.budget(),
+                            &mut tag_budget,
+                        )?;
+                        type_params.push(tag);
+                        type_param_nodes.push(nodes);
                         resolved_params.push(None);
                     } else {
                         let mut child = meter.nest()?;
@@ -2391,14 +2544,19 @@ impl<'l> ResolutionContext<'l> {
                             sig,
                             param_layouts,
                             param_type_tags,
+                            param_tag_nodes,
                             &mut child,
                         )?;
                         // SAFETY: layouts generated by this context have canonical type tags.
+                        tag_budget.charge_nodes(resolved.root_tag_nodes)?;
+                        meter.charge_nodes(resolved.root_tag_nodes)?;
                         type_params.push(TypeTag::from(&resolved.layout));
+                        type_param_nodes.push(resolved.root_tag_nodes);
                         resolved_params.push(Some(resolved));
                     }
                 }
 
+                meter.charge_node()?;
                 let type_ = StructTag {
                     address: def.defining_id,
                     module: ident(&key.module)?,
@@ -2406,7 +2564,13 @@ impl<'l> ResolutionContext<'l> {
                     type_params,
                 };
 
-                self.resolve_datatype_signature(def, type_, resolved_params, meter)?
+                self.resolve_datatype_signature(
+                    def,
+                    type_,
+                    type_param_nodes,
+                    resolved_params,
+                    meter,
+                )?
             }
         })
     }
@@ -2506,9 +2670,16 @@ fn ident(s: &str) -> Result<Identifier> {
     Identifier::new(s).map_err(|_| Error::NotAnIdentifier(s.to_string()))
 }
 
-pub fn as_type_tag(type_input: &TypeInput) -> Result<TypeTag> {
+fn as_type_tag_with_budget(
+    type_input: &TypeInput,
+    budget: &mut LayoutBudget,
+    tag_budget: &mut TagBudget,
+) -> Result<TypeTag> {
     use TypeInput as I;
     use TypeTag as T;
+
+    tag_budget.charge_nodes(1)?;
+    budget.charge_node()?;
     Ok(match type_input {
         I::Bool => T::Bool,
         I::U8 => T::U8,
@@ -2519,7 +2690,7 @@ pub fn as_type_tag(type_input: &TypeInput) -> Result<TypeTag> {
         I::U256 => T::U256,
         I::Address => T::Address,
         I::Signer => T::Signer,
-        I::Vector(t) => T::Vector(Box::new(as_type_tag(t)?)),
+        I::Vector(t) => T::Vector(Box::new(as_type_tag_with_budget(t, budget, tag_budget)?)),
         I::Struct(s) => {
             let StructInput {
                 address,
@@ -2527,7 +2698,10 @@ pub fn as_type_tag(type_input: &TypeInput) -> Result<TypeTag> {
                 name,
                 type_params,
             } = s.as_ref();
-            let type_params = type_params.iter().map(as_type_tag).collect::<Result<_>>()?;
+            let type_params = type_params
+                .iter()
+                .map(|param| as_type_tag_with_budget(param, budget, tag_budget))
+                .collect::<Result<_>>()?;
             T::Struct(Box::new(StructTag {
                 address: *address,
                 module: ident(module)?,
@@ -2782,7 +2956,7 @@ mod tests {
                 max_type_argument_depth: 100,
                 max_type_nodes: 100,
                 max_move_value_depth: 3,
-                max_layout_work: usize::MAX,
+                max_type_resolution_work: usize::MAX,
             },
         );
 
@@ -2809,7 +2983,7 @@ mod tests {
                 max_type_argument_depth: 100,
                 max_type_nodes: 100,
                 max_move_value_depth: 2,
-                max_layout_work: usize::MAX,
+                max_type_resolution_work: usize::MAX,
             },
         );
 
@@ -2837,7 +3011,7 @@ mod tests {
                 max_type_argument_depth: 100,
                 max_type_nodes: 100,
                 max_move_value_depth: 3,
-                max_layout_work: usize::MAX,
+                max_type_resolution_work: usize::MAX,
             },
         );
 
@@ -2869,7 +3043,7 @@ mod tests {
                 max_type_argument_depth: 100,
                 max_type_nodes: 100,
                 max_move_value_depth: 3,
-                max_layout_work: usize::MAX,
+                max_type_resolution_work: usize::MAX,
             },
         );
 
@@ -2917,7 +3091,7 @@ mod tests {
                 max_type_argument_depth: 100,
                 max_type_nodes: 100,
                 max_move_value_depth: 3,
-                max_layout_work: usize::MAX,
+                max_type_resolution_work: usize::MAX,
             },
         );
 
@@ -3278,7 +3452,12 @@ mod tests {
             ],
         );
 
-        insta::assert_debug_snapshot!(sig.instantiate(&[T::U64, T::Bool]).unwrap());
+        let mut budget = LayoutBudget::unlimited();
+        let mut tag_budget = budget.tag_budget();
+        insta::assert_debug_snapshot!(
+            sig.instantiate_with_budget(&[T::U64, T::Bool], &mut budget, &mut tag_budget)
+                .unwrap()
+        );
     }
 
     #[tokio::test]
@@ -3297,8 +3476,11 @@ mod tests {
             ],
         );
 
+        let mut budget = LayoutBudget::unlimited();
+        let mut tag_budget = budget.tag_budget();
         insta::assert_snapshot!(
-            sig.instantiate(&[T::U64, T::Bool]).unwrap_err(),
+            sig.instantiate_with_budget(&[T::U64, T::Bool], &mut budget, &mut tag_budget)
+                .unwrap_err(),
             @"Type Parameter 99 out of bounds (2)"
         );
     }
@@ -3483,7 +3665,7 @@ mod tests {
                 max_type_argument_depth: 100,
                 max_type_nodes: 100,
                 max_move_value_depth: 100,
-                max_layout_work: usize::MAX,
+                max_type_resolution_work: usize::MAX,
             },
         );
 
@@ -3511,7 +3693,7 @@ mod tests {
                 max_type_argument_depth: 100,
                 max_type_nodes: 2,
                 max_move_value_depth: 100,
-                max_layout_work: usize::MAX,
+                max_type_resolution_work: usize::MAX,
             },
         );
 
@@ -3532,6 +3714,45 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_err_type_tag_too_many_nodes() {
+        let (_, cache) = package_cache([]);
+        let resolver = Resolver::new_with_limits(
+            cache,
+            Limits {
+                max_type_argument_width: 100,
+                max_type_argument_depth: 100,
+                max_type_nodes: 2,
+                max_move_value_depth: 100,
+                max_type_resolution_work: usize::MAX,
+            },
+        );
+
+        let err = resolver
+            .type_layout(type_("vector<vector<u8>>"))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::TooManyTypeNodes(2, 3)));
+    }
+
+    #[tokio::test]
+    async fn test_err_type_layout_work_budget() {
+        let (_, cache) = package_cache([]);
+        let resolver = Resolver::new_with_limits(
+            cache,
+            Limits {
+                max_type_argument_width: 100,
+                max_type_argument_depth: 100,
+                max_type_nodes: 100,
+                max_move_value_depth: 100,
+                max_type_resolution_work: 1,
+            },
+        );
+
+        let err = resolver.type_layout(type_("vector<u8>")).await.unwrap_err();
+        assert!(matches!(err, Error::TooManyTypeNodes(1, 2)));
+    }
+
+    #[tokio::test]
     async fn test_err_type_param_nesting() {
         use Ability as A;
         use AbilitySet as S;
@@ -3548,7 +3769,7 @@ mod tests {
                 max_type_argument_depth: 2,
                 max_type_nodes: 100,
                 max_move_value_depth: 100,
-                max_layout_work: usize::MAX,
+                max_type_resolution_work: usize::MAX,
             },
         );
 
@@ -3706,6 +3927,37 @@ mod tests {
         }
 
         insta::assert_snapshot!(output);
+    }
+
+    #[tokio::test]
+    async fn test_err_pure_input_layout_copy_work_budget() {
+        use CallArg as I;
+        use TypeInput as TI;
+
+        let (_, cache) = package_cache([]);
+        let resolver = Resolver::new_with_limits(
+            cache,
+            Limits {
+                max_type_argument_width: 100,
+                max_type_argument_depth: 100,
+                max_type_nodes: 100,
+                max_move_value_depth: 100,
+                max_type_resolution_work: 5,
+            },
+        );
+        let ptb = ProgrammableTransaction {
+            inputs: vec![
+                I::Pure(bcs::to_bytes(&1u64).unwrap()),
+                I::Pure(bcs::to_bytes(&2u64).unwrap()),
+            ],
+            commands: vec![Command::MakeMoveVec(
+                Some(TI::U64),
+                vec![Argument::Input(0), Argument::Input(1)],
+            )],
+        };
+
+        let err = resolver.pure_input_layouts(&ptb).await.unwrap_err();
+        assert!(matches!(err, Error::TooManyTypeNodes(5, 6)));
     }
 
     #[tokio::test]
