@@ -143,7 +143,8 @@ pub struct StateSyncConfig {
     pub checkpoint_header_download_concurrency: Option<usize>,
 
     /// Set how far past the highest synced checkpoint contents downloads may start. Downloads
-    /// that finished but wait to be released in order count against this limit.
+    /// that finished but wait to be released in order count against this limit. The number of
+    /// running downloads adapts to timeouts, starting at 16, and never exceeds this value.
     ///
     /// If unspecified, this will default to `400`.
     #[serde(skip_serializing_if = "Option::is_none")]

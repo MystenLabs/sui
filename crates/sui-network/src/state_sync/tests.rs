@@ -1957,6 +1957,7 @@ impl HedgeTestClient {
             network: &self.network,
             max_timeout,
             timed_out_requests: std::sync::atomic::AtomicU32::new(0),
+            congestion: None,
             peer_heights: &self.peer_heights,
             checkpoint,
             use_get_checkpoint_contents_v2: true,
@@ -3647,4 +3648,66 @@ async fn finished_downloads_free_slots_behind_stalled_download() {
             .unwrap();
         assert_eq!(actual.digest(), checkpoint.digest());
     }
+}
+
+#[test]
+fn content_congestion_grows_halves_and_respects_bounds() {
+    let congestion = super::ContentCongestion::new(
+        4,
+        2,
+        10,
+        Duration::from_secs(3600),
+        super::metrics::Metrics::disabled(),
+    );
+    assert_eq!(congestion.limit(), 4);
+
+    // Before the first timeout, each success adds one.
+    for _ in 0..4 {
+        congestion.on_success();
+    }
+    assert_eq!(congestion.limit(), 8);
+
+    // A timeout that is under a quarter of recent requests ends slow start but keeps the limit.
+    for _ in 0..4 {
+        congestion.on_success();
+    }
+    congestion.on_timeout();
+    assert_eq!(congestion.limit(), 10);
+
+    // Timeouts reaching a quarter of recent requests halve the limit.
+    congestion.on_timeout();
+    congestion.on_timeout();
+    assert_eq!(congestion.limit(), 5);
+
+    // Further timeouts within the decrease interval do not halve it again.
+    congestion.on_timeout();
+    congestion.on_timeout();
+    assert_eq!(congestion.limit(), 5);
+
+    // After the first timeout the limit grows by about one per round of successes.
+    for _ in 0..5 {
+        congestion.on_success();
+    }
+    assert_eq!(congestion.limit(), 5);
+    for _ in 0..5 {
+        congestion.on_success();
+    }
+    assert_eq!(congestion.limit(), 6);
+
+    // The limit never exceeds the maximum or drops below the minimum.
+    for _ in 0..1000 {
+        congestion.on_success();
+    }
+    assert_eq!(congestion.limit(), 10);
+    let fast_decrease = super::ContentCongestion::new(
+        3,
+        2,
+        10,
+        Duration::ZERO,
+        super::metrics::Metrics::disabled(),
+    );
+    for _ in 0..5 {
+        fast_decrease.on_timeout();
+    }
+    assert_eq!(fast_decrease.limit(), 2);
 }

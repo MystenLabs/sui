@@ -56,7 +56,7 @@ use rand::Rng;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     sync::{
-        Arc, RwLock,
+        Arc, Mutex, RwLock,
         atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering},
     },
     time::{Duration, Instant},
@@ -1934,6 +1934,13 @@ async fn sync_checkpoint_contents<S>(
     let mut checkpoint_contents_tasks = FuturesOrdered::new();
 
     let running = Arc::new(RunningDownloads::new(metrics.clone()));
+    let congestion = Arc::new(ContentCongestion::new(
+        CONTENT_DOWNLOAD_INITIAL_LIMIT,
+        CONTENT_DOWNLOAD_MIN_LIMIT,
+        checkpoint_content_download_concurrency,
+        peer_heights.read().unwrap().checkpoint_content_timeout_min,
+        metrics.clone(),
+    ));
     let mut last_notified_sequence = None;
 
     let hedge = checkpoint_content_hedge_delay.map(|delay| ContentHedge {
@@ -2004,6 +2011,7 @@ async fn sync_checkpoint_contents<S>(
                                 peer_heights.clone(),
                                 use_get_checkpoint_contents_v2,
                                 hedge.clone(),
+                                congestion.clone(),
                                 metrics.clone(),
                                 retry_tx_count,
                                 checkpoint,
@@ -2017,10 +2025,11 @@ async fn sync_checkpoint_contents<S>(
         // Start new tasks up to configured concurrency limits.
         // `checkpoint_content_download_concurrency` bounds how far ahead of the highest synced
         // checkpoint downloads may start. Only downloads still running count against the
-        // transaction limit: one that finished has stored its contents and only waits to be
-        // released in order.
+        // transaction limit and the congestion limit: one that finished has stored its contents
+        // and only waits to be released in order.
         while current_sequence < target_sequence_cursor
             && checkpoint_contents_tasks.len() < checkpoint_content_download_concurrency
+            && running.count() < congestion.limit()
         {
             let next_checkpoint = store
                 .get_checkpoint_by_sequence_number(current_sequence)
@@ -2050,6 +2059,7 @@ async fn sync_checkpoint_contents<S>(
                     peer_heights.clone(),
                     use_get_checkpoint_contents_v2,
                     hedge.clone(),
+                    congestion.clone(),
                     metrics.clone(),
                     tx_count,
                     next_checkpoint,
@@ -2083,6 +2093,7 @@ async fn sync_one_checkpoint_contents<S>(
     peer_heights: Arc<RwLock<PeerHeights>>,
     use_get_checkpoint_contents_v2: bool,
     hedge: Option<ContentHedge>,
+    congestion: Arc<ContentCongestion>,
     metrics: Metrics,
     tx_count: u64,
     checkpoint: VerifiedCheckpoint,
@@ -2120,6 +2131,7 @@ where
     let fetch = ContentFetch {
         network: &network,
         max_timeout: timeout_max,
+        congestion: Some(&congestion),
         timed_out_requests: AtomicU32::new(0),
         peer_heights: &peer_heights,
         checkpoint: &checkpoint,
@@ -2149,6 +2161,12 @@ const MAX_CONCURRENT_CONTENT_REQUESTS: usize = 2;
 
 /// How much later than the client's timeout the anemo timeout of a contents request expires.
 const CONTENT_REQUEST_SERVER_GRACE: Duration = Duration::from_secs(1);
+
+/// This is the number of checkpoint contents downloads allowed to run at once when state sync
+/// starts.
+const CONTENT_DOWNLOAD_INITIAL_LIMIT: usize = 16;
+/// The congestion limit never drops below this many running downloads.
+const CONTENT_DOWNLOAD_MIN_LIMIT: usize = 2;
 
 /// In hedged mode, only checkpoints at most this far past the highest synced checkpoint are
 /// hedged, or keep looking for a peer after every peer that had the checkpoint failed.
@@ -2290,6 +2308,111 @@ impl Drop for RunningDownloads {
     }
 }
 
+/// Limits how many checkpoint contents downloads run at once, based on timeouts. A download
+/// whose response cannot arrive within its timeout is cancelled and its partial response is
+/// discarded, so running more downloads than the node's bandwidth delivers in time makes every
+/// download fail. The limit grows by one per successful request until the first timeout, which
+/// doubles it every round of requests. After that it grows by about one per round. It halves when
+/// at least a quarter of recent requests timed out, at most once per `decrease_interval`, because
+/// one burst of competing downloads times out together.
+struct ContentCongestion {
+    state: Mutex<CongestionState>,
+    min: f64,
+    max: f64,
+    decrease_interval: Duration,
+    metrics: Metrics,
+}
+
+struct CongestionState {
+    limit: f64,
+    slow_start: bool,
+    last_decrease: Option<Instant>,
+    window_start: Instant,
+    successes: f64,
+    timeouts: f64,
+}
+
+impl CongestionState {
+    // Halves the counts once per interval, so they weigh recent requests most.
+    fn decay(&mut self, interval: Duration) {
+        if self.window_start.elapsed() >= interval {
+            self.successes /= 2.0;
+            self.timeouts /= 2.0;
+            self.window_start = Instant::now();
+        }
+    }
+}
+
+impl ContentCongestion {
+    // Timeouts from a few slow peer paths do not mean the node is downloading too much at once.
+    // The limit halves only when at least this share of recent requests timed out.
+    const DECREASE_TIMEOUT_SHARE: f64 = 0.25;
+
+    fn new(
+        initial: usize,
+        min: usize,
+        max: usize,
+        decrease_interval: Duration,
+        metrics: Metrics,
+    ) -> Self {
+        let max = max.max(min) as f64;
+        let limit = (initial as f64).clamp(min as f64, max);
+        metrics.set_checkpoint_content_download_limit(limit as usize);
+        Self {
+            state: Mutex::new(CongestionState {
+                limit,
+                slow_start: true,
+                last_decrease: None,
+                window_start: Instant::now(),
+                successes: 0.0,
+                timeouts: 0.0,
+            }),
+            min: min as f64,
+            max,
+            decrease_interval,
+            metrics,
+        }
+    }
+
+    fn limit(&self) -> usize {
+        self.state.lock().unwrap().limit as usize
+    }
+
+    fn on_success(&self) {
+        let mut state = self.state.lock().unwrap();
+        state.decay(self.decrease_interval);
+        state.successes += 1.0;
+        let increase = if state.slow_start {
+            1.0
+        } else {
+            1.0 / state.limit
+        };
+        state.limit = (state.limit + increase).min(self.max);
+        self.metrics
+            .set_checkpoint_content_download_limit(state.limit as usize);
+    }
+
+    fn on_timeout(&self) {
+        let mut state = self.state.lock().unwrap();
+        state.decay(self.decrease_interval);
+        state.timeouts += 1.0;
+        state.slow_start = false;
+        if state.timeouts < Self::DECREASE_TIMEOUT_SHARE * (state.successes + state.timeouts)
+            || state
+                .last_decrease
+                .is_some_and(|last| last.elapsed() < self.decrease_interval)
+        {
+            return;
+        }
+        state.limit = (state.limit / 2.0).max(self.min);
+        state.last_decrease = Some(Instant::now());
+        state.successes = 0.0;
+        state.timeouts = 0.0;
+        self.metrics
+            .set_checkpoint_content_download_limit(state.limit as usize);
+    }
+}
+
 /// A finished request for one checkpoint's contents to one peer.
 struct ContentResponse {
     peer_id: PeerId,
@@ -2317,6 +2440,9 @@ struct ContentFetch<'a> {
     max_timeout: Duration,
     /// This counts the requests for this checkpoint that ran until their timeout.
     timed_out_requests: AtomicU32,
+    /// This adapts the number of downloads that run at once to timeouts. It is `None` in tests
+    /// that call the download directly.
+    congestion: Option<&'a ContentCongestion>,
     peer_heights: &'a Arc<RwLock<PeerHeights>>,
     checkpoint: &'a VerifiedCheckpoint,
     use_get_checkpoint_contents_v2: bool,
@@ -2592,6 +2718,9 @@ impl ContentFetch<'_> {
         let Some(contents) = contents else {
             if timed_out {
                 self.timed_out_requests.fetch_add(1, Ordering::Relaxed);
+                if let Some(congestion) = self.congestion {
+                    congestion.on_timeout();
+                }
             }
             self.peer_heights.write().unwrap().record_failure(peer_id);
             self.metrics.record_checkpoint_content_peer_request(
@@ -2613,6 +2742,9 @@ impl ContentFetch<'_> {
             return None;
         }
         let size = bcs::serialized_size(&contents).expect("serialization should not fail") as u64;
+        if let Some(congestion) = self.congestion {
+            congestion.on_success();
+        }
         self.peer_heights
             .write()
             .unwrap()

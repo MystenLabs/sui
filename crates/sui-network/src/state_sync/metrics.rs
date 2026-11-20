@@ -191,6 +191,12 @@ impl Metrics {
         }
     }
 
+    pub fn set_checkpoint_content_download_limit(&self, limit: usize) {
+        if let Some(inner) = &self.0 {
+            inner.checkpoint_content_download_limit.set(limit as i64);
+        }
+    }
+
     pub fn inc_checkpoint_content_fallback_requests(&self) {
         if let Some(inner) = &self.0 {
             inner.checkpoint_content_fallback_requests.inc();
@@ -357,6 +363,7 @@ struct Inner {
     checkpoint_content_hedges: IntCounterVec,
     checkpoint_content_fallback_requests: IntCounter,
     checkpoint_content_downloads_running: IntGauge,
+    checkpoint_content_download_limit: IntGauge,
     checkpoint_content_slow_peer_hedge_delay: HistogramVec,
     checkpoint_content_slow_peer_probes: IntCounterVec,
     checkpoint_content_peer_announce_delay: HistogramVec,
@@ -431,6 +438,13 @@ impl Inner {
             checkpoint_content_downloads_running: register_int_gauge_with_registry!(
                 "state_sync_checkpoint_content_downloads_running",
                 "Counts the checkpoint contents downloads that are still running.",
+                registry
+            )
+            .unwrap(),
+            checkpoint_content_download_limit: register_int_gauge_with_registry!(
+                "state_sync_checkpoint_content_download_limit",
+                "Counts the checkpoint contents downloads allowed to run at once, adapted to \
+                 timeouts.",
                 registry
             )
             .unwrap(),
