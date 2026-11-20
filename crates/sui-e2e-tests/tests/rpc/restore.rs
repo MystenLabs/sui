@@ -101,13 +101,20 @@ async fn spawn_fullnode(cluster: &mut TestCluster, rpc: RpcConfig) -> (Authority
     (name, rpc_url)
 }
 
-/// Stop the fullnode `name`, swap in `rpc` (the `db_path` is unchanged),
-/// and restart it. The stop releases the previous run's RocksDB locks
-/// because no strong `SuiNodeHandle` is held across the call.
+/// Stop the fullnode `name`, swap in `rpc` (the `db_path` and listen address
+/// are unchanged), and restart it. The stop releases the previous run's
+/// RocksDB locks because no strong `SuiNodeHandle` is held across the call.
 async fn restart_fullnode(cluster: &TestCluster, name: &AuthorityName, rpc: RpcConfig) {
     let node = cluster.swarm.node(name).unwrap();
     node.stop();
-    node.config().rpc = Some(rpc);
+    {
+        let mut config = node.config();
+        let http_address = config.fullnode_http_address();
+        config.rpc = Some(RpcConfig {
+            http_address: Some(http_address),
+            ..rpc
+        });
+    }
     if cfg!(msim) {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
