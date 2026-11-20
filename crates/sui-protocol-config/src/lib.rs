@@ -441,6 +441,10 @@ const MAINNET_USDB: &str =
 //              Charge a MIST-denominated amount for publish and upgrade commands before execution.
 //              Enable ML-DSA-65 account signatures on testnet.
 // Version 144: Enable timestamp-based transaction expiration on devnet.
+//              Enable the staggered-submission signal on all networks. Double its window,
+//              which doubles its excess floor to 1,200 copies and makes the exit dwell ten
+//              windows. Add a minimum number of user transactions per consensus commit,
+//              duplicates included, that it requires.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1285,8 +1289,9 @@ struct FeatureFlags {
     allowed_proposers: bool,
 
     // If true, validators turn on staggered submission when commits show too many
-    // duplicate copies of transactions without allowed proposers. Requires
-    // `allowed_proposers`. This flag coordinates the rollout across validators.
+    // duplicate copies of transactions without allowed proposers and enough user
+    // transactions overall, duplicates included. Requires `allowed_proposers`. This flag coordinates
+    // the rollout across validators.
     // `NodeConfig::enable_staggered_submission_signal` lets an operator disable it on
     // one node. Staggering runs only when both are enabled.
     #[serde(skip_serializing_if = "is_false")]
@@ -2349,10 +2354,21 @@ pub struct ProtocolConfig {
     /// Number of recent commits the staggered-submission signal looks at. It compares
     /// excess copies of transactions without allowed proposers to unique user transactions.
     staggered_submission_signal_window_commits: Option<u64>,
-    /// Average excess copies per commit in the window needed before the signal turns on.
+    /// Excess copies per commit that the signal requires before it turns on. The signal
+    /// compares the window's total with this value times
+    /// `staggered_submission_signal_window_commits`, so a window that is not full yet
+    /// must reach the same total.
     staggered_submission_signal_min_excess_copies_per_commit: Option<u64>,
-    /// Number of commits the ratio must stay below a band's exit ratio before the
-    /// signal drops to a lower band.
+    /// User transactions per consensus commit, duplicates included, that the signal
+    /// requires. The signal compares the window's total with this value times
+    /// `staggered_submission_signal_window_commits`, so a window that is not full yet
+    /// must reach the same total. Below that total the signal does not escalate, and a
+    /// commit counts towards the exit dwell.
+    staggered_submission_signal_min_consensus_user_transactions_per_commit: Option<u64>,
+    /// Number of consecutive commits before the signal drops to a lower band. Each of
+    /// these commits must have a ratio below the band's exit ratio, or a window total
+    /// below `staggered_submission_signal_min_consensus_user_transactions_per_commit` times
+    /// `staggered_submission_signal_window_commits`. The two conditions can alternate.
     staggered_submission_signal_exit_dwell_commits: Option<u64>,
     /// Ratios to enter and exit each band, in basis points (bps) of the window's unique
     /// user transactions. Band 1 delays submissions up to 1.6s and band 2 up to 4.8s.
@@ -3284,6 +3300,7 @@ impl ProtocolConfig {
             sip_45_consensus_amplification_threshold: None,
             staggered_submission_signal_window_commits: None,
             staggered_submission_signal_min_excess_copies_per_commit: None,
+            staggered_submission_signal_min_consensus_user_transactions_per_commit: None,
             staggered_submission_signal_exit_dwell_commits: None,
             staggered_submission_signal_band1_enter_ratio_bps: None,
             staggered_submission_signal_band1_exit_ratio_bps: None,
@@ -5076,6 +5093,30 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_timestamp_transaction_expiration = true;
                     }
                     cfg.object_runtime_max_loaded_child_value_size = Some(5_000_000);
+
+                    cfg.feature_flags.staggered_submission_signal = true;
+                    // Staggering should turn on only at peak load. Mainnet commits about
+                    // 15 times per second. There the window covers about 40 seconds and
+                    // the floor is about 15,000 user transactions per second, duplicates
+                    // included.
+                    // Under load mainnet commits about 10 to 13 times per second. There
+                    // the window covers 46 to 60 seconds and the floor is about 10,000
+                    // to 13,000 user transactions per second.
+                    // Mainnet traffic from 2026-11-04 to 2026-11-19 would have turned
+                    // the signal on 32 times, with a median of once per day. With the
+                    // same floor and the previous window of 300 commits, bursts of a
+                    // few seconds would have turned it on 83 times.
+                    cfg.staggered_submission_signal_window_commits = Some(600);
+                    cfg.staggered_submission_signal_min_consensus_user_transactions_per_commit =
+                        Some(1000);
+                    if chain == Chain::Testnet {
+                        // Testnet carries about one user transaction per commit and almost no
+                        // duplicates, so it never meets the floor above. From 2026-11-04
+                        // to 2026-11-19 no testnet window averaged more than 3 user transactions
+                        // per commit. This floor lets a load test that submits
+                        // duplicates turn the signal on.
+                        cfg.staggered_submission_signal_min_consensus_user_transactions_per_commit = Some(5);
+                    }
                 }
                 // Use this template when making changes:
                 //

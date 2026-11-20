@@ -20,10 +20,30 @@ use crate::{
     },
 };
 
+/// Sets up a handler without the volume floor, so that a few copies can move the signal.
 async fn setup(
     gas_price: u64,
     proposer_epoch: Option<u64>,
     defer_unpaid_amplification: bool,
+) -> (
+    Arc<AuthorityState>,
+    TestConsensusHandlerSetup<CheckpointServiceNoop>,
+    ConsensusTransaction,
+) {
+    setup_with_min_consensus_user_transactions_per_commit(
+        gas_price,
+        proposer_epoch,
+        defer_unpaid_amplification,
+        0,
+    )
+    .await
+}
+
+async fn setup_with_min_consensus_user_transactions_per_commit(
+    gas_price: u64,
+    proposer_epoch: Option<u64>,
+    defer_unpaid_amplification: bool,
+    min_consensus_user_transactions_per_commit: u64,
 ) -> (
     Arc<AuthorityState>,
     TestConsensusHandlerSetup<CheckpointServiceNoop>,
@@ -35,6 +55,9 @@ async fn setup(
     config.set_allowed_proposers_for_testing(true);
     config.set_staggered_submission_signal_for_testing(true);
     config.set_defer_unpaid_amplification_for_testing(defer_unpaid_amplification);
+    config.set_staggered_submission_signal_min_consensus_user_transactions_per_commit_for_testing(
+        min_consensus_user_transactions_per_commit,
+    );
     let state = TestAuthorityBuilder::new()
         .with_starting_objects(std::slice::from_ref(&gas))
         .with_reference_gas_price(1)
@@ -118,26 +141,119 @@ async fn cross_commit_copies_share_one_free_or_paid_allowance() {
 #[tokio::test]
 async fn late_copies_activate_band_two() {
     let (state, mut setup, transaction) = setup(1, None, false).await;
+    let epoch_store = state.epoch_store_for_testing();
+    let min_excess_copies = epoch_store
+        .staggered_submission()
+        .config()
+        .min_excess_copies;
     commit_copies(&mut setup, &transaction, 1, 1).await;
     assert_eq!(setup.metrics.staggered_submission_active.get(), 0);
 
-    // The first commit used one of the three free copies. Two remain, so 600 of
-    // these copies are excess.
-    commit_copies(&mut setup, &transaction, 2, 602).await;
+    // The first commit used one of the three free copies. Two remain, so all but two
+    // of these copies are excess.
+    commit_copies(&mut setup, &transaction, 2, min_excess_copies as usize + 2).await;
     assert_eq!(
         setup
             .metrics
             .staggered_submission_excess_copies
             .get_sample_sum(),
-        600.0,
+        min_excess_copies as f64,
     );
     assert_eq!(setup.metrics.staggered_submission_signal_band.get(), 2);
     assert_eq!(setup.metrics.staggered_submission_active.get(), 1);
-    assert!(
-        state
-            .epoch_store_for_testing()
-            .staggered_submission()
-            .is_active()
+    assert!(epoch_store.staggered_submission().is_active());
+}
+
+#[tokio::test]
+async fn volume_floor_delays_activation_until_the_window_has_enough_transactions() {
+    let min_consensus_user_transactions_per_commit = 3;
+    let (state, mut setup, transaction) = setup_with_min_consensus_user_transactions_per_commit(
+        1,
+        None,
+        false,
+        min_consensus_user_transactions_per_commit,
+    )
+    .await;
+    let epoch_store = state.epoch_store_for_testing();
+    let config = epoch_store.staggered_submission().config().clone();
+    assert_eq!(
+        config.min_consensus_user_txns,
+        min_consensus_user_transactions_per_commit
+            * epoch_store
+                .protocol_config()
+                .staggered_submission_signal_window_commits()
+    );
+
+    // The excess copies pass the excess floor and band 2's ratio. The window holds
+    // three more user transactions than that, which is below the volume floor.
+    commit_copies(&mut setup, &transaction, 1, 1).await;
+    commit_copies(
+        &mut setup,
+        &transaction,
+        2,
+        config.min_excess_copies as usize + 2,
+    )
+    .await;
+    assert_eq!(
+        setup
+            .metrics
+            .staggered_submission_excess_copies
+            .get_sample_sum(),
+        config.min_excess_copies as f64,
+    );
+    assert_eq!(setup.metrics.staggered_submission_signal_band.get(), 0);
+    assert_eq!(setup.metrics.staggered_submission_active.get(), 0);
+
+    // The first copy and the two free duplicates count towards the volume floor.
+    let window_consensus_user_txns = config.min_excess_copies + 3;
+    assert_eq!(
+        setup
+            .metrics
+            .staggered_submission_window_consensus_user_transactions
+            .get(),
+        window_consensus_user_txns as i64
+    );
+    assert!(window_consensus_user_txns < config.min_consensus_user_txns);
+    let missing = (config.min_consensus_user_txns - window_consensus_user_txns) as usize;
+    commit_copies(&mut setup, &transaction, 3, missing - 1).await;
+    assert_eq!(
+        setup
+            .metrics
+            .staggered_submission_window_consensus_user_transactions
+            .get(),
+        config.min_consensus_user_txns as i64 - 1
+    );
+    assert_eq!(setup.metrics.staggered_submission_signal_band.get(), 0);
+    commit_copies(&mut setup, &transaction, 4, 1).await;
+    assert_eq!(
+        setup
+            .metrics
+            .staggered_submission_window_consensus_user_transactions
+            .get(),
+        config.min_consensus_user_txns as i64
+    );
+    assert_eq!(setup.metrics.staggered_submission_signal_band.get(), 2);
+    assert_eq!(setup.metrics.staggered_submission_active.get(), 1);
+}
+
+#[tokio::test]
+async fn restricted_duplicates_count_towards_the_volume_floor() {
+    let (_state, mut setup, transaction) =
+        setup_with_min_consensus_user_transactions_per_commit(1, Some(0), false, 1).await;
+    commit_copies(&mut setup, &transaction, 1, 4).await;
+    commit_copies(&mut setup, &transaction, 2, 2).await;
+    // The ratio ignores restricted duplicates, but the window total counts all six
+    // user transactions.
+    assert_eq!(
+        setup.metrics.staggered_submission_duplication_ratio.get(),
+        0.0
+    );
+    assert_eq!(
+        setup
+            .metrics
+            .staggered_submission_window_consensus_user_transactions
+            .get(),
+        6
     );
 }
 
