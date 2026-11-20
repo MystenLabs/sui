@@ -1585,8 +1585,12 @@ async fn subscription_cursor_positions() {
 async fn validator_streams_locally_built_checkpoints() {
     // Enabling the server takes a restart; the other validators keep
     // certifying checkpoints, and serving them to the fullnode, meanwhile.
+    // The transfer executes through the fullnode, which streams its checkpoint
+    // from the reported height. Pruning would move the fullnode's serving floor
+    // past that height.
     let cluster = TestClusterBuilder::new()
         .with_num_validators(4)
+        .disable_fullnode_pruning()
         .build()
         .await;
     let sender = cluster.get_address_0();
@@ -1692,27 +1696,36 @@ async fn validator_streams_locally_built_checkpoints() {
         next_locally_built_checkpoint(&mut checkpoints, &mut streamed).await;
     }
 
-    // Every streamed checkpoint is the one the network certifies.
-    let mut ledger = LedgerServiceClient::connect(cluster.rpc_url().to_owned())
-        .await
+    // Every streamed checkpoint is the one the network certifies. Read the
+    // certified checkpoints from another validator's store: the fullnode RPC
+    // can already have moved its serving floor past the earliest ones.
+    let witness = cluster
+        .swarm
+        .validator_nodes()
+        .find(|node| node.name() != validator.name())
         .unwrap();
     for (sequence_number, digest) in streamed {
-        let certified = loop {
-            match ledger
-                .get_checkpoint(
-                    v2::GetCheckpointRequest::by_sequence_number(sequence_number)
-                        .with_read_mask(FieldMask::from_paths(["digest"])),
-                )
-                .await
-            {
-                Ok(response) => break response.into_inner().checkpoint.unwrap(),
-                Err(status) if status.code() == tonic::Code::NotFound => {
-                    tokio::time::sleep(Duration::from_millis(100)).await;
+        let certified = tokio::time::timeout(Duration::from_secs(60), async {
+            loop {
+                let checkpoint = witness.get_node_handle().unwrap().with(|node| {
+                    node.state()
+                        .get_checkpoint_store()
+                        .get_checkpoint_by_sequence_number(sequence_number)
+                        .unwrap()
+                });
+                match checkpoint {
+                    Some(checkpoint) => break checkpoint,
+                    None => tokio::time::sleep(Duration::from_millis(100)).await,
                 }
-                Err(status) => panic!("get_checkpoint({sequence_number}) failed: {status}"),
             }
-        };
-        assert_eq!(certified.digest(), digest);
+        })
+        .await
+        .unwrap_or_else(|_| panic!("witness certifies checkpoint {sequence_number}"));
+        assert_eq!(
+            certified.digest().to_string(),
+            digest,
+            "checkpoint {sequence_number}"
+        );
     }
 }
 
