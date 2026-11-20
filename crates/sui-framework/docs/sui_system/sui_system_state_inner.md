@@ -69,6 +69,7 @@ title: Module `sui_system::sui_system_state_inner`
 -  [Function `extract_coin_balance`](#sui_system_sui_system_state_inner_extract_coin_balance)
 -  [Function `store_execution_time_estimates`](#sui_system_sui_system_state_inner_store_execution_time_estimates)
 -  [Function `store_execution_time_estimates_v2`](#sui_system_sui_system_state_inner_store_execution_time_estimates_v2)
+-  [Function `v1_validators`](#sui_system_sui_system_state_inner_v1_validators)
 -  [Function `validators`](#sui_system_sui_system_state_inner_validators)
 -  [Function `validators_mut`](#sui_system_sui_system_state_inner_validators_mut)
 -  [Function `extra_fields`](#sui_system_sui_system_state_inner_extra_fields)
@@ -2888,6 +2889,31 @@ Extract required Balance from vector of Coin<SUI>, transfer the remainder back t
             i = i + 1;
         };
     };
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_sui_system_state_inner_v1_validators"></a>
+
+## Function `v1_validators`
+
+Return the validator set of a version 1 system state.
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_v1_validators">v1_validators</a>(self: &<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInner">sui_system::sui_system_state_inner::SuiSystemStateInner</a>): &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_v1_validators">v1_validators</a>(self: &<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a>): &ValidatorSet {
+    &self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>
 }
 </code></pre>
 

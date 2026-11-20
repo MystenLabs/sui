@@ -17,6 +17,8 @@
 ///    with the exception of the `sui_system_state_inner::create` function, which should always return the genesis type.
 /// 4. Inside `load_inner_maybe_upgrade` function, check the current version in the wrapper, and if it's not the latest version,
 ///   call the data migration function to upgrade the inner object. Make sure to also update the version in the wrapper.
+/// 5. Extend `calculate_rewards` to read the validator set from every older version, because it
+///   takes `&SuiSystemState` and cannot upgrade the inner object.
 /// A detailed example can be found in sui/tests/framework_upgrades/mock_sui_systems/shallow_upgrade.
 /// Along with the Move change, we also need to update the Rust code to support the new type. This includes:
 /// 1. Define a new `SuiSystemStateInner` struct type that matches the new Move type, and implement the SuiSystemStateTrait.
@@ -32,6 +34,9 @@
 /// 3. Replace all uses of Validator with ValidatorV2 except the genesis creation function.
 /// 4. In validator_wrapper::upgrade_to_latest, check the current version in the wrapper, and if it's not the latest version,
 ///  call the data migration function to upgrade it.
+/// 5. In validator_wrapper::staking_pool_ref, keep reading every older version without upgrading it,
+///  because `calculate_rewards` takes `&SuiSystemState` and must not abort on entries that were not
+///  upgraded yet.
 /// In Rust, we also need to add a new case in `get_validator_from_table`.
 /// Note that it is possible to upgrade SuiSystemStateInner without upgrading Validator, but not the other way around.
 /// And when we only upgrade SuiSystemStateInner, the version of Validator in the wrapper will not be updated, and hence may become
@@ -562,19 +567,18 @@ public fun active_validator_stake_amount(wrapper: &SuiSystemState, validator_add
     wrapper.load_system_state_ref().validator_stake_amount(validator_addr)
 }
 
-/// Calculate the rewards for a given staked SUI object.
-/// Used in the package, and can be dev-inspected.
-public(package) fun calculate_rewards(
-    self: &mut SuiSystemState,
-    staked_sui: &StakedSui,
-    ctx: &TxContext,
-): u64 {
-    let system_state = self.load_system_state_mut();
-
-    system_state
-        .validators_mut()
-        .validator_by_pool_id(staked_sui.pool_id())
-        .get_staking_pool_ref()
+/// Calculate the rewards for a given staked SUI object without upgrading the system state or any
+/// validator.
+public fun calculate_rewards(self: &SuiSystemState, staked_sui: &StakedSui, ctx: &TxContext): u64 {
+    // Genesis creates a version 1 system state, which only a mutable load upgrades.
+    let validators = if (self.version == 1) {
+        let inner: &SuiSystemStateInner = dynamic_field::borrow(&self.id, self.version);
+        inner.v1_validators()
+    } else {
+        self.load_system_state_ref().validators()
+    };
+    validators
+        .staking_pool_by_pool_id(staked_sui.pool_id())
         .calculate_rewards(staked_sui, ctx.epoch())
 }
 

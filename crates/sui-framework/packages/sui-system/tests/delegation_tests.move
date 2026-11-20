@@ -202,6 +202,7 @@ fun remove_stake_post_active_flow(should_distribute_rewards: bool) {
         assert_eq!(system.validator_stake_amount(VALIDATOR_ADDR_1), 200 * MIST_PER_SUI);
         assert_eq!(system.validator_stake_amount(VALIDATOR_ADDR_2), 100 * MIST_PER_SUI);
     });
+    runner.set_sender(STAKER_ADDR_1).assert_staking_rewards(0, 0);
 
     // Depending on the flag we configure epoch advance options
     let options = if (should_distribute_rewards) {
@@ -219,6 +220,7 @@ fun remove_stake_post_active_flow(should_distribute_rewards: bool) {
     let reward_amt = if (should_distribute_rewards) 15 * MIST_PER_SUI else 0;
     let validator_reward_amt = if (should_distribute_rewards) 10 * MIST_PER_SUI else 0;
 
+    runner.set_sender(STAKER_ADDR_1).assert_staking_rewards(0, reward_amt);
     runner.set_sender(STAKER_ADDR_1);
     runner.owned_tx!<StakedSui>(|stake| {
         assert_eq!(stake.amount(), 100 * MIST_PER_SUI);
@@ -382,6 +384,34 @@ fun add_preactive_remove_pending_failure() {
 
 #[test]
 // Scenario:
+// 1. Calculate rewards for a genesis stake while the system state is still at version 1
+// 2. Add a validator candidate, stake to it, and request to add it to the active set
+// 3. Calculate rewards while the validator is pending
+fun calculate_rewards_genesis_and_pending() {
+    let mut runner = test_runner::new()
+        .validators(vector[
+            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1),
+            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_2),
+        ])
+        .build();
+
+    let validator = validator_builder::preset(0)
+        .sui_address(NEW_VALIDATOR_ADDR)
+        .build(runner.ctx());
+
+    runner.set_sender(VALIDATOR_ADDR_1).assert_staking_rewards(0, 0);
+
+    runner.add_validator_candidate(validator);
+    runner.set_sender(STAKER_ADDR_1).stake_with(NEW_VALIDATOR_ADDR, 100);
+    runner.set_sender(NEW_VALIDATOR_ADDR).add_validator();
+
+    runner.set_sender(STAKER_ADDR_1).assert_staking_rewards(0, 0);
+
+    runner.finish();
+}
+
+#[test]
+// Scenario:
 // 1. Add a validator candidate
 // 2. Perform different stake and unstake transactions in different epochs
 // 3. Make sure that the rewards are distributed correctly and proportionally
@@ -537,6 +567,7 @@ fun add_remove_stake_preactive_candidate() {
     // Stake 100 SUI to the validator candidate from each of the two stakers.
     runner.set_sender(STAKER_ADDR_1).stake_with(NEW_VALIDATOR_ADDR, 100);
     runner.set_sender(STAKER_ADDR_2).stake_with(NEW_VALIDATOR_ADDR, 100);
+    runner.set_sender(STAKER_ADDR_1).assert_staking_rewards(0, 0);
 
     // Check values for the candidate.
     runner.system_tx!(|system, _| {
@@ -599,6 +630,7 @@ fun add_preactive_candidate_drop_out() {
     runner.advance_epoch(option::none()).destroy_for_testing();
 
     // Unstake now and the staker should get no rewards.
+    runner.set_sender(STAKER_ADDR_1).assert_staking_rewards(0, 0);
     runner.set_sender(STAKER_ADDR_1).unstake(0);
     assert_eq!(runner.sui_balance(), 100 * MIST_PER_SUI);
 

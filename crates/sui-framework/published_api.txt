@@ -329,7 +329,7 @@ active_validator_stake_amount
 	public fun
 	0x3::sui_system
 calculate_rewards
-	public(package) fun
+	public fun
 	0x3::sui_system
 advance_epoch
 	fun
@@ -551,6 +551,9 @@ store_execution_time_estimates
 	public(package) fun
 	0x3::sui_system_state_inner
 store_execution_time_estimates_v2
+	public(package) fun
+	0x3::sui_system_state_inner
+v1_validators
 	public(package) fun
 	0x3::sui_system_state_inner
 validators
@@ -919,7 +922,7 @@ validator_address_by_pool_id
 pool_exchange_rates
 	public(package) fun
 	0x3::validator_set
-validator_by_pool_id
+staking_pool_by_pool_id
 	public(package) fun
 	0x3::validator_set
 next_epoch_validator_count
@@ -1046,6 +1049,9 @@ load_validator_maybe_upgrade
 	public(package) fun
 	0x3::validator_wrapper
 destroy
+	public(package) fun
+	0x3::validator_wrapper
+staking_pool_ref
 	public(package) fun
 	0x3::validator_wrapper
 upgrade_to_latest
