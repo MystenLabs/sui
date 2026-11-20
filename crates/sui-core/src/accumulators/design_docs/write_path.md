@@ -313,8 +313,9 @@ Each subsystem keeps the two paths consistent without path-specific code:
 - The **address-funds scheduler** uses storage-version checks at scheduling time plus
   idempotent in-memory settlement (see
   [`address_funds_scheduling.md`](./address_funds_scheduling.md) §3.1 and §4). On the
-  checkpoint-executor path it never builds up state for an already-settled version in the
-  first place, so there's nothing to reconcile.
+  checkpoint-executor path it never starts tracking an account at an already-settled version.
+  Accounts it already tracks still reserve a skipped batch's withdraws, and the consensus
+  path's `settle_address_funds` for that version releases them.
 - The **object-funds checker** drives `last_settled_version` from the barrier-tx execution
   hook in `process_certificate`, which fires regardless of which path produced the barrier.
   See [`object_funds_checking.md`](./object_funds_checking.md) §3.
@@ -322,14 +323,16 @@ Each subsystem keeps the two paths consistent without path-specific code:
   (`UnsettledObjectWithdrawals::commit_accumulator_versions`), which is also path-agnostic.
 
 In short: the validator path uses richer in-process notifications; the checkpoint-executor
-path uses just on-chain effects. The schedulers are designed so that "I observed the on-chain
-state moved" is sufficient — the in-process notifications are an optimization, not a
-correctness requirement.
+path uses just on-chain effects. "I observed the on-chain state moved" is sufficient to decide
+not to schedule a batch. On a validator, the address-funds scheduler still needs
+`settle_address_funds` for every version, because that call releases the reservations of
+accounts it tracks.
 
 One subtle consequence is that "observed the on-chain state moved" is sufficient only for the
 subsystem whose job is to gate *pre-execution* work. That is the address-funds scheduler: once
-some other path has advanced storage past version V, the scheduler can safely stop and return
-`SkipSchedule`.
+some other path has advanced storage past version V, the scheduler can safely return
+`SkipSchedule` for the batch. It still records the batch's reservations for accounts it
+already tracks.
 
 The object-funds checker is different because it runs *post-execution*. At that point there is no
 separate scheduler left to take over, and the checker must still reconcile an already-executed
