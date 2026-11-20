@@ -27,6 +27,8 @@ use crate::RpcError;
 const MAX_FILTER_LITERALS: usize = 32;
 
 const LITERALS_FIELD: &str = "filter.terms.literals";
+const OBJECT_TYPE_FIELD: &str = "filter.terms.literals.object_type.object_type";
+const NAME_TYPE_FIELD: &str = "filter.terms.literals.name_type.name_type";
 
 pub(super) fn owned_object_filter(filter: &ObjectFilter) -> Result<OwnedObjectFilter, RpcError> {
     validate_shape(filter.terms.iter().map(|term| term.literals.len()))?;
@@ -42,10 +44,12 @@ pub(super) fn owned_object_filter(filter: &ObjectFilter) -> Result<OwnedObjectFi
                             object_literal::Predicate::ObjectType(object_type) => object_type,
                             _ => return Err(unsupported_predicate()),
                         };
-                    let field = format!("{LITERALS_FIELD}.object_type.object_type");
                     Ok(FilterLiteral {
                         negated: literal.negated,
-                        predicate: parse_required(object_type.object_type.as_deref(), &field)?,
+                        predicate: parse_required(
+                            object_type.object_type.as_deref(),
+                            OBJECT_TYPE_FIELD,
+                        )?,
                     })
                 })
                 .collect::<Result<Vec<_>, RpcError>>()
@@ -68,10 +72,9 @@ pub(super) fn dynamic_field_filter(
                     let predicate =
                         match literal.predicate.as_ref().ok_or_else(missing_predicate)? {
                             dynamic_field_literal::Predicate::NameType(name_type) => {
-                                let field = format!("{LITERALS_FIELD}.name_type.name_type");
                                 DynamicFieldPredicate::NameType(parse_required(
                                     name_type.name_type.as_deref(),
-                                    &field,
+                                    NAME_TYPE_FIELD,
                                 )?)
                             }
                             dynamic_field_literal::Predicate::DynamicObjectField(_) => {
@@ -120,9 +123,11 @@ fn validate_shape(literals_per_term: impl ExactSizeIterator<Item = usize>) -> Re
     Ok(())
 }
 
+/// Also covers predicates newer than this server: prost drops an unknown
+/// oneof variant, leaving the predicate unset.
 fn missing_predicate() -> RpcError {
     FieldViolation::new(LITERALS_FIELD)
-        .with_description("predicate variant is required")
+        .with_description("predicate is unset or not supported by this server")
         .with_reason(ErrorReason::FieldMissing)
         .into()
 }
@@ -195,11 +200,19 @@ mod tests {
             object_literal(true, "0xd22b::suins_registration"),
         ]]))
         .unwrap();
-        assert_eq!(filter.literal_count(), 2);
-        assert!(filter.terms[0].iter().all(|literal| literal.negated));
-        assert!(!filter.matches_object_type(
-            &sui_types::parse_sui_struct_tag("0x2::coin::Coin<0x2::sui::SUI>").unwrap()
-        ));
+        assert_eq!(
+            filter.terms,
+            vec![vec![
+                FilterLiteral {
+                    negated: true,
+                    predicate: "0x2::coin::Coin".parse().unwrap(),
+                },
+                FilterLiteral {
+                    negated: true,
+                    predicate: "0xd22b::suins_registration".parse().unwrap(),
+                },
+            ]]
+        );
     }
 
     #[test]
@@ -212,6 +225,8 @@ mod tests {
             reason(owned_object_filter(&object_filter(vec![vec![]])).unwrap_err())
                 .contains("at least one literal")
         );
+        let at_limit = vec![vec![object_literal(false, "0x2"); MAX_FILTER_LITERALS]];
+        assert!(owned_object_filter(&object_filter(at_limit)).is_ok());
         let too_many = vec![vec![object_literal(false, "0x2"); MAX_FILTER_LITERALS + 1]];
         assert!(
             reason(owned_object_filter(&object_filter(too_many)).unwrap_err())
@@ -232,7 +247,7 @@ mod tests {
         term.literals = vec![DynamicFieldLiteral::default()];
         let mut filter = DynamicFieldFilter::default();
         filter.terms = vec![term];
-        assert!(reason(dynamic_field_filter(&filter).unwrap_err()).contains("predicate variant"));
+        assert!(reason(dynamic_field_filter(&filter).unwrap_err()).contains("predicate is unset"));
     }
 
     #[test]

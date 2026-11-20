@@ -157,8 +157,7 @@ fn encode_page_token(page_token: PageToken) -> Bytes {
     bcs::to_bytes(&page_token).unwrap().into()
 }
 
-/// Does not record `filter`, so tokens keep the layout servers without filter
-/// support issue and accept. Resuming with a different filter continues from
+/// Does not record `filter`: resuming with a different filter continues from
 /// the same index position.
 #[derive(serde::Serialize, serde::Deserialize)]
 struct PageToken {

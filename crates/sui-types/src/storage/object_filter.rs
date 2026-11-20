@@ -14,13 +14,11 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
-use serde::Deserialize;
-use serde::Serialize;
 
 use crate::dynamic_field::DynamicFieldInfo;
 
 /// A Move struct type at one of four levels of specificity.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StructTypePattern {
     /// Every struct type defined at this address.
     Package(AccountAddress),
@@ -72,7 +70,7 @@ impl FromStr for StructTypePattern {
 }
 
 /// The type of a dynamic field's name.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NameTypePattern {
     /// A struct type, at any level of specificity.
     Struct(StructTypePattern),
@@ -110,7 +108,7 @@ impl FromStr for NameTypePattern {
 
 /// A predicate on a dynamic field, evaluated against the type of its
 /// `0x2::dynamic_field::Field<Name, Value>` object.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DynamicFieldPredicate {
     /// The field's name type. For a dynamic object field this is the name
     /// type wrapped in `0x2::dynamic_object_field::Wrapper`, not the wrapper.
@@ -119,55 +117,8 @@ pub enum DynamicFieldPredicate {
     DynamicObjectField,
 }
 
-impl DynamicFieldPredicate {
-    pub fn matches(&self, field_type: &StructTag) -> bool {
-        let Some(field) = DynamicFieldTypeParts::new(field_type) else {
-            return false;
-        };
-        match self {
-            Self::NameType(pattern) => field.name_type.is_some_and(|name| pattern.matches(name)),
-            Self::DynamicObjectField => field.is_dynamic_object_field,
-        }
-    }
-}
-
-/// The name type and kind encoded in a `Field<Name, Value>` type.
-struct DynamicFieldTypeParts<'a> {
-    /// `None` only for a malformed `Wrapper` without exactly one type parameter.
-    name_type: Option<&'a TypeTag>,
-    is_dynamic_object_field: bool,
-}
-
-impl<'a> DynamicFieldTypeParts<'a> {
-    fn new(field_type: &'a StructTag) -> Option<Self> {
-        if !DynamicFieldInfo::is_dynamic_field(field_type) {
-            return None;
-        }
-        let [name_type, _value_type] = field_type.type_params.as_slice() else {
-            return None;
-        };
-        Some(match name_type {
-            TypeTag::Struct(wrapper)
-                if DynamicFieldInfo::is_dynamic_object_field_wrapper(wrapper) =>
-            {
-                Self {
-                    name_type: match wrapper.type_params.as_slice() {
-                        [name_type] => Some(name_type),
-                        _ => None,
-                    },
-                    is_dynamic_object_field: true,
-                }
-            }
-            name_type => Self {
-                name_type: Some(name_type),
-                is_dynamic_object_field: false,
-            },
-        })
-    }
-}
-
 /// A predicate, optionally negated.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FilterLiteral<P> {
     pub negated: bool,
     pub predicate: P,
@@ -175,7 +126,7 @@ pub struct FilterLiteral<P> {
 
 /// An OR of terms, each an AND of literals. A filter with no terms matches
 /// nothing; a term with no literals matches everything.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DnfFilter<P> {
     pub terms: Vec<Vec<FilterLiteral<P>>>,
 }
@@ -188,10 +139,6 @@ impl<P> DnfFilter<P> {
             term.iter()
                 .all(|literal| predicate_matches(&literal.predicate) != literal.negated)
         })
-    }
-
-    pub fn literal_count(&self) -> usize {
-        self.terms.iter().map(Vec::len).sum()
     }
 }
 
@@ -219,10 +166,34 @@ impl OwnedObjectFilter {
 pub type DynamicFieldFilter = DnfFilter<DynamicFieldPredicate>;
 
 impl DynamicFieldFilter {
-    /// Whether the filter accepts the dynamic field whose `Field` object has
-    /// type `field_type`.
+    /// Whether the filter accepts the object of type `field_type` that a
+    /// parent owns. Only `Field<Name, Value>` objects can match.
     pub fn matches_field_type(&self, field_type: &StructTag) -> bool {
-        self.matches(|predicate| predicate.matches(field_type))
+        if !DynamicFieldInfo::is_dynamic_field(field_type) {
+            return false;
+        }
+        let [name_type, _value_type] = field_type.type_params.as_slice() else {
+            return false;
+        };
+        // `name_type` is `None` only for a malformed `Wrapper` without exactly
+        // one type parameter.
+        let (name_type, is_dynamic_object_field) = match name_type {
+            TypeTag::Struct(wrapper)
+                if DynamicFieldInfo::is_dynamic_object_field_wrapper(wrapper) =>
+            {
+                match wrapper.type_params.as_slice() {
+                    [name_type] => (Some(name_type), true),
+                    _ => (None, true),
+                }
+            }
+            name_type => (Some(name_type), false),
+        };
+        self.matches(|predicate| match predicate {
+            DynamicFieldPredicate::NameType(pattern) => {
+                name_type.is_some_and(|name| pattern.matches(name))
+            }
+            DynamicFieldPredicate::DynamicObjectField => is_dynamic_object_field,
+        })
     }
 }
 
@@ -299,19 +270,33 @@ mod tests {
 
     #[test]
     fn name_type_matches_the_unwrapped_name_of_dynamic_object_fields() {
-        let item = DynamicFieldPredicate::NameType("0x2::kiosk::Item".parse().unwrap());
-        assert!(item.matches(&dynamic_field("0x2::kiosk::Item")));
-        assert!(item.matches(&dynamic_object_field("0x2::kiosk::Item")));
+        let only = |negated, predicate| DynamicFieldFilter {
+            terms: vec![vec![FilterLiteral { negated, predicate }]],
+        };
+        let item = only(
+            false,
+            DynamicFieldPredicate::NameType("0x2::kiosk::Item".parse().unwrap()),
+        );
+        assert!(item.matches_field_type(&dynamic_field("0x2::kiosk::Item")));
+        assert!(item.matches_field_type(&dynamic_object_field("0x2::kiosk::Item")));
 
         // The wrapper is defined at 0x2, but the name type is not.
-        let framework = DynamicFieldPredicate::NameType("0x2".parse().unwrap());
-        assert!(!framework.matches(&dynamic_object_field("0xabc::m::Key")));
-        assert!(framework.matches(&dynamic_object_field("0x2::kiosk::Item")));
+        let framework = only(
+            false,
+            DynamicFieldPredicate::NameType("0x2".parse().unwrap()),
+        );
+        assert!(!framework.matches_field_type(&dynamic_object_field("0xabc::m::Key")));
+        assert!(framework.matches_field_type(&dynamic_object_field("0x2::kiosk::Item")));
 
-        let is_object = DynamicFieldPredicate::DynamicObjectField;
-        assert!(is_object.matches(&dynamic_object_field("u64")));
-        assert!(!is_object.matches(&dynamic_field("u64")));
-        assert!(!is_object.matches(&struct_tag("0x2::coin::Coin<0x2::sui::SUI>")));
+        let is_object = only(false, DynamicFieldPredicate::DynamicObjectField);
+        assert!(is_object.matches_field_type(&dynamic_object_field("u64")));
+        assert!(!is_object.matches_field_type(&dynamic_field("u64")));
+
+        // Only `Field` objects match, even through a negated literal: the
+        // value object of a dynamic object field is owned by its `Field`.
+        let inline_value = only(true, DynamicFieldPredicate::DynamicObjectField);
+        assert!(inline_value.matches_field_type(&dynamic_field("u64")));
+        assert!(!inline_value.matches_field_type(&struct_tag("0x2::coin::Coin<0x2::sui::SUI>")));
     }
 
     #[test]
