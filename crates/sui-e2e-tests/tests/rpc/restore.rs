@@ -96,7 +96,7 @@ async fn spawn_fullnode(cluster: &mut TestCluster, rpc: RpcConfig) -> (Authority
         .with_rpc_config(rpc)
         .build(&mut OsRng, cluster.swarm.config());
     let name = config.protocol_public_key();
-    let rpc_url = format!("http://{}", config.json_rpc_address);
+    let rpc_url = format!("http://{}", config.fullnode_http_address());
     cluster.swarm.spawn_new_node(config).await;
     (name, rpc_url)
 }

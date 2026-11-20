@@ -52,10 +52,6 @@ impl Node {
         self.config.lock().unwrap()
     }
 
-    pub fn json_rpc_address(&self) -> std::net::SocketAddr {
-        self.config().json_rpc_address
-    }
-
     /// Start this Node
     pub async fn spawn(&self) -> Result<()> {
         info!(name =% self.name().concise(), "starting in-memory node");

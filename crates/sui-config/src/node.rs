@@ -1081,6 +1081,16 @@ impl NodeConfig {
         self.consensus_config.as_ref()
     }
 
+    /// The address a fullnode serves plaintext RPC on: `rpc.http-address`, or
+    /// the deprecated `json-rpc-address` when that is unset. Validators serve
+    /// plaintext only on `rpc.http-address`.
+    pub fn fullnode_http_address(&self) -> SocketAddr {
+        self.rpc
+            .as_ref()
+            .and_then(|rpc| rpc.http_address)
+            .unwrap_or(self.json_rpc_address)
+    }
+
     /// Returns the node role as declared by configuration. This is the
     /// *intended* role used for one-time startup decisions (e.g. whether to
     /// create RPC servers or index stores). The authoritative per-epoch role

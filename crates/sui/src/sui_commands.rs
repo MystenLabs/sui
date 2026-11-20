@@ -1092,7 +1092,7 @@ async fn start(
                     .checkpoint_executor_config
                     .data_ingestion_dir = Some(dir.clone());
             }
-            let fullnode_rpc_address = fullnode_config.json_rpc_address;
+            let fullnode_rpc_address = fullnode_config.fullnode_http_address();
             swarm_builder = swarm_builder
                 .with_fullnode_count(1)
                 .with_fullnode_config(fullnode_config);
@@ -1629,7 +1629,7 @@ async fn genesis(
         client_config.active_address = active_address;
     }
 
-    let rpc = socket_addr_to_url(fullnode_config.json_rpc_address)?
+    let rpc = socket_addr_to_url(fullnode_config.fullnode_http_address())?
         .to_string()
         .trim_end_matches("/")
         .to_string();
