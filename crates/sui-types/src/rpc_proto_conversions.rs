@@ -1449,9 +1449,7 @@ impl From<crate::execution_status::ExecutionErrorKind> for ExecutionError {
                 message.set_object_id(id.to_canonical_string(true));
                 ExecutionErrorKind::NonExclusiveWriteInputObjectModified
             }
-            // TODO: map to a dedicated kind once the sui-rpc proto has one. The description
-            // still carries the error text.
-            E::TransactionExpired => ExecutionErrorKind::Unknown,
+            E::TransactionExpired => ExecutionErrorKind::TransactionExpired,
         };
 
         message.set_kind(kind);
@@ -3748,6 +3746,38 @@ mod tests {
             bcs::to_bytes(&sdk).unwrap(),
             bcs::to_bytes(&K::FreezeListCreate).unwrap()
         );
+    }
+
+    #[test]
+    fn execution_error_kind_conversions() {
+        use crate::execution_status::ExecutionErrorKind as K;
+        use sui_rpc::proto::sui::rpc::v2::execution_error::ExecutionErrorKind;
+
+        let proto = super::ExecutionError::from(K::TransactionExpired);
+        assert_eq!(proto.kind(), ExecutionErrorKind::TransactionExpired);
+
+        let object = crate::base_types::ObjectID::random();
+        for (kind, expected_sdk) in [
+            (
+                K::TransactionExpired,
+                sui_sdk_types::ExecutionError::TransactionExpired,
+            ),
+            (
+                K::InsufficientFundsForWithdraw,
+                sui_sdk_types::ExecutionError::InsufficientFundsForWithdraw,
+            ),
+            (
+                K::NonExclusiveWriteInputObjectModified { id: object },
+                sui_sdk_types::ExecutionError::NonExclusiveWriteInputObjectModified {
+                    object: object.into(),
+                },
+            ),
+        ] {
+            let sdk = sui_sdk_types::ExecutionError::from(kind.clone());
+            assert_eq!(sdk, expected_sdk);
+            assert_eq!(bcs::to_bytes(&sdk).unwrap(), bcs::to_bytes(&kind).unwrap());
+            assert_eq!(K::from(sdk), kind);
+        }
     }
 
     #[test]
