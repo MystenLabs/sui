@@ -2234,8 +2234,8 @@ struct UnaskedPeer {
     slow: bool,
 }
 
-/// Checkpoint contents downloads that are still running. A download stops counting when it
-/// finishes, even if earlier checkpoints are still downloading.
+/// This tracks the checkpoint contents downloads that are still running. A download stops
+/// counting when it finishes, even if earlier checkpoints are still downloading.
 #[derive(Default)]
 struct RunningDownloads {
     count: AtomicUsize,
@@ -2274,7 +2274,7 @@ impl RunningDownloads {
 struct ContentResponse {
     peer_id: PeerId,
     elapsed: Duration,
-    /// Whether the request ran until its timeout.
+    /// This is true if the request ran until its timeout.
     timed_out: bool,
     /// `None` if the request failed or timed out, or the peer had no contents.
     contents: Option<VersionedFullCheckpointContents>,
@@ -2295,7 +2295,7 @@ struct ContentFetch<'a> {
     network: &'a anemo::Network,
     /// Upper bound for the timeout of a request, which doubles after each request that timed out.
     max_timeout: Duration,
-    /// Requests for this checkpoint that ran until their timeout so far.
+    /// This counts the requests for this checkpoint that ran until their timeout.
     timed_out_requests: AtomicU32,
     peer_heights: &'a Arc<RwLock<PeerHeights>>,
     checkpoint: &'a VerifiedCheckpoint,
@@ -2496,7 +2496,7 @@ impl ContentFetch<'_> {
         // A checkpoint that timed out with one peer is likely too large for the current timeout,
         // so each request that timed out doubles the timeout of the next one, up to `max_timeout`.
         // A fast failure, such as a peer without the contents, does not escalate.
-        let timed_out = self.timed_out_requests.load(Ordering::Relaxed).min(6);
+        let timed_out = self.timed_out_requests.load(Ordering::Relaxed).min(31);
         let timeout = self
             .timeout
             .saturating_mul(1 << timed_out)
@@ -2509,16 +2509,30 @@ impl ContentFetch<'_> {
             peer_id
         );
         async move {
-            let request = Request::new(digest).with_timeout(timeout);
+            // The request carries no anemo timeout: anemo reports its own timeout as an opaque
+            // error, which would hide whether the request timed out or failed for another reason.
+            let request = Request::new(digest);
             let start = Instant::now();
-            let result = if use_get_checkpoint_contents_v2 {
-                peer.get_checkpoint_contents_v2(request).await
-            } else {
-                peer.get_checkpoint_contents(request)
-                    .await
-                    .map(|r| r.map(|c| c.map(VersionedFullCheckpointContents::V1)))
-            };
+            let result = tokio::time::timeout(timeout, async {
+                if use_get_checkpoint_contents_v2 {
+                    peer.get_checkpoint_contents_v2(request).await
+                } else {
+                    peer.get_checkpoint_contents(request)
+                        .await
+                        .map(|r| r.map(|c| c.map(VersionedFullCheckpointContents::V1)))
+                }
+            })
+            .await;
             let elapsed = start.elapsed();
+            let Ok(result) = result else {
+                trace!("request timed out after {timeout:?}");
+                return ContentResponse {
+                    peer_id,
+                    elapsed,
+                    timed_out: true,
+                    contents: None,
+                };
+            };
             let contents = match result {
                 Ok(response) => {
                     let contents = response.into_inner();
@@ -2535,7 +2549,7 @@ impl ContentFetch<'_> {
             ContentResponse {
                 peer_id,
                 elapsed,
-                timed_out: contents.is_none() && elapsed >= timeout,
+                timed_out: false,
                 contents,
             }
         }

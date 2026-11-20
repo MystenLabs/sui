@@ -430,7 +430,7 @@ impl Inner {
             .unwrap(),
             checkpoint_content_downloads_running: register_int_gauge_with_registry!(
                 "state_sync_checkpoint_content_downloads_running",
-                "Checkpoint contents downloads that are still running.",
+                "Counts the checkpoint contents downloads that are still running.",
                 registry
             )
             .unwrap(),

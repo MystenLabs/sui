@@ -3413,6 +3413,50 @@ async fn contents_request_timeout_doubles_after_failed_request() {
     assert_eq!(requests(super::metrics::ContentRequestOutcome::Success), 1);
 }
 
+/// As above, in hedged mode with a hedge delay longer than the test. The first request times out
+/// after 700 ms, so the request to the other peer gets 1.4 s and succeeds.
+#[tokio::test]
+async fn hedged_contents_request_timeout_doubles_after_failed_request() {
+    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let (checkpoints, contents, _, _) = committee.make_random_checkpoints(2, None);
+    let delay = Duration::from_secs(1);
+    let peer_a = build_contents_peer(&committee, &checkpoints, &contents, 2, delay);
+    let peer_b = build_contents_peer(&committee, &checkpoints, &contents, 2, delay);
+    let client =
+        HedgeTestClient::new(*checkpoints[0].digest(), &[(&peer_a, 1), (&peer_b, 1)]).await;
+    let hedge = super::ContentHedge {
+        delay: Duration::from_secs(30),
+        highest_synced: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
+    };
+
+    let fetch = client.content_fetch_with_timeouts(
+        &checkpoints[1],
+        Duration::from_millis(700),
+        Duration::from_secs(5),
+    );
+    let fetched = timeout(
+        Duration::from_secs(10),
+        super::get_full_checkpoint_contents(fetch, &client.store, Some(&hedge)),
+    )
+    .await
+    .expect("the second request should succeed");
+    assert!(fetched);
+
+    let requests = |outcome: super::metrics::ContentRequestOutcome| {
+        client
+            .metrics
+            .checkpoint_content_peer_requests("other", outcome)
+    };
+    assert_eq!(requests(super::metrics::ContentRequestOutcome::Failure), 1);
+    assert_eq!(requests(super::metrics::ContentRequestOutcome::Success), 1);
+    assert_eq!(
+        client
+            .metrics
+            .checkpoint_content_hedges(super::metrics::HedgeEvent::Sent),
+        0
+    );
+}
+
 /// As above, but the maximum timeout of 750 ms caps the second request's timeout below the
 /// peers' 1 s delay. Both requests time out and the client falls back to the paginated
 /// download, which the peers answer without delay.
@@ -3539,7 +3583,7 @@ async fn contents_request_timeout_escalates_only_after_timeout() {
     );
 }
 
-/// The peer answers for checkpoint 1's contents after 3 s and for the others at once. The
+/// The peer answers for checkpoint 1's contents after 10 s and for the others at once. The
 /// transaction limit allows two running downloads. Downloads of checkpoints 2 to 5 finish and free
 /// their slots while checkpoint 1 is still downloading, and checkpoints are still released in
 /// order.
@@ -3553,7 +3597,7 @@ async fn finished_downloads_free_slots_behind_stalled_download() {
         &checkpoints,
         &contents,
         6,
-        Duration::from_secs(3),
+        Duration::from_secs(10),
         Some(checkpoints[1].content_digest),
     );
     let store = SharedInMemoryStore::default();
@@ -3572,7 +3616,7 @@ async fn finished_downloads_free_slots_behind_stalled_download() {
     let mut synced = handle.subscribe_to_synced_checkpoints();
     network.connect(source.local_addr()).await.unwrap();
 
-    timeout(Duration::from_secs(2), async {
+    timeout(Duration::from_secs(8), async {
         while !checkpoints[2..].iter().all(|checkpoint| {
             store
                 .get_checkpoint_contents_by_digest(&checkpoint.content_digest)
@@ -3592,7 +3636,7 @@ async fn finished_downloads_free_slots_behind_stalled_download() {
     );
 
     for checkpoint in checkpoints.iter().skip(1) {
-        let actual = timeout(Duration::from_secs(10), synced.recv())
+        let actual = timeout(Duration::from_secs(20), synced.recv())
             .await
             .expect("checkpoints should sync once checkpoint 1 arrives")
             .unwrap();
