@@ -123,8 +123,11 @@ impl LocalObservations {
 
     fn add_sample(&mut self, duration: Duration, gas_price: u64) {
         self.moving_average.add_sample(duration);
+        // Gasless txs report a price of 0 and count at the minimum weight of 1. A gasless sample
+        // that enters the window adds its measured duration; a window full of paid samples
+        // still drops it.
         self.weighted_moving_average
-            .add_sample(duration.as_micros() as u64, gas_price);
+            .add_sample(duration.as_micros() as u64, gas_price.max(1));
     }
 
     fn get_average(&self) -> Duration {
@@ -1126,10 +1129,12 @@ mod tests {
             }))],
         };
 
+        let rgp = epoch_store.reference_gas_price();
+
         // Record an observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(100))];
         let total_duration = Duration::from_millis(110);
-        observer.record_local_observations(&ptb, &timings, total_duration, 1);
+        observer.record_local_observations(&ptb, &timings, total_duration, rgp);
 
         let key = ExecutionTimeObservationKey::MoveEntryPoint {
             package,
@@ -1150,16 +1155,48 @@ mod tests {
         // Record another observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(110))];
         let total_duration = Duration::from_millis(120);
-        observer.record_local_observations(&ptb, &timings, total_duration, 2);
+        observer.record_local_observations(&ptb, &timings, total_duration, 2 * rgp);
 
         // Check that weighted moving average was updated
         let local_obs = observer.local_observations.get(&key).unwrap();
         assert_eq!(
             local_obs.get_average(),
             // Our local observation averages are weighted by gas price:
-            // 110ms * 1 + 110ms * 2 / (1 + 2) = 116.666ms
+            // (110ms * rgp + 120ms * 2rgp) / (rgp + 2rgp) = 116.666ms
             Duration::from_micros(116_666)
         );
+
+        // A gasless tx's price of 0 is weighted as 1.
+        let timings = vec![ExecutionTiming::Success(Duration::from_millis(140))];
+        let total_duration = Duration::from_millis(150);
+        observer.record_local_observations(&ptb, &timings, total_duration, 0);
+        let local_obs = observer.local_observations.get(&key).unwrap();
+        assert_eq!(
+            local_obs.get_average(),
+            Duration::from_micros((110_000 * rgp + 120_000 * 2 * rgp + 150_000) / (3 * rgp + 1))
+        );
+
+        // A window holding only gasless samples averages their measured durations.
+        let gasless_function = "gasless_function".to_string();
+        let gasless_ptb = ProgrammableTransaction {
+            inputs: vec![],
+            commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
+                package,
+                module: module.clone(),
+                function: gasless_function.clone(),
+                type_arguments: vec![],
+                arguments: vec![],
+            }))],
+        };
+        observer.record_local_observations(&gasless_ptb, &timings, total_duration, 0);
+        let gasless_key = ExecutionTimeObservationKey::MoveEntryPoint {
+            package,
+            module,
+            function: gasless_function,
+            type_arguments: vec![],
+        };
+        let local_obs = observer.local_observations.get(&gasless_key).unwrap();
+        assert_eq!(local_obs.get_average(), Duration::from_millis(150));
     }
 
     #[tokio::test]

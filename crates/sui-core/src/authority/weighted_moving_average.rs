@@ -8,7 +8,7 @@ use std::fmt;
 struct Sample {
     value: u64,
     weight: u64,
-    insertion_total: u64, // cumulative weight at insertion time
+    insertion_total: u128, // cumulative weight at insertion time
 }
 
 impl fmt::Debug for Sample {
@@ -32,8 +32,8 @@ impl fmt::Display for Sample {
 #[derive(Debug, Clone)]
 pub struct WeightedMovingAverage {
     queue: VecDeque<Sample>,
-    total_weight: u64, // running cumulative weight of all added samples
-    max_size: usize,   // maximum number of samples to store
+    total_weight: u128, // running cumulative weight of all added samples
+    max_size: usize,    // maximum number of samples to store
     default: u64,
 }
 
@@ -53,7 +53,7 @@ impl WeightedMovingAverage {
     }
 
     pub fn add_sample(&mut self, value: u64, weight: u64) {
-        self.total_weight += weight;
+        self.total_weight = self.total_weight.saturating_add(u128::from(weight));
         let sample = Sample {
             value,
             weight,
@@ -97,7 +97,7 @@ impl WeightedMovingAverage {
         let old_sample = self.queue.front()?;
 
         let weight_since_insertion = self.total_weight - old_sample.insertion_total;
-        let threshold = old_sample.weight * self.max_size as u64;
+        let threshold = u128::from(old_sample.weight) * self.max_size as u128;
 
         if weight_since_insertion >= threshold {
             self.queue.pop_front()
@@ -108,19 +108,58 @@ impl WeightedMovingAverage {
 
     /// Compute the weighted average over the samples currently in the window.
     pub fn get_weighted_average(&self) -> u64 {
-        if self.queue.is_empty() {
+        // With gas-price weights (at most max_gas_price, about 2^36) and microsecond values, these
+        // sums are exact for any realistic window. Saturation only lowers the quotient, which
+        // keeps it within u64.
+        let (weighted_sum, total_w) = self.queue.iter().fold((0u128, 0u128), |(sum, w_sum), s| {
+            let weight = u128::from(s.weight);
+            (
+                sum.saturating_add(u128::from(s.value) * weight),
+                w_sum.saturating_add(weight),
+            )
+        });
+        if total_w == 0 {
             return self.default;
         }
-        let (weighted_sum, total_w) = self.queue.iter().fold((0u64, 0u64), |(sum, w_sum), s| {
-            (sum + s.value * s.weight, w_sum + s.weight)
-        });
-        weighted_sum / total_w
+        // At most the largest sample value, so the cast does not truncate.
+        (weighted_sum / total_w) as u64
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_weighted_moving_average_large_values() {
+        // Each product overflows u64 at a gas price of 5e10.
+        let gas_price = 50_000_000_000;
+        let mut wma = WeightedMovingAverage::new(0, 10);
+        for _ in 0..10 {
+            wma.add_sample(u64::MAX - 1, gas_price);
+        }
+        assert_eq!(wma.get_weighted_average(), u64::MAX - 1);
+
+        // Two of these products saturate the u128 sum; the result is lowered, not a panic.
+        let mut wma = WeightedMovingAverage::new(0, 10);
+        wma.add_sample(u64::MAX, u64::MAX);
+        wma.add_sample(u64::MAX, u64::MAX);
+        // u128::MAX / (2 * (2^64 - 1)) = 2^63.
+        assert_eq!(wma.get_weighted_average(), 1 << 63);
+    }
+
+    #[test]
+    fn test_weighted_moving_average_zero_weights() {
+        let mut wma = WeightedMovingAverage::new(7, 10);
+        wma.add_sample(100, 0);
+        assert_eq!(wma.get_weighted_average(), 7);
+
+        // Zero-weight samples do not move the average of positive-weight ones.
+        wma.add_sample(200, 10);
+        assert_eq!(wma.get_weighted_average(), 200);
+        wma.add_sample(50, 0);
+        assert_eq!(wma.get_weighted_average(), 200);
+    }
 
     #[test]
     fn test_weighted_moving_average_equal_weights() {
