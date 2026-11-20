@@ -5,8 +5,7 @@
 use super::{SUI_BRIDGE_OBJECT_ID, base_types::*, error::*};
 use crate::accumulator_root::{AccumulatorObjId, AccumulatorValue, check_accumulator_type_bounds};
 use crate::allowance::{
-    ALLOWANCE_BALANCE_SPEND_FUNCTION_NAME, ALLOWANCE_MODULE_NAME, ResolvedAllowance,
-    parse_allowance_object,
+    ALLOWANCE_BALANCE_SPEND_FUNCTION_NAME, ALLOWANCE_MODULE_NAME, ResolvedAllowances,
 };
 use crate::authenticator_state::ActiveJwk;
 use crate::balance::{
@@ -63,7 +62,6 @@ use mysten_common::{ZipDebugEqIteratorExt, assert_reachable, debug_fatal};
 use nonempty::{NonEmpty, nonempty};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
-use std::collections::btree_map::Entry;
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
@@ -3226,7 +3224,8 @@ pub trait TransactionDataAPI {
     /// Validates the declared funder, the spender, and the funds type of each
     /// `WithdrawFrom::SenderAllowance` against its loaded input object. Execution trusts the
     /// declared funder, which is immutable on the allowance. Policy checks live in Move.
-    fn check_allowance_inputs(&self, input_objects: &InputObjects) -> UserInputResult<()>;
+    /// `allowances` must come from `resolve_allowance_inputs` over this transaction's inputs.
+    fn check_allowance_inputs(&self, allowances: &ResolvedAllowances) -> UserInputResult<()>;
 
     // A cheap way to quickly check if the transaction has funds withdraws.
     fn has_funds_withdrawals(&self) -> bool;
@@ -3432,7 +3431,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         withdraw_map
     }
 
-    fn check_allowance_inputs(&self, input_objects: &InputObjects) -> UserInputResult<()> {
+    fn check_allowance_inputs(&self, allowances: &ResolvedAllowances) -> UserInputResult<()> {
         let allowance_withdrawals: Vec<_> = self
             .get_funds_withdrawals()
             .filter_map(|w| match w.withdraw_from {
@@ -3445,27 +3444,12 @@ impl TransactionDataAPI for TransactionDataV1 {
         if allowance_withdrawals.is_empty() {
             return Ok(());
         }
-        // An allowance must be among the tx's inputs, or it fails to resolve here.
-        let objects_by_id: BTreeMap<ObjectID, &Object> = input_objects
-            .iter()
-            .filter_map(|input| Some((input.id(), input.as_object()?)))
-            .collect();
-        // Two withdrawals may source the same allowance with different declared funders
-        // (and should be rejected).
-        let mut resolved_allowances: BTreeMap<ObjectID, ResolvedAllowance> = BTreeMap::new();
         for (specified_funder, allowance, requested_funds_type) in allowance_withdrawals {
-            let resolved: &ResolvedAllowance = match resolved_allowances.entry(allowance) {
-                Entry::Occupied(entry) => entry.into_mut(),
-                Entry::Vacant(entry) => {
-                    let object = objects_by_id.get(&allowance).ok_or_else(|| {
-                        UserInputError::InvalidWithdrawReservation {
-                            error: format!(
-                                "Specified allowance {allowance} not found among the tx inputs"
-                            ),
-                        }
-                    })?;
-                    entry.insert(parse_allowance_object(object)?)
-                }
+            // Resolution already failed for any declared input that is not an `Allowance`.
+            let Some(resolved) = allowances.get(&allowance) else {
+                return Err(UserInputError::InvalidWithdrawReservation {
+                    error: format!("Specified allowance {allowance} not found among the tx inputs"),
+                });
             };
             if resolved.funder != specified_funder {
                 return Err(UserInputError::InvalidWithdrawReservation {

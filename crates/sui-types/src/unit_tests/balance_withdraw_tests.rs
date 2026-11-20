@@ -6,6 +6,7 @@ use sui_protocol_config::ProtocolConfig;
 
 use crate::{
     accumulator_root::AccumulatorValue,
+    allowance::resolve_allowance_inputs,
     base_types::{ObjectID, SequenceNumber, SuiAddress, random_object_ref},
     coin_reservation::{CoinReservationResolverTrait, ParsedObjectRefWithdrawal},
     digests::{ChainIdentifier, CheckpointDigest},
@@ -512,8 +513,9 @@ fn test_check_allowance_inputs() {
     let tx = allowance_tx(sender, funder, allowance);
 
     // The allowance is missing from the loaded inputs (e.g. revoked).
+    let empty = InputObjects::new(vec![]);
     let err = tx
-        .check_allowance_inputs(&InputObjects::new(vec![]))
+        .check_allowance_inputs(&resolve_allowance_inputs(&tx, &empty, true).unwrap())
         .unwrap_err();
     assert!(err.to_string().contains("not found"), "{err}");
 
@@ -524,7 +526,8 @@ fn test_check_allowance_inputs() {
         InputObjectKind::ImmOrOwnedMoveObject(coin_ref),
         coin.into(),
     )]);
-    let err = tx.check_allowance_inputs(&not_an_allowance).unwrap_err();
+    // Resolution rejects it before `check_allowance_inputs` runs.
+    let err = resolve_allowance_inputs(&tx, &not_an_allowance, true).unwrap_err();
     assert!(err.to_string().contains("not a sui::allowance"), "{err}");
 }
 

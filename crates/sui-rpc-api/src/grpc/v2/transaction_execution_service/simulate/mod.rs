@@ -936,7 +936,8 @@ fn is_replay_protected_without_gas_coin(
 ///
 /// Requires: gasless enabled by protocol, caller did not set price (or set it to 0) and did not
 /// set gas payment objects, tx is a PTB that passes the structural gasless checks, and all loaded
-/// Move object inputs pass `check_gasless_object_inputs`.
+/// Move object inputs pass `check_gasless_inputs`. A transaction that fails it falls through to
+/// the priced flow, so its simulation still reports the Move outcome.
 fn is_gasless_candidate(
     request: &SimulateTransactionRequest,
     transaction: &sui_types::transaction::TransactionData,
@@ -972,7 +973,7 @@ fn is_gasless_candidate(
     }
 
     // Load Move object inputs so we can run the runtime input check. Packages need not be loaded
-    // since check_gasless_object_inputs skips them.
+    // since check_gasless_inputs skips them.
     let input_object_kinds = match transaction.input_objects() {
         Ok(kinds) => kinds,
         Err(_) => return Ok(false),
@@ -996,12 +997,10 @@ fn is_gasless_candidate(
         }
     }
     let input_objects = InputObjects::new(loaded);
-    Ok(sui_transaction_checks::check_gasless_object_inputs(
-        transaction,
-        &input_objects,
-        protocol_config,
+    Ok(
+        sui_transaction_checks::check_gasless_inputs(transaction, &input_objects, protocol_config)
+            .is_ok(),
     )
-    .is_ok())
 }
 
 /// The executor maps a post-execution gasless-requirements failure

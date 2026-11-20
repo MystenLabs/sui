@@ -8,10 +8,14 @@
 //! the adapter mints the `AllowanceWithdrawal<T>` that the allowance's spend paths consume.
 
 use crate::SUI_FRAMEWORK_ADDRESS;
-use crate::base_types::SuiAddress;
+use crate::base_types::{ObjectID, SuiAddress};
 use crate::error::{UserInputError, UserInputResult};
 use crate::id::UID;
 use crate::object::Object;
+use crate::transaction::{
+    InputObjectKind, InputObjects, SharedObjectMutability, TransactionData, TransactionDataAPI,
+    WithdrawFrom,
+};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
@@ -19,6 +23,7 @@ use move_core_types::language_storage::{StructTag, TypeTag};
 use move_core_types::u256::U256;
 use mysten_common::debug_fatal;
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 
 pub const ALLOWANCE_MODULE_NAME: &IdentStr = ident_str!("allowance");
 pub const ALLOWANCE_STRUCT_NAME: &IdentStr = ident_str!("Allowance");
@@ -124,6 +129,71 @@ impl ResolvedAllowance {
         let over_rate_limit = self.rate_limit.is_some_and(|limit| amount > limit);
         expired || over_lifetime_cap || over_rate_limit
     }
+}
+
+/// This map holds a transaction's `Allowance` inputs, each decoded once. Only
+/// `resolve_allowance_inputs` constructs it; callers must pass it the transaction and inputs it is
+/// later checked against.
+#[derive(Debug)]
+pub struct ResolvedAllowances {
+    declared: BTreeSet<ObjectID>,
+    resolved: BTreeMap<ObjectID, ResolvedAllowance>,
+}
+
+impl ResolvedAllowances {
+    pub fn get(&self, id: &ObjectID) -> Option<&ResolvedAllowance> {
+        self.resolved.get(id)
+    }
+
+    /// Returns the allowances that the transaction declares withdrawals from.
+    pub fn declared(&self) -> &BTreeSet<ObjectID> {
+        &self.declared
+    }
+}
+
+/// Decodes every input that `transaction` declares an allowance withdrawal from, failing if one is
+/// not an `Allowance`, and with `include_mutable` every `Allowance` it takes mutably. Undeclared
+/// allowances that are only read are not decoded.
+pub fn resolve_allowance_inputs(
+    transaction: &TransactionData,
+    input_objects: &InputObjects,
+    include_mutable: bool,
+) -> UserInputResult<ResolvedAllowances> {
+    let declared: BTreeSet<ObjectID> = transaction
+        .kind()
+        .get_funds_withdrawals()
+        .filter_map(|w| match w.withdraw_from {
+            WithdrawFrom::SenderAllowance { allowance, .. } => Some(allowance),
+            WithdrawFrom::Sender | WithdrawFrom::Sponsor | WithdrawFrom::FrozenAddress { .. } => {
+                None
+            }
+        })
+        .collect();
+    if declared.is_empty() && !include_mutable {
+        return Ok(ResolvedAllowances {
+            declared,
+            resolved: BTreeMap::new(),
+        });
+    }
+    let resolved = input_objects
+        .iter()
+        .filter_map(|input| {
+            let object = input.as_object()?;
+            let is_mutable_allowance = include_mutable
+                && matches!(
+                    input.input_object_kind,
+                    InputObjectKind::SharedMoveObject { mutability, .. }
+                        if mutability != SharedObjectMutability::Immutable
+                )
+                && object
+                    .data
+                    .try_as_move()
+                    .is_some_and(|move_obj| move_obj.type_().is_allowance());
+            (declared.contains(&object.id()) || is_mutable_allowance).then_some(object)
+        })
+        .map(|object| Ok((object.id(), parse_allowance_object(object)?)))
+        .collect::<UserInputResult<_>>()?;
+    Ok(ResolvedAllowances { declared, resolved })
 }
 
 /// Parses an object as an `Allowance`, extracting the sign-time-relevant fields.

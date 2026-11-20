@@ -9,18 +9,22 @@
 
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
+use move_core_types::u256::U256;
 use sui_macros::sim_test;
 use sui_rpc::proto::sui::rpc::v2::SimulateTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::Transaction;
 use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
-use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
-use sui_types::base_types::{ObjectRef, SuiAddress};
+use sui_types::balance::Balance;
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::gas_coin::GAS;
+use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
-    self, FundsWithdrawalArg, GasData, ObjectArg, TransactionData, TransactionDataV1,
-    TransactionExpiration, TransactionKind,
+    self, FundsWithdrawalArg, GasData, ObjectArg, SharedObjectMutability, TransactionData,
+    TransactionDataV1, TransactionExpiration, TransactionKind,
 };
+use sui_types::{MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID};
 use test_cluster::addr_balance_test_env::{TestEnv, TestEnvBuilder};
 
 async fn setup_gasless_env() -> TestEnv {
@@ -274,7 +278,7 @@ async fn simulate_bcs_gasless_transaction_accepted() {
 }
 
 /// A tx whose `Coin<T>` input is a type *not* on the gasless allowlist must not be classified
-/// as gasless-eligible: `is_gasless_candidate` should reject it via `check_gasless_object_inputs`,
+/// as gasless-eligible: `is_gasless_candidate` should reject it via `check_gasless_inputs`,
 /// and the simulate flow should fall through to the priced flow rather than returning
 /// `gas_price=0`.
 #[sim_test]
@@ -395,4 +399,163 @@ async fn simulate_gasless_with_no_address_owned_inputs_succeeds() {
     assert_eq!(gas_payment.budget, Some(0));
     assert!(gas_payment.objects.is_empty());
     assert!(returned.effects().status().success());
+}
+
+/// Issues a SUI allowance from `funder` to `spender` that expires at `expiration_ms`, returning
+/// its id and initial shared version.
+async fn issue_sui_allowance(
+    test_env: &mut TestEnv,
+    funder: SuiAddress,
+    spender: SuiAddress,
+    expiration_ms: u64,
+) -> (ObjectID, SequenceNumber) {
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let rate_limit = builder.programmable_move_call(
+        MOVE_STDLIB_PACKAGE_ID,
+        Identifier::new("option").unwrap(),
+        Identifier::new("none").unwrap(),
+        vec!["0x2::allowance::RateLimit".parse().unwrap()],
+        vec![],
+    );
+    let args = vec![
+        builder.pure("".to_string()).unwrap(),
+        builder.pure(spender).unwrap(),
+        builder.pure(Some(U256::from(1_000u64))).unwrap(),
+        builder.pure(None::<u64>).unwrap(),
+        builder.pure(Some(expiration_ms)).unwrap(),
+        rate_limit,
+    ];
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("allowance").unwrap(),
+        Identifier::new("new").unwrap(),
+        vec![Balance::type_tag(GAS::type_tag())],
+        args,
+    );
+    let funder_gas = test_env.get_gas_for_sender(funder)[0];
+    let tx = TransactionData::new_programmable(
+        funder,
+        vec![funder_gas],
+        builder.finish(),
+        10_000_000,
+        test_env.rgp,
+    );
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok(), "{:?}", effects.status());
+    test_env.update_all_gas().await;
+    effects
+        .created()
+        .iter()
+        .find_map(|(obj_ref, owner)| match owner {
+            Owner::Shared {
+                initial_shared_version,
+            } => Some((obj_ref.0, *initial_shared_version)),
+            _ => None,
+        })
+        .expect("the allowance is created as a shared object")
+}
+
+/// Builds a gasless-shaped spend of 100 MIST from the allowance, sent back to the funder.
+fn build_allowance_spend_tx(
+    spender: SuiAddress,
+    funder: SuiAddress,
+    (allowance_id, initial_shared_version): (ObjectID, SequenceNumber),
+) -> TransactionData {
+    let sui_type = GAS::type_tag();
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let withdraw_arg = builder
+        .funds_withdrawal(FundsWithdrawalArg::balance_from_allowance(
+            100,
+            sui_type.clone(),
+            funder,
+            allowance_id,
+        ))
+        .unwrap();
+    let allowance_arg = builder
+        .obj(ObjectArg::SharedObject {
+            id: allowance_id,
+            initial_shared_version,
+            mutability: SharedObjectMutability::Mutable,
+        })
+        .unwrap();
+    let clock_arg = builder.input(transaction::CallArg::CLOCK_IMM).unwrap();
+    let balance = builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("allowance").unwrap(),
+        Identifier::new("balance_spend").unwrap(),
+        vec![sui_type.clone()],
+        vec![allowance_arg, withdraw_arg, clock_arg],
+    );
+    let recipient_arg = builder.pure(funder).unwrap();
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("balance").unwrap(),
+        Identifier::new("send_funds").unwrap(),
+        vec![sui_type],
+        vec![balance, recipient_arg],
+    );
+    wrap_tx(
+        spender,
+        TransactionKind::ProgrammableTransaction(builder.finish()),
+    )
+}
+
+/// A spend from an expired allowance fails the gasless input checks, which refuse spends that
+/// `consume` must abort. Simulate must not classify it as gasless, so it falls back to the priced
+/// flow and reports the Move abort instead of an error. A spend from a live allowance stays
+/// gasless.
+#[sim_test]
+async fn simulate_falls_back_to_priced_for_expired_allowance_spend() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_gasless_for_testing();
+            cfg.set_gasless_allowance_spend_for_testing(true);
+            cfg
+        }))
+        .build()
+        .await;
+    let funder = test_env.get_sender(0);
+    let spender = test_env.get_sender(1);
+    transaction::add_gasless_token_for_testing(GAS::type_tag().to_canonical_string(true), 0);
+    test_env.fund_one_address_balance(funder, 5_000).await;
+    let live = issue_sui_allowance(&mut test_env, funder, spender, u64::MAX).await;
+    let expired = issue_sui_allowance(&mut test_env, funder, spender, 1).await;
+
+    let mut client = connect(&test_env).await;
+    let mut simulate = async |allowance| {
+        let tx = build_allowance_spend_tx(spender, funder, allowance);
+        client
+            .simulate_transaction(
+                SimulateTransactionRequest::new(to_unresolved_proto(tx, None))
+                    .with_do_gas_selection(true),
+            )
+            .await
+            .unwrap()
+            .into_inner()
+    };
+
+    let response = simulate(live).await;
+    let returned = response.transaction();
+    assert_eq!(returned.transaction().gas_payment().price, Some(0));
+    assert!(returned.effects().status().success());
+
+    let response = simulate(expired).await;
+    let returned = response.transaction();
+    let gas_payment = returned.transaction().gas_payment();
+    assert_eq!(gas_payment.price, Some(test_env.rgp));
+    assert!(!gas_payment.objects.is_empty());
+    let status = returned.effects().status();
+    assert!(!status.success());
+    let abort = status.error().abort();
+    assert_eq!(
+        abort.location().module(),
+        "allowance",
+        "{:?}",
+        status.error()
+    );
+    assert!(
+        abort.clever_error().constant_name().contains("EExpired"),
+        "{:?}",
+        status.error()
+    );
 }

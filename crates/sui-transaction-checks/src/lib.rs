@@ -7,12 +7,12 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
-    use std::collections::{BTreeMap, BTreeSet, HashSet};
+    use std::collections::{BTreeMap, HashSet};
     use std::sync::Arc;
     use sui_config::verifier_signing_config::VerifierSigningConfig;
     use sui_protocol_config::{ProtocolConfig, assert_reachable_gated};
     use sui_types::TypeTag;
-    use sui_types::allowance::parse_allowance_object;
+    use sui_types::allowance::{ResolvedAllowances, resolve_allowance_inputs};
     use sui_types::balance::Balance;
     use sui_types::base_types::{ObjectID, ObjectRef};
     use sui_types::clock::Clock;
@@ -70,12 +70,20 @@ mod checked {
             &input_objects,
             &[],
         )?;
-        transaction.check_allowance_inputs(&input_objects)?;
-        if protocol_config.gasless_allowance_spend() {
-            check_allowance_writers(transaction, &input_objects)?;
-            if transaction.is_gasless_transaction() {
-                check_gasless_allowance_spends(transaction, &input_objects)?;
+        let gasless_allowance_spend = protocol_config.gasless_allowance_spend();
+        let is_gasless = protocol_config.enable_gasless() && transaction.is_gasless_transaction();
+        let allowances =
+            resolve_allowance_inputs(transaction, &input_objects, gasless_allowance_spend)?;
+        if is_gasless {
+            check_gasless_object_inputs(&input_objects, &allowances, protocol_config)?;
+        }
+        transaction.check_allowance_inputs(&allowances)?;
+        if gasless_allowance_spend {
+            // After `check_allowance_inputs`, so that only well-formed spends reach it.
+            if is_gasless {
+                check_gasless_allowance_spends(transaction, &input_objects, &allowances)?;
             }
+            check_allowance_writers(transaction, &input_objects, &allowances)?;
         }
         check_receiving_objects(&input_objects, receiving_objects)?;
         // Runs verifier, which could be expensive.
@@ -108,12 +116,14 @@ mod checked {
             &input_objects,
             &[],
         )?;
+        if protocol_config.enable_gasless() && transaction.is_gasless_transaction() {
+            let allowances = resolve_allowance_inputs(transaction, &input_objects, false)?;
+            check_gasless_object_inputs(&input_objects, &allowances, protocol_config)?;
+        }
         // NB: We do not check receiving objects when executing. Only at signing time do we check.
         // NB: move verifier is only checked at signing time, not at execution.
-        // NB: allowance withdrawal declarations and gasless allowance spends are only validated
-        // at signing; at execution the allowance's own Move checks enforce policy on
-        // consensus-sequenced state. `check_gasless_object_inputs` reads allowances at execution,
-        // but only fields that are fixed at creation.
+        // NB: allowance checks run only at signing, except gasless input checks on creation-fixed
+        // fields; Move enforces allowance policy on consensus-sequenced state.
 
         Ok(input_objects.into_checked())
     }
@@ -206,10 +216,6 @@ mod checked {
         )?;
         check_objects(transaction, input_objects, protocol_config)?;
         check_replay_protection(transaction, input_objects)?;
-
-        if protocol_config.enable_gasless() && transaction.is_gasless_transaction() {
-            check_gasless_object_inputs(transaction, input_objects, protocol_config)?;
-        }
 
         Ok(())
     }
@@ -695,24 +701,33 @@ mod checked {
         Ok(())
     }
 
-    /// Verify that all Move object inputs in a gasless transaction are owned `Coin<T>` where `T`
-    /// is in the allowlist, or (with `gasless_allowance_spend`) the Clock or a non-app-bound
-    /// `Allowance<Balance<T>>` with `T` in the allowlist.
-    pub fn check_gasless_object_inputs(
+    /// Runs the gasless-specific input checks from signing: the allowed object inputs, and the
+    /// rejection of allowance spends that must abort. Signing also runs the general checks. Keep
+    /// in sync with the gasless checks in `check_transaction_input`.
+    pub fn check_gasless_inputs(
         transaction: &TransactionData,
         input_objects: &InputObjects,
         protocol_config: &ProtocolConfig,
     ) -> UserInputResult<()> {
+        let allowances = resolve_allowance_inputs(transaction, input_objects, false)?;
+        check_gasless_object_inputs(input_objects, &allowances, protocol_config)?;
+        transaction.check_allowance_inputs(&allowances)?;
+        if protocol_config.gasless_allowance_spend() {
+            check_gasless_allowance_spends(transaction, input_objects, &allowances)?;
+        }
+        Ok(())
+    }
+
+    /// Verify that all Move object inputs in a gasless transaction are owned `Coin<T>` where `T`
+    /// is in the allowlist, or (with `gasless_allowance_spend`) the Clock or a non-app-bound
+    /// `Allowance<Balance<T>>` with `T` in the allowlist.
+    fn check_gasless_object_inputs(
+        input_objects: &InputObjects,
+        allowances: &ResolvedAllowances,
+        protocol_config: &ProtocolConfig,
+    ) -> UserInputResult<()> {
         let allowed_token_types =
             sui_types::transaction::get_gasless_allowed_token_types(protocol_config);
-        let declared_allowances: BTreeSet<ObjectID> = transaction
-            .kind()
-            .get_funds_withdrawals()
-            .filter_map(|w| match w.withdraw_from {
-                WithdrawFrom::SenderAllowance { allowance, .. } => Some(allowance),
-                WithdrawFrom::Sender | WithdrawFrom::Sponsor => None,
-            })
-            .collect();
 
         for obj_read in input_objects.iter() {
             let Some(object) = obj_read.as_object() else {
@@ -724,12 +739,7 @@ mod checked {
             match object.owner() {
                 Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => (),
                 Owner::Shared { .. } if protocol_config.gasless_allowance_spend() => {
-                    check_gasless_shared_input(
-                        obj_read,
-                        object,
-                        &declared_allowances,
-                        &allowed_token_types,
-                    )?;
+                    check_gasless_shared_input(obj_read, object, allowances, &allowed_token_types)?;
                     continue;
                 }
                 Owner::Immutable
@@ -769,7 +779,7 @@ mod checked {
     fn check_gasless_shared_input(
         obj_read: &ObjectReadResult,
         object: &Object,
-        declared_allowances: &BTreeSet<ObjectID>,
+        allowances: &ResolvedAllowances,
         allowed_token_types: &BTreeMap<TypeTag, u64>,
     ) -> UserInputResult<()> {
         let unsupported = |msg: &str| UserInputError::Unsupported(msg.to_string());
@@ -788,13 +798,13 @@ mod checked {
         }
         fp_ensure!(
             matches!(mutability, SharedObjectMutability::Mutable)
-                && declared_allowances.contains(&object.id()),
+                && allowances.declared().contains(&object.id()),
             unsupported(
                 "Gasless transactions only support shared inputs that are the Clock or a mutable \
                  allowance backing a withdrawal"
             )
         );
-        let allowance = parse_allowance_object(object).map_err(|_| {
+        let allowance = allowances.get(&object.id()).ok_or_else(|| {
             unsupported(
                 "Gasless transactions only support the Clock or an Allowance as shared inputs",
             )
@@ -820,34 +830,27 @@ mod checked {
     fn check_allowance_writers(
         transaction: &TransactionData,
         input_objects: &InputObjects,
+        allowances: &ResolvedAllowances,
     ) -> UserInputResult<()> {
         let sender = transaction.sender();
         for input in input_objects.iter() {
-            let InputObjectKind::SharedMoveObject { mutability, .. } = &input.input_object_kind
+            let InputObjectKind::SharedMoveObject { id, mutability, .. } = &input.input_object_kind
             else {
                 continue;
             };
             if matches!(mutability, SharedObjectMutability::Immutable) {
                 continue;
             }
-            let Some(object) = input.as_object() else {
+            let Some(allowance) = allowances.get(id) else {
                 continue;
             };
-            let Some(move_obj) = object.data.try_as_move() else {
-                continue;
-            };
-            if !move_obj.type_().is_allowance() {
-                continue;
-            }
-            let allowance = parse_allowance_object(object)?;
             if allowance.is_app_bound {
                 continue;
             }
             fp_ensure!(
                 sender == allowance.funder || allowance.spender == Some(sender),
                 UserInputError::Unsupported(format!(
-                    "Only the funder or spender of allowance {} may take it as a mutable input",
-                    object.id()
+                    "Only the funder or spender of allowance {id} may take it as a mutable input"
                 ))
             );
         }
@@ -858,12 +861,13 @@ mod checked {
     /// transaction is free but still writes the funder's allowance, so the spender could otherwise
     /// write it indefinitely at no cost.
     ///
-    /// Signing only. At execution the allowance and Clock are read at consensus-assigned versions,
-    /// where a rejection is fatal. `spend_must_abort` stays true at every later version, so this
-    /// rejects no transaction that could succeed.
+    /// Runs at signing and in simulate, never at execution. At execution the allowance and Clock
+    /// are read at consensus-assigned versions, where a rejection is fatal. `spend_must_abort`
+    /// stays true at every later version, so this rejects no transaction that could succeed.
     fn check_gasless_allowance_spends(
         transaction: &TransactionData,
         input_objects: &InputObjects,
+        allowances: &ResolvedAllowances,
     ) -> UserInputResult<()> {
         let mut amounts: BTreeMap<ObjectID, u128> = BTreeMap::new();
         for withdrawal in transaction.kind().get_funds_withdrawals() {
@@ -877,20 +881,19 @@ mod checked {
         if amounts.is_empty() {
             return Ok(());
         }
-        let objects: BTreeMap<ObjectID, &Object> = input_objects
+        let now_ms = input_objects
             .iter()
-            .filter_map(|input| Some((input.id(), input.as_object()?)))
-            .collect();
-        let now_ms = objects
-            .get(&SUI_CLOCK_OBJECT_ID)
+            .find(|input| input.id() == SUI_CLOCK_OBJECT_ID)
+            .and_then(|input| input.as_object())
             .and_then(|clock| clock.to_rust::<Clock>())
             .map(|clock| clock.timestamp_ms());
         for (allowance_id, amount) in amounts {
-            // `check_allowance_inputs` has already resolved every declared allowance.
-            let Some(object) = objects.get(&allowance_id) else {
+            // A declared allowance missing from the inputs fails `check_allowance_inputs` at
+            // signing.
+            let Some(allowance) = allowances.get(&allowance_id) else {
                 continue;
             };
-            if parse_allowance_object(object)?.spend_must_abort(amount, now_ms) {
+            if allowance.spend_must_abort(amount, now_ms) {
                 // Reachability is expected only where SUI is gasless-allowlisted.
                 assert_reachable_gated!(
                     "gasless spend of an expired or exhausted allowance rejected",
