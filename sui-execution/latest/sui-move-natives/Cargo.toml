@@ -31,3 +31,4 @@ tracing.workspace = true
 
 [dev-dependencies]
 prometheus.workspace = true
+proptest.workspace = true

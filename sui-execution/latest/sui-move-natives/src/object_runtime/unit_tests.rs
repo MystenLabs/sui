@@ -286,6 +286,8 @@ mod balance_tracking {
         assert!(add_to_totals(&mut totals, owner, &a, 1).is_err());
         assert_eq!(totals[&owner][&a], u128::MAX);
     }
+
+    mod traversal_props;
 }
 
 mod parent_checks {
