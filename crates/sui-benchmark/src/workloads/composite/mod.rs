@@ -1731,15 +1731,18 @@ impl Payload for CompositePayload {
                         .as_ref()
                         .is_some_and(gasless_sui_allowance_spend_allowed) =>
                 {
-                    [
+                    let mut sources = vec![
                         ((None, GASLESS_TRANSFER), 5),
                         ((Some(a.neighbor), GASLESS_ALLOWANCE_SPEND), 2),
                         ((Some(a.own), GASLESS_SELF_ALLOWANCE_SPEND), 2),
-                        ((Some(a.expired), GASLESS_EXPIRED_ALLOWANCE_SPEND), 1),
-                    ]
-                    .choose_weighted(&mut rng, |(_, weight)| *weight)
-                    .unwrap()
-                    .0
+                    ];
+                    if let Some(expired) = a.expired {
+                        sources.push(((Some(expired), GASLESS_EXPIRED_ALLOWANCE_SPEND), 1));
+                    }
+                    sources
+                        .choose_weighted(&mut rng, |(_, weight)| *weight)
+                        .unwrap()
+                        .0
                 }
                 _ => (None, GASLESS_TRANSFER),
             };
@@ -2470,9 +2473,15 @@ impl Workload<dyn Payload> for CompositeWorkload {
             let own = self
                 .issue_allowances(&execution_proxy, gas_price, &senders, u64::MAX)
                 .await;
-            let expired = self
-                .issue_allowances(&execution_proxy, gas_price, &senders, 1)
-                .await;
+            let expired = if self.config.gasless_probability > 0.0 {
+                self.issue_allowances(&execution_proxy, gas_price, &senders, 1)
+                    .await
+                    .into_iter()
+                    .map(Some)
+                    .collect()
+            } else {
+                vec![None; n]
+            };
             self.allowances = itertools::zip_eq(itertools::zip_eq(neighbor, own), expired)
                 .map(|((neighbor, own), expired)| PayloadAllowances {
                     neighbor,
@@ -2480,7 +2489,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                     expired,
                 })
                 .collect();
-            info!("Issued neighbor, self, and expired allowances for {n} payloads");
+            info!("Issued allowances for {n} payloads");
         }
 
         if init_requirements.contains(&InitRequirement::CreateBalancePool) {

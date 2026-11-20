@@ -48,8 +48,8 @@ pub struct PayloadAllowances {
     /// Funded by the sender itself.
     pub own: AllowanceInfo,
     /// Funded by the sender itself and already expired, so validators must reject every gasless
-    /// spend from it.
-    pub expired: AllowanceInfo,
+    /// spend from it. Only gasless txs spend it, so it is issued only when they are enabled.
+    pub expired: Option<AllowanceInfo>,
 }
 
 pub const ALIAS_TX: &str = "alias_tx";
