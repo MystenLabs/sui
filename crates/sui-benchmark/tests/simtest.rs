@@ -2186,12 +2186,14 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_composite_workload() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        // Gasless txs in the workload send SUI, which no chain allows by default.
+        // Gasless txs in the workload send SUI, which no chain allows by default, and spend
+        // allowances, which only devnet allows.
         let _gasless_guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
             config.set_gasless_allowed_token_types_for_testing(vec![(
                 "0x2::sui::SUI".to_string(),
                 0,
             )]);
+            config.set_gasless_allowance_spend_for_testing(true);
             config
         });
 
@@ -2213,6 +2215,7 @@ mod test {
         let auth_events_enabled = protocol_config.enable_authenticated_event_streams();
         let allowances_enabled = protocol_config.enable_allowances();
         let allowed_proposers_enabled = protocol_config.allowed_proposers();
+        let gasless_allowance_spend_enabled = protocol_config.gasless_allowance_spend();
 
         let metrics = Arc::new(Mutex::new(
             sui_benchmark::workloads::composite::CompositionMetrics::new(),
@@ -2435,6 +2438,16 @@ mod test {
                     sum_containing(name, |s| s.permanent_failure_count),
                 );
                 assert!(success_count > 0, "expected at least one {name} success");
+            }
+
+            if gasless_allowance_spend_enabled {
+                let success_count = sum_containing(GASLESS_ALLOWANCE_SPEND, |s| s.success_count)
+                    + sum_containing(GASLESS_SELF_ALLOWANCE_SPEND, |s| s.success_count);
+                info!("gasless allowance spend success count: {success_count}");
+                assert!(
+                    success_count > 0,
+                    "expected at least one gasless allowance spend success"
+                );
             }
         }
     }
