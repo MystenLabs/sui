@@ -2297,9 +2297,27 @@ struct CongestionState {
     limit: f64,
     slow_start: bool,
     last_decrease: Option<Instant>,
+    window_start: Instant,
+    successes: f64,
+    timeouts: f64,
+}
+
+impl CongestionState {
+    // Halves the counts once per interval, so they weigh recent completions most.
+    fn decay(&mut self, interval: Duration) {
+        if self.window_start.elapsed() >= interval {
+            self.successes /= 2.0;
+            self.timeouts /= 2.0;
+            self.window_start = Instant::now();
+        }
+    }
 }
 
 impl ContentCongestion {
+    // Timeouts from a few slow peer paths do not mean the node is downloading too much at once.
+    // The limit halves only when at least this share of recent downloads timed out.
+    const DECREASE_TIMEOUT_SHARE: f64 = 0.25;
+
     pub(super) fn new(initial: usize, min: usize, max: usize, decrease_interval: Duration) -> Self {
         let max = max.max(min) as f64;
         Self {
@@ -2307,6 +2325,9 @@ impl ContentCongestion {
                 limit: (initial as f64).clamp(min as f64, max),
                 slow_start: true,
                 last_decrease: None,
+                window_start: Instant::now(),
+                successes: 0.0,
+                timeouts: 0.0,
             }),
             min: min as f64,
             max,
@@ -2320,6 +2341,8 @@ impl ContentCongestion {
 
     pub(super) fn on_success(&self) {
         let mut state = self.state.lock().unwrap();
+        state.decay(self.decrease_interval);
+        state.successes += 1.0;
         let increase = if state.slow_start {
             1.0
         } else {
@@ -2330,15 +2353,20 @@ impl ContentCongestion {
 
     pub(super) fn on_timeout(&self) {
         let mut state = self.state.lock().unwrap();
-        if state
-            .last_decrease
-            .is_some_and(|last| last.elapsed() < self.decrease_interval)
+        state.decay(self.decrease_interval);
+        state.timeouts += 1.0;
+        state.slow_start = false;
+        if state.timeouts < Self::DECREASE_TIMEOUT_SHARE * (state.successes + state.timeouts)
+            || state
+                .last_decrease
+                .is_some_and(|last| last.elapsed() < self.decrease_interval)
         {
             return;
         }
         state.limit = (state.limit / 2.0).max(self.min);
-        state.slow_start = false;
         state.last_decrease = Some(Instant::now());
+        state.successes = 0.0;
+        state.timeouts = 0.0;
     }
 }
 

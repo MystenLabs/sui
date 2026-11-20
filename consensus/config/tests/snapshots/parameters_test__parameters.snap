@@ -23,6 +23,7 @@ dag_state_cached_rounds: 500
 commit_sync_parallel_fetches: 8
 commit_sync_batch_size: 100
 commit_sync_batches_ahead: 32
+commit_sync_unhandled_bytes_limit: 4294967296
 commit_sync_request_timeout:
   secs: 10
   nanos: 0

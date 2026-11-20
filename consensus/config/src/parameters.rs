@@ -95,6 +95,11 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_commit_sync_batches_ahead")]
     pub commit_sync_batches_ahead: usize,
 
+    // Maximum bytes of fetched blocks sent to core whose commits the consensus handler has not
+    // handled yet. Commit sync stops starting new fetches above this limit.
+    #[serde(default = "Parameters::default_commit_sync_unhandled_bytes_limit")]
+    pub commit_sync_unhandled_bytes_limit: u64,
+
     // Base per-request timeout for commit sync fetches. The actual timeout grows progressively
     // with a multiplier to allow larger commit batches to finish downloading.
     #[serde(default = "Parameters::default_commit_sync_request_timeout")]
@@ -222,6 +227,10 @@ impl Parameters {
         // while keeping the total number of inflight fetches and unprocessed fetched commits limited.
         32
     }
+
+    pub(crate) fn default_commit_sync_unhandled_bytes_limit() -> u64 {
+        4 << 30
+    }
 }
 
 impl Default for Parameters {
@@ -243,6 +252,8 @@ impl Default for Parameters {
             commit_sync_parallel_fetches: Parameters::default_commit_sync_parallel_fetches(),
             commit_sync_batch_size: Parameters::default_commit_sync_batch_size(),
             commit_sync_batches_ahead: Parameters::default_commit_sync_batches_ahead(),
+            commit_sync_unhandled_bytes_limit:
+                Parameters::default_commit_sync_unhandled_bytes_limit(),
             commit_sync_request_timeout: Parameters::default_commit_sync_request_timeout(),
             commit_sync_probe_timeout: Parameters::default_commit_sync_probe_timeout(),
             tonic: TonicParameters::default(),

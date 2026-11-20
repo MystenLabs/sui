@@ -103,6 +103,9 @@ pub(crate) struct CommitSyncer<VC: ValidatorNetworkClient, OC: ObserverNetworkCl
     // The commit index that is the max of highest local commit index and commit index inflight to Core.
     // Used to determine if fetched blocks can be sent to Core without gaps.
     synced_commit_index: CommitIndex,
+    // Bytes of fetched blocks sent to Core, keyed by the end of their commit range, for ranges the
+    // consumer has not fully handled yet.
+    unhandled_sent_bytes: BTreeMap<CommitIndex, u64>,
 }
 
 impl<VC, OC> CommitSyncer<VC, OC>
@@ -143,6 +146,7 @@ where
             highest_scheduled_index: None,
             highest_fetched_commit_index: 0,
             synced_commit_index,
+            unhandled_sent_bytes: BTreeMap::new(),
         }
     }
 
@@ -336,6 +340,13 @@ where
                     .join(","),
             );
 
+            let range_bytes = commits
+                .commits()
+                .iter()
+                .flat_map(|c| c.blocks())
+                .map(|b| b.serialized().len() as u64)
+                .sum::<u64>();
+
             // If core thread cannot handle the incoming blocks, it is ok to block here
             // to slow down the commit syncer.
             match self
@@ -374,6 +385,10 @@ where
                 }
             };
 
+            *self
+                .unhandled_sent_bytes
+                .entry(fetched_commit_range.end())
+                .or_default() += range_bytes;
             // Once commits and blocks are sent to Core, ratchet up synced_commit_index
             self.synced_commit_index = self.synced_commit_index.max(fetched_commit_range.end());
         }
@@ -425,9 +440,22 @@ where
                 )
                 .max(1)
         };
+        let unhandled_bytes = self.unhandled_sent_bytes();
+        let over_bytes_limit = unhandled_bytes
+            >= self
+                .inner
+                .context
+                .parameters
+                .commit_sync_unhandled_bytes_limit;
+        if over_bytes_limit && !self.pending_fetches.is_empty() {
+            warn!(
+                "Skip starting commit fetches: {} bytes of synced blocks are not yet handled",
+                unhandled_bytes
+            );
+        }
         // Start new fetches if there are pending batches and available slots.
         loop {
-            if self.inflight_fetches.len() >= target_parallel_fetches {
+            if over_bytes_limit || self.inflight_fetches.len() >= target_parallel_fetches {
                 break;
             }
             let Some(commit_range) = self.pending_fetches.pop_first() else {
@@ -768,6 +796,22 @@ where
             certified_commits,
             commit_certifying_blocks,
         ))
+    }
+
+    // Drops ranges the consumer has handled, and returns the bytes of the rest.
+    fn unhandled_sent_bytes(&mut self) -> u64 {
+        let highest_handled_index = self.inner.consumer_monitor.highest_handled_commit();
+        self.unhandled_sent_bytes = self
+            .unhandled_sent_bytes
+            .split_off(&highest_handled_index.saturating_add(1));
+        let bytes = self.unhandled_sent_bytes.values().sum();
+        self.inner
+            .context
+            .metrics
+            .node_metrics
+            .commit_sync_unhandled_bytes
+            .set(bytes as i64);
+        bytes
     }
 
     fn unhandled_commits_threshold(&self) -> CommitIndex {
@@ -1344,5 +1388,68 @@ mod tests {
             assert_eq!(range.start(), start);
             assert_eq!(range.end(), start + 4);
         }
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn commit_syncer_pauses_fetches_on_unhandled_bytes() {
+        let (context, _) = Context::new_for_test(4);
+        let context = Context {
+            own_index: AuthorityIndex::new_for_test(3),
+            parameters: Parameters {
+                commit_sync_batch_size: 5,
+                commit_sync_unhandled_bytes_limit: 1000,
+                ..context.parameters
+            },
+            ..context
+        };
+        let context = Arc::new(context);
+        let block_verifier = Arc::new(NoopBlockVerifier {});
+        let core_thread_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
+        let mock_client = Arc::new(FakeNetworkClient::default());
+        let network_client = Arc::new(CommitSyncerClient::new(
+            context.clone(),
+            Some(mock_client.clone()),
+            Some(mock_client.clone()),
+        ));
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let consumer_monitor = Arc::new(ConsumerMonitor::new(0, Some(0)));
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
+        let mut commit_syncer = CommitSyncer::new(
+            context,
+            core_thread_dispatcher,
+            commit_vote_monitor.clone(),
+            consumer_monitor.clone(),
+            block_verifier,
+            transaction_vote_tracker,
+            round_tracker,
+            network_client,
+            dag_state,
+            peers_pool,
+        );
+
+        for i in 0..3 {
+            let test_block = TestBlock::new(15, i)
+                .set_commit_votes(vec![CommitRef::new(10, CommitDigest::MIN)])
+                .build();
+            commit_vote_monitor.observe_block(&VerifiedBlock::new_for_test(test_block));
+        }
+        commit_syncer.try_schedule_once();
+        assert_eq!(commit_syncer.pending_fetches().len(), 2);
+
+        commit_syncer.unhandled_sent_bytes.insert(3, 600);
+        commit_syncer.unhandled_sent_bytes.insert(5, 600);
+        commit_syncer.try_start_fetches();
+        assert!(commit_syncer.inflight_fetches.is_empty());
+        assert_eq!(commit_syncer.pending_fetches().len(), 2);
+
+        consumer_monitor.set_highest_handled_commit(4);
+        commit_syncer.try_start_fetches();
+        assert_eq!(commit_syncer.unhandled_sent_bytes.len(), 1);
+        assert!(!commit_syncer.inflight_fetches.is_empty());
     }
 }

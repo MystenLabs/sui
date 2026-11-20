@@ -3351,23 +3351,32 @@ fn content_congestion_grows_halves_and_respects_bounds() {
     }
     assert_eq!(congestion.limit(), 8);
 
-    // A timeout halves the limit.
-    congestion.on_timeout();
-    assert_eq!(congestion.limit(), 4);
-
-    // A second timeout within the decrease interval does not halve it again.
-    congestion.on_timeout();
-    assert_eq!(congestion.limit(), 4);
-
-    // After the first timeout the limit grows by about one per round of successes.
+    // A timeout that is under a quarter of recent downloads ends slow start but keeps the limit.
     for _ in 0..4 {
         congestion.on_success();
     }
-    assert_eq!(congestion.limit(), 4);
-    for _ in 0..4 {
+    congestion.on_timeout();
+    assert_eq!(congestion.limit(), 10);
+
+    // Timeouts reaching a quarter of recent downloads halve the limit.
+    congestion.on_timeout();
+    congestion.on_timeout();
+    assert_eq!(congestion.limit(), 5);
+
+    // A further timeout within the decrease interval does not halve it again.
+    congestion.on_timeout();
+    congestion.on_timeout();
+    assert_eq!(congestion.limit(), 5);
+
+    // After the first timeout the limit grows by about one per round of successes.
+    for _ in 0..5 {
         congestion.on_success();
     }
     assert_eq!(congestion.limit(), 5);
+    for _ in 0..5 {
+        congestion.on_success();
+    }
+    assert_eq!(congestion.limit(), 6);
 
     // The limit never exceeds the maximum or drops below the minimum.
     for _ in 0..1000 {

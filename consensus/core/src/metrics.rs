@@ -228,6 +228,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) subscribed_by: IntGaugeVec,
     pub(crate) commit_sync_inflight_fetches: IntGauge,
     pub(crate) commit_sync_pending_fetches: IntGauge,
+    pub(crate) commit_sync_unhandled_bytes: IntGauge,
     pub(crate) commit_sync_fetch_commits_handler_uncertified_skipped: IntCounter,
     pub(crate) commit_sync_fetched_commits: IntCounter,
     pub(crate) commit_sync_fetched_blocks: IntCounter,
@@ -856,6 +857,11 @@ impl NodeMetrics {
             commit_sync_pending_fetches: register_int_gauge_with_registry!(
                 "commit_sync_pending_fetches",
                 "The number of pending fetches in commit syncer",
+                registry,
+            ).unwrap(),
+            commit_sync_unhandled_bytes: register_int_gauge_with_registry!(
+                "commit_sync_unhandled_bytes",
+                "Bytes of fetched blocks sent to core whose commits are not yet handled by the consumer",
                 registry,
             ).unwrap(),
             commit_sync_fetched_commits: register_int_counter_with_registry!(
