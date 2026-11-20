@@ -391,8 +391,8 @@ async fn test_traffic_sketch_no_blocks() {
     let policy = PolicyConfig {
         connection_blocklist_ttl_sec: 1,
         proxy_blocklist_ttl_sec: 1,
-        spam_policy_type: PolicyType::NoOp,
-        error_policy_type: PolicyType::FreqThreshold(sketch_config),
+        spam_policy_type: PolicyType::FreqThreshold(sketch_config),
+        spam_sample_rate: Weight::one(),
         channel_capacity: 100,
         dry_run: false,
         ..Default::default()
@@ -416,6 +416,46 @@ async fn test_traffic_sketch_no_blocks() {
     }
     assert!(metrics.num_blocklist_adds < 10);
     assert!(metrics.total_time_blocked < Duration::from_secs(10));
+}
+
+#[sim_test]
+async fn test_traffic_sketch_with_slow_blocks() {
+    telemetry_subscribers::init_for_testing();
+    let sketch_config = FreqThresholdConfig {
+        client_threshold: 9_900,
+        proxied_client_threshold: 9_900,
+        window_size_secs: 4,
+        update_interval_secs: 1,
+        ..Default::default()
+    };
+    let policy = PolicyConfig {
+        connection_blocklist_ttl_sec: 1,
+        proxy_blocklist_ttl_sec: 1,
+        spam_policy_type: PolicyType::FreqThreshold(sketch_config),
+        spam_sample_rate: Weight::one(),
+        channel_capacity: 100,
+        dry_run: false,
+        ..Default::default()
+    };
+    let metrics = TrafficSim::run(
+        policy,
+        10,     // num_clients
+        10_000, // per_client_tps
+        Duration::from_secs(20),
+        true, // report
+    )
+    .await;
+
+    let expected_requests = 10_000 * 10 * 20;
+    assert!(metrics.num_requests > expected_requests - 1_000);
+    assert!(metrics.num_requests < expected_requests + 200);
+    // Blocking starts once the 4-second window fills, and each block lasts the 1-second TTL. A
+    // client is blocked again about 4 seconds after release, so about a fifth of requests are blocked.
+    assert!(metrics.num_blocked as f64 > (expected_requests as f64 / 5.0) * 0.90);
+    // The clients are added to the blocklist about 40 times in total.
+    assert!(metrics.num_blocklist_adds >= 30);
+    assert!(metrics.abs_time_to_first_block.unwrap() < Duration::from_secs(5));
+    assert!(metrics.total_time_blocked > Duration::from_millis(3500));
 }
 
 #[sim_test]
