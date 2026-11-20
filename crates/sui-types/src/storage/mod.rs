@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod error;
+mod object_filter;
 mod object_store_trait;
 mod read_store;
 mod shared_in_memory_store;
@@ -31,6 +32,13 @@ use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::{ModuleId, TypeTag};
 use move_core_types::resolver::SerializedPackage;
+pub use object_filter::DnfFilter;
+pub use object_filter::DynamicFieldFilter;
+pub use object_filter::DynamicFieldPredicate;
+pub use object_filter::FilterLiteral;
+pub use object_filter::NameTypePattern;
+pub use object_filter::OwnedObjectFilter;
+pub use object_filter::StructTypePattern;
 pub use object_store_trait::ObjectStore;
 pub use read_store::BalanceInfo;
 pub use read_store::BalanceIterator;

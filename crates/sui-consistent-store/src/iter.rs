@@ -234,7 +234,7 @@ where
 /// `None` if `prefix` is composed entirely of `0xFF` bytes (and so
 /// has no successor in this ordering), in which case the prefix
 /// extends to the end of the key space.
-pub(crate) fn next_prefix(prefix: &[u8]) -> Option<Vec<u8>> {
+pub fn next_prefix(prefix: &[u8]) -> Option<Vec<u8>> {
     let mut next = prefix.to_vec();
     while let Some(last) = next.last_mut() {
         if *last < 0xFF {
