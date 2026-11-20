@@ -1,0 +1,982 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/sui-indexer-alt-graphql/src/api/subscription/scan_then_live.rs`."><title>scan_then_live.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="sui_indexer_alt_graphql" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.1 (48a229cea 2026-09-01)" data-channel="1.98.1" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../../static.files/src-script-813739b1.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">sui_indexer_alt_graphql/api/subscription/</div>scan_then_live.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) Mysten Labs, Inc.
+<a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: Apache-2.0
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="doccomment">//! Scan-then-live subscription driver: stream the items matching a filter, in checkpoint order,
+<a href=#5 id=5 data-nosnippet>5</a>//! resuming from a cursor or checkpoint, in two phases:
+<a href=#6 id=6 data-nosnippet>6</a>//!
+<a href=#7 id=7 data-nosnippet>7</a>//! 1. Backfill ([`backfill`]): scan indexed data forward from the resume point to catch up, using
+<a href=#8 id=8 data-nosnippet>8</a>//!    the same pagination path.
+<a href=#9 id=9 data-nosnippet>9</a>//! 2. Live ([`live`]): read matching items from the checkpoint broadcast.
+<a href=#10 id=10 data-nosnippet>10</a>//!
+<a href=#11 id=11 data-nosnippet>11</a>//! Once the scan comes within `handoff_threshold` of the tip, the driver subscribes to the broadcast,
+<a href=#12 id=12 data-nosnippet>12</a>//! so reading is handed off to the live phase at `handoff + 1`. The coverage claim the ledger reports
+<a href=#13 id=13 data-nosnippet>13</a>//! on each page lets the handoff advance even through stretches that match nothing. Every payload
+<a href=#14 id=14 data-nosnippet>14</a>//! goes out only past the position the client's latest cursor resumes from, so the two phases leave
+<a href=#15 id=15 data-nosnippet>15</a>//! no gap and repeat nothing.
+<a href=#16 id=16 data-nosnippet>16</a>
+<a href=#17 id=17 data-nosnippet>17</a></span><span class="kw">use </span>std::future::Future;
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>std::ops::RangeInclusive;
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>std::sync::Arc;
+<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>std::time::Duration;
+<a href=#21 id=21 data-nosnippet>21</a>
+<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>async_graphql::OutputType;
+<a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>async_graphql::connection::CursorType;
+<a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>async_stream::stream;
+<a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>backoff::ExponentialBackoff;
+<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>futures::Stream;
+<a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span>sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
+<a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>tokio::sync::broadcast;
+<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>tokio::sync::watch;
+<a href=#30 id=30 data-nosnippet>30</a><span class="kw">use </span>tracing::warn;
+<a href=#31 id=31 data-nosnippet>31</a>
+<a href=#32 id=32 data-nosnippet>32</a><span class="kw">use </span><span class="kw">crate</span>::api::types::ledger_cursor::scan::LedgerPage;
+<a href=#33 id=33 data-nosnippet>33</a><span class="kw">use </span><span class="kw">crate</span>::config::SubscriptionConfig;
+<a href=#34 id=34 data-nosnippet>34</a><span class="kw">use </span><span class="kw">crate</span>::error::RpcError;
+<a href=#35 id=35 data-nosnippet>35</a><span class="kw">use </span><span class="kw">crate</span>::error::bad_user_input;
+<a href=#36 id=36 data-nosnippet>36</a><span class="kw">use </span><span class="kw">crate</span>::error::upcast;
+<a href=#37 id=37 data-nosnippet>37</a><span class="kw">use </span><span class="kw">crate</span>::pagination::Page;
+<a href=#38 id=38 data-nosnippet>38</a><span class="kw">use </span><span class="kw">crate</span>::pagination::PageLimits;
+<a href=#39 id=39 data-nosnippet>39</a><span class="kw">use </span><span class="kw">crate</span>::task::streaming::CheckpointBroadcaster;
+<a href=#40 id=40 data-nosnippet>40</a><span class="kw">use </span><span class="kw">crate</span>::task::streaming::ProcessedCheckpoint;
+<a href=#41 id=41 data-nosnippet>41</a><span class="kw">use </span><span class="kw">crate</span>::task::streaming::StreamedCaches;
+<a href=#42 id=42 data-nosnippet>42</a><span class="kw">use </span><span class="kw">crate</span>::task::streaming::SubscriberLimit;
+<a href=#43 id=43 data-nosnippet>43</a><span class="kw">use </span><span class="kw">crate</span>::task::streaming::SubscriptionBroadcast;
+<a href=#44 id=44 data-nosnippet>44</a><span class="kw">use </span><span class="kw">crate</span>::task::streaming::SubscriptionLifecycleGuard;
+<a href=#45 id=45 data-nosnippet>45</a><span class="kw">use </span><span class="kw">crate</span>::task::streaming::SubscriptionTerminationReason;
+<a href=#46 id=46 data-nosnippet>46</a><span class="kw">use </span><span class="kw">crate</span>::task::streaming::broadcast_error;
+<a href=#47 id=47 data-nosnippet>47</a><span class="kw">use </span><span class="kw">crate</span>::task::streaming::reconnect_error;
+<a href=#48 id=48 data-nosnippet>48</a><span class="kw">use </span><span class="kw">crate</span>::task::streaming::wait_for_pipelines_catching_up_at;
+<a href=#49 id=49 data-nosnippet>49</a>
+<a href=#50 id=50 data-nosnippet>50</a><span class="kw">use </span><span class="kw">super</span>::Error;
+<a href=#51 id=51 data-nosnippet>51</a><span class="kw">use </span><span class="kw">crate</span>::task::watermark::Watermarks;
+<a href=#52 id=52 data-nosnippet>52</a>
+<a href=#53 id=53 data-nosnippet>53</a><span class="doccomment">/// How long to wait before re-requesting when the scan has drained the indexer's current tip but not
+<a href=#54 id=54 data-nosnippet>54</a>/// yet reached the handoff. The wait doubles while the ledger makes no progress, up to
+<a href=#55 id=55 data-nosnippet>55</a>/// `BACKFILL_POLL_MAX_INTERVAL`.
+<a href=#56 id=56 data-nosnippet>56</a></span><span class="kw">const </span>BACKFILL_POLL_INTERVAL: Duration = Duration::from_millis(<span class="number">100</span>);
+<a href=#57 id=57 data-nosnippet>57</a><span class="kw">const </span>BACKFILL_POLL_MAX_INTERVAL: Duration = Duration::from_secs(<span class="number">2</span>);
+<a href=#58 id=58 data-nosnippet>58</a>
+<a href=#59 id=59 data-nosnippet>59</a><span class="doccomment">/// How long the backfill waits for the ledger to make progress before asking the client to
+<a href=#60 id=60 data-nosnippet>60</a>/// reconnect, so a stalled ledger does not hold subscription slots indefinitely.
+<a href=#61 id=61 data-nosnippet>61</a></span><span class="kw">const </span>BACKFILL_POLL_DEADLINE: Duration = Duration::from_secs(<span class="number">180</span>);
+<a href=#62 id=62 data-nosnippet>62</a>
+<a href=#63 id=63 data-nosnippet>63</a><span class="doccomment">/// The filter-matching items in one live checkpoint, each with its cursor, in delivery order.
+<a href=#64 id=64 data-nosnippet>64</a></span><span class="kw">type </span>LiveMatches&lt;S&gt; = Vec&lt;(&lt;S <span class="kw">as </span>Subscribable&gt;::Cursor, &lt;S <span class="kw">as </span>Subscribable&gt;::Item)&gt;;
+<a href=#65 id=65 data-nosnippet>65</a>
+<a href=#66 id=66 data-nosnippet>66</a><span class="doccomment">/// A feed that can be streamed with the scan-then-live driver. One implementation per subscribable
+<a href=#67 id=67 data-nosnippet>67</a>/// GraphQL type supplies its cursor, filter, matching, and payload shape, and the free functions
+<a href=#68 id=68 data-nosnippet>68</a>/// here drive the shared machinery over it.
+<a href=#69 id=69 data-nosnippet>69</a></span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">trait </span>Subscribable {
+<a href=#70 id=70 data-nosnippet>70</a>    <span class="doccomment">/// The GraphQL node delivered in each edge.
+<a href=#71 id=71 data-nosnippet>71</a>    </span><span class="kw">type </span>Item: OutputType + Send + <span class="lifetime">'static</span>;
+<a href=#72 id=72 data-nosnippet>72</a>    <span class="doccomment">/// The opaque cursor minted for resumption.
+<a href=#73 id=73 data-nosnippet>73</a>    </span><span class="kw">type </span>Cursor: CursorType + Clone + Send + Sync + <span class="lifetime">'static</span>;
+<a href=#74 id=74 data-nosnippet>74</a>    <span class="doccomment">/// A position in the feed's order: the boundary just before an item, whether or not an item
+<a href=#75 id=75 data-nosnippet>75</a>    /// sits there.
+<a href=#76 id=76 data-nosnippet>76</a>    </span><span class="kw">type </span>Position: Ord + Copy + Send + Sync + <span class="lifetime">'static</span>;
+<a href=#77 id=77 data-nosnippet>77</a>    <span class="doccomment">/// The filter selecting matching items.
+<a href=#78 id=78 data-nosnippet>78</a>    </span><span class="kw">type </span>Filter: Clone + Send + Sync + <span class="lifetime">'static</span>;
+<a href=#79 id=79 data-nosnippet>79</a>    <span class="doccomment">/// The raw scan payload one page yields before conversion to edges.
+<a href=#80 id=80 data-nosnippet>80</a>    </span><span class="kw">type </span>ScanItem: Send + <span class="lifetime">'static</span>;
+<a href=#81 id=81 data-nosnippet>81</a>
+<a href=#82 id=82 data-nosnippet>82</a>    <span class="doccomment">/// The GraphQL payload delivered for each item: an edge carrying the cursor and the node.
+<a href=#83 id=83 data-nosnippet>83</a>    </span><span class="kw">type </span>Output: OutputType + Send + <span class="lifetime">'static</span>;
+<a href=#84 id=84 data-nosnippet>84</a>
+<a href=#85 id=85 data-nosnippet>85</a>    <span class="doccomment">/// Scan one page of matches over `cp_bounds`, starting after `page`'s cursor.
+<a href=#86 id=86 data-nosnippet>86</a>    </span><span class="kw">fn </span>scan&lt;<span class="lifetime">'a</span>&gt;(
+<a href=#87 id=87 data-nosnippet>87</a>        reader: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>LedgerGrpcReader,
+<a href=#88 id=88 data-nosnippet>88</a>        cp_bounds: RangeInclusive&lt;u64&gt;,
+<a href=#89 id=89 data-nosnippet>89</a>        page: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Page&lt;<span class="self">Self</span>::Cursor&gt;,
+<a href=#90 id=90 data-nosnippet>90</a>        filter: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">Self</span>::Filter,
+<a href=#91 id=91 data-nosnippet>91</a>    ) -&gt; <span class="kw">impl </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;LedgerPage&lt;<span class="self">Self</span>::ScanItem, <span class="self">Self</span>::Cursor&gt;, RpcError&gt;&gt; + Send + <span class="lifetime">'a</span>;
+<a href=#92 id=92 data-nosnippet>92</a>
+<a href=#93 id=93 data-nosnippet>93</a>    <span class="doccomment">/// The last checkpoint a resume cursor shows the client has seen any of, if it shows one.
+<a href=#94 id=94 data-nosnippet>94</a>    </span><span class="kw">fn </span>resume_from(cursor: <span class="kw-2">&amp;</span><span class="self">Self</span>::Cursor) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt;;
+<a href=#95 id=95 data-nosnippet>95</a>
+<a href=#96 id=96 data-nosnippet>96</a>    <span class="doccomment">/// Where a scan after `cursor` starts: every item before this position comes at or before the
+<a href=#97 id=97 data-nosnippet>97</a>    /// cursor.
+<a href=#98 id=98 data-nosnippet>98</a>    </span><span class="kw">fn </span>resume_position(cursor: <span class="kw-2">&amp;</span><span class="self">Self</span>::Cursor) -&gt; <span class="self">Self</span>::Position;
+<a href=#99 id=99 data-nosnippet>99</a>
+<a href=#100 id=100 data-nosnippet>100</a>    <span class="doccomment">/// The position at the start of `checkpoint`, before its first item.
+<a href=#101 id=101 data-nosnippet>101</a>    </span><span class="kw">fn </span>checkpoint_start(checkpoint: u64) -&gt; <span class="self">Self</span>::Position;
+<a href=#102 id=102 data-nosnippet>102</a>
+<a href=#103 id=103 data-nosnippet>103</a>    <span class="doccomment">/// Build the GraphQL node from one scanned item's payload, which sits in `checkpoint`,
+<a href=#104 id=104 data-nosnippet>104</a>    /// constructing whatever scope the feed resolves against. The driver assembles the edge from
+<a href=#105 id=105 data-nosnippet>105</a>    /// the item's cursor and this node.
+<a href=#106 id=106 data-nosnippet>106</a>    </span><span class="kw">fn </span>build_node(
+<a href=#107 id=107 data-nosnippet>107</a>        caches: <span class="kw-2">&amp;</span>Arc&lt;StreamedCaches&gt;,
+<a href=#108 id=108 data-nosnippet>108</a>        resolver_limits: <span class="kw-2">&amp;</span>sui_package_resolver::Limits,
+<a href=#109 id=109 data-nosnippet>109</a>        checkpoint: u64,
+<a href=#110 id=110 data-nosnippet>110</a>        payload: <span class="kw-2">&amp;</span><span class="self">Self</span>::ScanItem,
+<a href=#111 id=111 data-nosnippet>111</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Item, RpcError&gt;;
+<a href=#112 id=112 data-nosnippet>112</a>
+<a href=#113 id=113 data-nosnippet>113</a>    <span class="doccomment">/// The filter-matching items in one live checkpoint, each with its cursor, in delivery order.
+<a href=#114 id=114 data-nosnippet>114</a>    </span><span class="kw">fn </span>matching_items(
+<a href=#115 id=115 data-nosnippet>115</a>        checkpoint: <span class="kw-2">&amp;</span>Arc&lt;ProcessedCheckpoint&gt;,
+<a href=#116 id=116 data-nosnippet>116</a>        caches: <span class="kw-2">&amp;</span>Arc&lt;StreamedCaches&gt;,
+<a href=#117 id=117 data-nosnippet>117</a>        resolver_limits: <span class="kw-2">&amp;</span>sui_package_resolver::Limits,
+<a href=#118 id=118 data-nosnippet>118</a>        filter: <span class="kw-2">&amp;</span><span class="self">Self</span>::Filter,
+<a href=#119 id=119 data-nosnippet>119</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;LiveMatches&lt;<span class="self">Self</span>&gt;, RpcError&gt;;
+<a href=#120 id=120 data-nosnippet>120</a>
+<a href=#121 id=121 data-nosnippet>121</a>    <span class="doccomment">/// Assemble one delivered payload from its cursor and node: a match passes the node, a progress
+<a href=#122 id=122 data-nosnippet>122</a>    /// payload passes `None`. A feed that does not opt into progress is only ever called with `Some`.
+<a href=#123 id=123 data-nosnippet>123</a>    </span><span class="kw">fn </span>output(cursor: String, node: <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt;) -&gt; <span class="self">Self</span>::Output;
+<a href=#124 id=124 data-nosnippet>124</a>
+<a href=#125 id=125 data-nosnippet>125</a>    <span class="doccomment">/// The cursor marking the end of `checkpoint`, minted for a live progress payload: at the start
+<a href=#126 id=126 data-nosnippet>126</a>    /// of the next checkpoint, so a scan starting after it covers everything from there on.
+<a href=#127 id=127 data-nosnippet>127</a>    /// Returning `None` suppresses live progress for the feed; backfill progress is gated
+<a href=#128 id=128 data-nosnippet>128</a>    /// separately, by the per-subscription opt-in.
+<a href=#129 id=129 data-nosnippet>129</a>    </span><span class="kw">fn </span>boundary_after(_checkpoint: <span class="kw-2">&amp;</span>ProcessedCheckpoint) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Cursor&gt; {
+<a href=#130 id=130 data-nosnippet>130</a>        <span class="prelude-val">None
+<a href=#131 id=131 data-nosnippet>131</a>    </span>}
+<a href=#132 id=132 data-nosnippet>132</a>
+<a href=#133 id=133 data-nosnippet>133</a>    <span class="doccomment">/// The feed's name, used to label its lifecycle metrics.
+<a href=#134 id=134 data-nosnippet>134</a>    </span><span class="kw">fn </span>subscription_type() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str;
+<a href=#135 id=135 data-nosnippet>135</a>}
+<a href=#136 id=136 data-nosnippet>136</a>
+<a href=#137 id=137 data-nosnippet>137</a><span class="doccomment">/// One backfill scan output: either a match at the checkpoint its payload names, or a coverage
+<a href=#138 id=138 data-nosnippet>138</a>/// marker at a page's coverage claim, at or below which every match has been scanned (advances the
+<a href=#139 id=139 data-nosnippet>139</a>/// handoff even on a match-less page), carrying the page's end cursor, the resume point past
+<a href=#140 id=140 data-nosnippet>140</a>/// everything scanned so far.
+<a href=#141 id=141 data-nosnippet>141</a></span><span class="kw">enum </span>Scanned&lt;C, I&gt; {
+<a href=#142 id=142 data-nosnippet>142</a>    Match { checkpoint: u64, cursor: C, node: I },
+<a href=#143 id=143 data-nosnippet>143</a>    Covered { checkpoint: u64, cursor: C },
+<a href=#144 id=144 data-nosnippet>144</a>}
+<a href=#145 id=145 data-nosnippet>145</a>
+<a href=#146 id=146 data-nosnippet>146</a><span class="doccomment">/// Where the backfill scan hands off to the live broadcast. The scan delivers matches at or below
+<a href=#147 id=147 data-nosnippet>147</a>/// the pinned handoff; live delivers the rest, from the checkpoint after it.
+<a href=#148 id=148 data-nosnippet>148</a></span><span class="kw">struct </span>Handoff {
+<a href=#149 id=149 data-nosnippet>149</a>    <span class="doccomment">/// Pin once the scan frontier is within this many checkpoints of the streamed tip.
+<a href=#150 id=150 data-nosnippet>150</a>    </span>threshold: u64,
+<a href=#151 id=151 data-nosnippet>151</a>    pinned: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#152 id=152 data-nosnippet>152</a>}
+<a href=#153 id=153 data-nosnippet>153</a>
+<a href=#154 id=154 data-nosnippet>154</a><span class="doccomment">/// What the backfill does with one scan output, as decided by [`Handoff::step`].
+<a href=#155 id=155 data-nosnippet>155</a></span><span class="kw">enum </span>ScanStep&lt;C, I&gt; {
+<a href=#156 id=156 data-nosnippet>156</a>    <span class="doccomment">/// Deliver this match.
+<a href=#157 id=157 data-nosnippet>157</a>    </span>Deliver { cursor: C, node: I },
+<a href=#158 id=158 data-nosnippet>158</a>    <span class="doccomment">/// Keep scanning.
+<a href=#159 id=159 data-nosnippet>159</a>    </span>Continue,
+<a href=#160 id=160 data-nosnippet>160</a>    <span class="doccomment">/// The scan has covered the handoff; live takes over.
+<a href=#161 id=161 data-nosnippet>161</a>    </span>Done,
+<a href=#162 id=162 data-nosnippet>162</a>}
+<a href=#163 id=163 data-nosnippet>163</a>
+<a href=#164 id=164 data-nosnippet>164</a><span class="kw">impl</span>&lt;C, I&gt; Scanned&lt;C, I&gt; {
+<a href=#165 id=165 data-nosnippet>165</a>    <span class="doccomment">/// The checkpoint this output sits at (the match's, or the page's coverage claim).
+<a href=#166 id=166 data-nosnippet>166</a>    </span><span class="kw">fn </span>checkpoint(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+<a href=#167 id=167 data-nosnippet>167</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#168 id=168 data-nosnippet>168</a>            Scanned::Match { checkpoint, .. } | Scanned::Covered { checkpoint, .. } =&gt; <span class="kw-2">*</span>checkpoint,
+<a href=#169 id=169 data-nosnippet>169</a>        }
+<a href=#170 id=170 data-nosnippet>170</a>    }
+<a href=#171 id=171 data-nosnippet>171</a>}
+<a href=#172 id=172 data-nosnippet>172</a>
+<a href=#173 id=173 data-nosnippet>173</a><span class="doccomment">/// Tracks what the client holds, and decides when the driver emits a progress payload.
+<a href=#174 id=174 data-nosnippet>174</a>///
+<a href=#175 id=175 data-nosnippet>175</a>/// The committed position is where the client's latest cursor resumes: every match before it has
+<a href=#176 id=176 data-nosnippet>176</a>/// been delivered. A payload, match or progress, goes out only when its cursor resumes past the
+<a href=#177 id=177 data-nosnippet>177</a>/// committed position, which it then becomes. So resuming from the latest cursor neither skips nor
+<a href=#178 id=178 data-nosnippet>178</a>/// repeats, and the client's resume point never moves backward. Live drops what the backfill
+<a href=#179 id=179 data-nosnippet>179</a>/// already delivered, or what a progress payload already covered, by position.
+<a href=#180 id=180 data-nosnippet>180</a>///
+<a href=#181 id=181 data-nosnippet>181</a>/// Backfill and live produce progress differently. Backfill reuses each scan page's own end cursor
+<a href=#182 id=182 data-nosnippet>182</a>/// at the page boundary, so it needs no pacing. Live has no scan cursor to reuse: it mints one, and
+<a href=#183 id=183 data-nosnippet>183</a>/// only after a run of checkpoints that matched nothing, so a sparse filter does not emit a payload
+<a href=#184 id=184 data-nosnippet>184</a>/// on every checkpoint.
+<a href=#185 id=185 data-nosnippet>185</a></span><span class="kw">struct </span>DeliveryTracker&lt;P&gt; {
+<a href=#186 id=186 data-nosnippet>186</a>    <span class="doccomment">/// Whether this subscription opted into progress payloads. When false, no progress is emitted
+<a href=#187 id=187 data-nosnippet>187</a>    /// on either phase and every payload is a match.
+<a href=#188 id=188 data-nosnippet>188</a>    </span>progress_enabled: bool,
+<a href=#189 id=189 data-nosnippet>189</a>    <span class="doccomment">/// Emit live progress after this many consecutive live checkpoints with no match (0 disables
+<a href=#190 id=190 data-nosnippet>190</a>    /// live progress; backfill is unaffected).
+<a href=#191 id=191 data-nosnippet>191</a>    </span>unmatched_threshold: u64,
+<a href=#192 id=192 data-nosnippet>192</a>    <span class="doccomment">/// Consecutive live checkpoints with no match since the last match or progress payload.
+<a href=#193 id=193 data-nosnippet>193</a>    </span>consecutive_unmatched: u64,
+<a href=#194 id=194 data-nosnippet>194</a>    <span class="doccomment">/// Where the client's latest cursor resumes, or `None` before it holds one.
+<a href=#195 id=195 data-nosnippet>195</a>    </span>committed: <span class="prelude-ty">Option</span>&lt;P&gt;,
+<a href=#196 id=196 data-nosnippet>196</a>}
+<a href=#197 id=197 data-nosnippet>197</a>
+<a href=#198 id=198 data-nosnippet>198</a><span class="kw">impl</span>&lt;P: Ord + Copy&gt; DeliveryTracker&lt;P&gt; {
+<a href=#199 id=199 data-nosnippet>199</a>    <span class="kw">fn </span>new(progress_enabled: bool, unmatched_threshold: u64, committed: <span class="prelude-ty">Option</span>&lt;P&gt;) -&gt; <span class="self">Self </span>{
+<a href=#200 id=200 data-nosnippet>200</a>        <span class="self">Self </span>{
+<a href=#201 id=201 data-nosnippet>201</a>            progress_enabled,
+<a href=#202 id=202 data-nosnippet>202</a>            unmatched_threshold,
+<a href=#203 id=203 data-nosnippet>203</a>            consecutive_unmatched: <span class="number">0</span>,
+<a href=#204 id=204 data-nosnippet>204</a>            committed,
+<a href=#205 id=205 data-nosnippet>205</a>        }
+<a href=#206 id=206 data-nosnippet>206</a>    }
+<a href=#207 id=207 data-nosnippet>207</a>
+<a href=#208 id=208 data-nosnippet>208</a>    <span class="doccomment">/// Commit a match whose cursor resumes at `position`, or return `false` if the client already
+<a href=#209 id=209 data-nosnippet>209</a>    /// holds it. A committed match ends the run of unmatched live checkpoints.
+<a href=#210 id=210 data-nosnippet>210</a>    </span><span class="kw">fn </span>commit_match(<span class="kw-2">&amp;mut </span><span class="self">self</span>, position: P) -&gt; bool {
+<a href=#211 id=211 data-nosnippet>211</a>        <span class="kw">let </span>advanced = <span class="self">self</span>.advance(position);
+<a href=#212 id=212 data-nosnippet>212</a>        <span class="kw">if </span>advanced {
+<a href=#213 id=213 data-nosnippet>213</a>            <span class="self">self</span>.consecutive_unmatched = <span class="number">0</span>;
+<a href=#214 id=214 data-nosnippet>214</a>        }
+<a href=#215 id=215 data-nosnippet>215</a>        advanced
+<a href=#216 id=216 data-nosnippet>216</a>    }
+<a href=#217 id=217 data-nosnippet>217</a>
+<a href=#218 id=218 data-nosnippet>218</a>    <span class="doccomment">/// Commit the end of a backfill page, whose cursor resumes at `position`, as progress. Returns
+<a href=#219 id=219 data-nosnippet>219</a>    /// `false` when progress is off, or when the client already holds a cursor at or past it (a full
+<a href=#220 id=220 data-nosnippet>220</a>    /// page ends on its last match, so it emits nothing).
+<a href=#221 id=221 data-nosnippet>221</a>    </span><span class="kw">fn </span>commit_page_end(<span class="kw-2">&amp;mut </span><span class="self">self</span>, position: P) -&gt; bool {
+<a href=#222 id=222 data-nosnippet>222</a>        <span class="self">self</span>.progress_enabled &amp;&amp; <span class="self">self</span>.advance(position)
+<a href=#223 id=223 data-nosnippet>223</a>    }
+<a href=#224 id=224 data-nosnippet>224</a>
+<a href=#225 id=225 data-nosnippet>225</a>    <span class="doccomment">/// Commit progress at `position`, the boundary after a live checkpoint that delivered no match,
+<a href=#226 id=226 data-nosnippet>226</a>    /// only once the unmatched run reaches the threshold. Returns whether to emit it.
+<a href=#227 id=227 data-nosnippet>227</a>    </span><span class="kw">fn </span>commit_unmatched(<span class="kw-2">&amp;mut </span><span class="self">self</span>, position: P) -&gt; bool {
+<a href=#228 id=228 data-nosnippet>228</a>        <span class="kw">if </span>!<span class="self">self</span>.progress_enabled || <span class="self">self</span>.unmatched_threshold == <span class="number">0 </span>{
+<a href=#229 id=229 data-nosnippet>229</a>            <span class="kw">return </span><span class="bool-val">false</span>;
+<a href=#230 id=230 data-nosnippet>230</a>        }
+<a href=#231 id=231 data-nosnippet>231</a>        <span class="self">self</span>.consecutive_unmatched += <span class="number">1</span>;
+<a href=#232 id=232 data-nosnippet>232</a>        <span class="kw">if </span><span class="self">self</span>.consecutive_unmatched &lt; <span class="self">self</span>.unmatched_threshold {
+<a href=#233 id=233 data-nosnippet>233</a>            <span class="kw">return </span><span class="bool-val">false</span>;
+<a href=#234 id=234 data-nosnippet>234</a>        }
+<a href=#235 id=235 data-nosnippet>235</a>        <span class="self">self</span>.consecutive_unmatched = <span class="number">0</span>;
+<a href=#236 id=236 data-nosnippet>236</a>        <span class="self">self</span>.advance(position)
+<a href=#237 id=237 data-nosnippet>237</a>    }
+<a href=#238 id=238 data-nosnippet>238</a>
+<a href=#239 id=239 data-nosnippet>239</a>    <span class="doccomment">/// Move the committed position to `position`, if it is past it.
+<a href=#240 id=240 data-nosnippet>240</a>    </span><span class="kw">fn </span>advance(<span class="kw-2">&amp;mut </span><span class="self">self</span>, position: P) -&gt; bool {
+<a href=#241 id=241 data-nosnippet>241</a>        <span class="kw">if </span><span class="self">self
+<a href=#242 id=242 data-nosnippet>242</a>            </span>.committed
+<a href=#243 id=243 data-nosnippet>243</a>            .is_some_and(|committed| position &lt;= committed)
+<a href=#244 id=244 data-nosnippet>244</a>        {
+<a href=#245 id=245 data-nosnippet>245</a>            <span class="kw">return </span><span class="bool-val">false</span>;
+<a href=#246 id=246 data-nosnippet>246</a>        }
+<a href=#247 id=247 data-nosnippet>247</a>        <span class="self">self</span>.committed = <span class="prelude-val">Some</span>(position);
+<a href=#248 id=248 data-nosnippet>248</a>        <span class="bool-val">true
+<a href=#249 id=249 data-nosnippet>249</a>    </span>}
+<a href=#250 id=250 data-nosnippet>250</a>}
+<a href=#251 id=251 data-nosnippet>251</a>
+<a href=#252 id=252 data-nosnippet>252</a><span class="kw">impl </span>Handoff {
+<a href=#253 id=253 data-nosnippet>253</a>    <span class="kw">fn </span>new(threshold: u64) -&gt; <span class="self">Self </span>{
+<a href=#254 id=254 data-nosnippet>254</a>        <span class="self">Self </span>{
+<a href=#255 id=255 data-nosnippet>255</a>            threshold,
+<a href=#256 id=256 data-nosnippet>256</a>            pinned: <span class="prelude-val">None</span>,
+<a href=#257 id=257 data-nosnippet>257</a>        }
+<a href=#258 id=258 data-nosnippet>258</a>    }
+<a href=#259 id=259 data-nosnippet>259</a>
+<a href=#260 id=260 data-nosnippet>260</a>    <span class="doccomment">/// Decide what to do with one scan output, given this replica's streamed `tip`.
+<a href=#261 id=261 data-nosnippet>261</a>    ///
+<a href=#262 id=262 data-nosnippet>262</a>    /// Pins first if the scan frontier is within the threshold of `tip`. `resubscribe` must
+<a href=#263 id=263 data-nosnippet>263</a>    /// subscribe the live receiver and then return the streamed tip, so live sees every checkpoint
+<a href=#264 id=264 data-nosnippet>264</a>    /// above the pin. A match past the handoff belongs to live, so the scan stops there.
+<a href=#265 id=265 data-nosnippet>265</a>    </span><span class="kw">fn </span>step&lt;C, I&gt;(
+<a href=#266 id=266 data-nosnippet>266</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#267 id=267 data-nosnippet>267</a>        scanned: Scanned&lt;C, I&gt;,
+<a href=#268 id=268 data-nosnippet>268</a>        tip: u64,
+<a href=#269 id=269 data-nosnippet>269</a>        resubscribe: <span class="kw">impl </span>FnOnce() -&gt; u64,
+<a href=#270 id=270 data-nosnippet>270</a>    ) -&gt; ScanStep&lt;C, I&gt; {
+<a href=#271 id=271 data-nosnippet>271</a>        <span class="kw">if </span><span class="self">self</span>.pinned.is_none() &amp;&amp; tip.saturating_sub(scanned.checkpoint()) &lt;= <span class="self">self</span>.threshold {
+<a href=#272 id=272 data-nosnippet>272</a>            <span class="self">self</span>.pinned = <span class="prelude-val">Some</span>(resubscribe());
+<a href=#273 id=273 data-nosnippet>273</a>        }
+<a href=#274 id=274 data-nosnippet>274</a>
+<a href=#275 id=275 data-nosnippet>275</a>        <span class="kw">match </span>scanned {
+<a href=#276 id=276 data-nosnippet>276</a>            Scanned::Match {
+<a href=#277 id=277 data-nosnippet>277</a>                checkpoint,
+<a href=#278 id=278 data-nosnippet>278</a>                cursor,
+<a href=#279 id=279 data-nosnippet>279</a>                node,
+<a href=#280 id=280 data-nosnippet>280</a>            } =&gt; {
+<a href=#281 id=281 data-nosnippet>281</a>                <span class="kw">if </span><span class="self">self</span>.pinned.is_none_or(|h| checkpoint &lt;= h) {
+<a href=#282 id=282 data-nosnippet>282</a>                    ScanStep::Deliver { cursor, node }
+<a href=#283 id=283 data-nosnippet>283</a>                } <span class="kw">else </span>{
+<a href=#284 id=284 data-nosnippet>284</a>                    ScanStep::Done
+<a href=#285 id=285 data-nosnippet>285</a>                }
+<a href=#286 id=286 data-nosnippet>286</a>            }
+<a href=#287 id=287 data-nosnippet>287</a>            Scanned::Covered { checkpoint, .. } =&gt; {
+<a href=#288 id=288 data-nosnippet>288</a>                <span class="kw">if </span><span class="self">self</span>.pinned.is_some_and(|h| checkpoint &gt;= h) {
+<a href=#289 id=289 data-nosnippet>289</a>                    ScanStep::Done
+<a href=#290 id=290 data-nosnippet>290</a>                } <span class="kw">else </span>{
+<a href=#291 id=291 data-nosnippet>291</a>                    ScanStep::Continue
+<a href=#292 id=292 data-nosnippet>292</a>                }
+<a href=#293 id=293 data-nosnippet>293</a>            }
+<a href=#294 id=294 data-nosnippet>294</a>        }
+<a href=#295 id=295 data-nosnippet>295</a>    }
+<a href=#296 id=296 data-nosnippet>296</a>
+<a href=#297 id=297 data-nosnippet>297</a>    <span class="doccomment">/// The last checkpoint the scan was responsible for; live delivers from the next one.
+<a href=#298 id=298 data-nosnippet>298</a>    </span><span class="kw">fn </span>pinned(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
+<a href=#299 id=299 data-nosnippet>299</a>        <span class="self">self</span>.pinned
+<a href=#300 id=300 data-nosnippet>300</a>    }
+<a href=#301 id=301 data-nosnippet>301</a>}
+<a href=#302 id=302 data-nosnippet>302</a>
+<a href=#303 id=303 data-nosnippet>303</a><span class="doccomment">/// Whether a subscription resuming after `checkpoint` starts more than `max_ahead` checkpoints past
+<a href=#304 id=304 data-nosnippet>304</a>/// the streamed `tip`. A resume point that names no checkpoint is never too far ahead.
+<a href=#305 id=305 data-nosnippet>305</a></span><span class="kw">fn </span>is_too_far_ahead(checkpoint: <span class="prelude-ty">Option</span>&lt;u64&gt;, tip: u64, max_ahead: u64) -&gt; bool {
+<a href=#306 id=306 data-nosnippet>306</a>    checkpoint.is_some_and(|checkpoint| checkpoint &gt; tip.saturating_add(max_ahead))
+<a href=#307 id=307 data-nosnippet>307</a>}
+<a href=#308 id=308 data-nosnippet>308</a>
+<a href=#309 id=309 data-nosnippet>309</a><span class="doccomment">/// Subscribe to items matching `filter`: backfill from `resume` toward the tip, then follow live.
+<a href=#310 id=310 data-nosnippet>310</a>/// The handoff is pinned mid-scan, once the scan frontier comes within `handoff_threshold` of the
+<a href=#311 id=311 data-nosnippet>311</a>/// tip, so even a deep backfill catches up within one connection instead of lagging the receiver.
+<a href=#312 id=312 data-nosnippet>312</a></span><span class="attr">#[allow(clippy::type_complexity)]
+<a href=#313 id=313 data-nosnippet>313</a></span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>subscribe&lt;S: Subscribable&gt;(
+<a href=#314 id=314 data-nosnippet>314</a>    reader: LedgerGrpcReader,
+<a href=#315 id=315 data-nosnippet>315</a>    broadcast: Arc&lt;SubscriptionBroadcast&gt;,
+<a href=#316 id=316 data-nosnippet>316</a>    caches: Arc&lt;StreamedCaches&gt;,
+<a href=#317 id=317 data-nosnippet>317</a>    resolver_limits: sui_package_resolver::Limits,
+<a href=#318 id=318 data-nosnippet>318</a>    <span class="kw-2">mut </span>watermarks_rx: watch::Receiver&lt;Arc&lt;Watermarks&gt;&gt;,
+<a href=#319 id=319 data-nosnippet>319</a>    filter: S::Filter,
+<a href=#320 id=320 data-nosnippet>320</a>    after: <span class="prelude-ty">Option</span>&lt;S::Cursor&gt;,
+<a href=#321 id=321 data-nosnippet>321</a>    after_checkpoint: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#322 id=322 data-nosnippet>322</a>    send_progress: bool,
+<a href=#323 id=323 data-nosnippet>323</a>    subscriber_limit: SubscriberLimit,
+<a href=#324 id=324 data-nosnippet>324</a>    config: SubscriptionConfig,
+<a href=#325 id=325 data-nosnippet>325</a>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>Stream&lt;Item = <span class="prelude-ty">Result</span>&lt;S::Output, RpcError&gt;&gt;, RpcError&lt;Error&gt;&gt; {
+<a href=#326 id=326 data-nosnippet>326</a>    <span class="comment">// The last checkpoint the client has seen any of, when it has seen one: the later of the
+<a href=#327 id=327 data-nosnippet>327</a>    // cursor's and `afterCheckpoint`.
+<a href=#328 id=328 data-nosnippet>328</a>    </span><span class="kw">let </span>resume_checkpoint = after
+<a href=#329 id=329 data-nosnippet>329</a>        .as_ref()
+<a href=#330 id=330 data-nosnippet>330</a>        .and_then(S::resume_from)
+<a href=#331 id=331 data-nosnippet>331</a>        .max(after_checkpoint);
+<a href=#332 id=332 data-nosnippet>332</a>
+<a href=#333 id=333 data-nosnippet>333</a>    <span class="comment">// Reject a resume point more than `max_ahead` checkpoints past the streamed tip before
+<a href=#334 id=334 data-nosnippet>334</a>    // admitting, so bad input never claims a slot or lands in the subscription lifecycle metrics.
+<a href=#335 id=335 data-nosnippet>335</a>    // There is nothing to backfill ahead of the tip, so such a request would only wait for the
+<a href=#336 id=336 data-nosnippet>336</a>    // chain to reach it, and a far-future one would hold the connection open indefinitely.
+<a href=#337 id=337 data-nosnippet>337</a>    </span><span class="kw">let </span>max_ahead = config.max_start_checkpoints_ahead_of_tip;
+<a href=#338 id=338 data-nosnippet>338</a>    <span class="kw">if </span>is_too_far_ahead(resume_checkpoint, broadcast.network_tip(), max_ahead) {
+<a href=#339 id=339 data-nosnippet>339</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(bad_user_input(Error::TooFarAheadOfTip { max: max_ahead }));
+<a href=#340 id=340 data-nosnippet>340</a>    }
+<a href=#341 id=341 data-nosnippet>341</a>
+<a href=#342 id=342 data-nosnippet>342</a>    <span class="comment">// Claim a concurrency slot for the subscription's lifetime; at capacity this is `Err` with no
+<a href=#343 id=343 data-nosnippet>343</a>    // guard created (and so no lifecycle metric).
+<a href=#344 id=344 data-nosnippet>344</a>    </span><span class="kw">let </span>guard = SubscriptionLifecycleGuard::new(
+<a href=#345 id=345 data-nosnippet>345</a>        S::subscription_type(),
+<a href=#346 id=346 data-nosnippet>346</a>        broadcast.metrics(),
+<a href=#347 id=347 data-nosnippet>347</a>        <span class="kw-2">&amp;</span>subscriber_limit,
+<a href=#348 id=348 data-nosnippet>348</a>    )
+<a href=#349 id=349 data-nosnippet>349</a>    .map_err(upcast)<span class="question-mark">?</span>;
+<a href=#350 id=350 data-nosnippet>350</a>
+<a href=#351 id=351 data-nosnippet>351</a>    <span class="comment">// Size the backfill scan page to the resolve concurrency. Scans are sequential (each needs the
+<a href=#352 id=352 data-nosnippet>352</a>    // previous page's cursor), so feeding one window of `n` concurrent resolutions takes ceil(n /
+<a href=#353 id=353 data-nosnippet>353</a>    // page) scans: a page much smaller than the concurrency makes scanning the bottleneck, a much
+<a href=#354 id=354 data-nosnippet>354</a>    // larger one just holds a bigger page in memory. Matching them is roughly one scan per window.
+<a href=#355 id=355 data-nosnippet>355</a>    </span><span class="kw">let </span>scan_page_size = config.max_concurrent_resolutions;
+<a href=#356 id=356 data-nosnippet>356</a>
+<a href=#357 id=357 data-nosnippet>357</a>    <span class="comment">// Pin the handoff once the scan comes within half the live buffer of the tip, leaving room for
+<a href=#358 id=358 data-nosnippet>358</a>    // checkpoints that arrive during the handoff so the receiver does not lag.
+<a href=#359 id=359 data-nosnippet>359</a>    </span><span class="kw">let </span>handoff_threshold = config.broadcast_buffer <span class="kw">as </span>u64 / <span class="number">2</span>;
+<a href=#360 id=360 data-nosnippet>360</a>
+<a href=#361 id=361 data-nosnippet>361</a>    <span class="comment">// Progress payloads are opt-in per subscription; once enabled, this threshold paces how often
+<a href=#362 id=362 data-nosnippet>362</a>    // live progress fires.
+<a href=#363 id=363 data-nosnippet>363</a>    </span><span class="kw">let </span>unmatched_threshold = config.unmatched_checkpoints_before_progress;
+<a href=#364 id=364 data-nosnippet>364</a>
+<a href=#365 id=365 data-nosnippet>365</a>    <span class="comment">// The client holds every match before the later of its cursor and `afterCheckpoint`. With
+<a href=#366 id=366 data-nosnippet>366</a>    // neither, it holds nothing and the subscription is live-only.
+<a href=#367 id=367 data-nosnippet>367</a>    </span><span class="kw">let </span>committed = after
+<a href=#368 id=368 data-nosnippet>368</a>        .as_ref()
+<a href=#369 id=369 data-nosnippet>369</a>        .map(S::resume_position)
+<a href=#370 id=370 data-nosnippet>370</a>        .max(after_checkpoint.map(|checkpoint| S::checkpoint_start(checkpoint.saturating_add(<span class="number">1</span>))));
+<a href=#371 id=371 data-nosnippet>371</a>
+<a href=#372 id=372 data-nosnippet>372</a>    <span class="prelude-val">Ok</span>(<span class="macro">stream!</span> {
+<a href=#373 id=373 data-nosnippet>373</a>        <span class="kw">let </span><span class="kw-2">mut </span>pending_receiver = <span class="prelude-val">None</span>;
+<a href=#374 id=374 data-nosnippet>374</a>        <span class="kw">let </span><span class="kw-2">mut </span>handoff = Handoff::new(handoff_threshold);
+<a href=#375 id=375 data-nosnippet>375</a>        <span class="kw">let </span><span class="kw-2">mut </span>tracker = DeliveryTracker::new(send_progress, unmatched_threshold, committed);
+<a href=#376 id=376 data-nosnippet>376</a>        <span class="kw">let </span><span class="kw-2">mut </span>last_checkpoint: <span class="prelude-ty">Option</span>&lt;u64&gt; = <span class="prelude-val">None</span>;
+<a href=#377 id=377 data-nosnippet>377</a>
+<a href=#378 id=378 data-nosnippet>378</a>        <span class="comment">// Phase 1: scan toward the tip, pinning the live receiver near it. `after` and/or
+<a href=#379 id=379 data-nosnippet>379</a>        // `afterCheckpoint` resume the backfill; neither means live-only.
+<a href=#380 id=380 data-nosnippet>380</a>        </span><span class="kw">if </span>committed.is_some() {
+<a href=#381 id=381 data-nosnippet>381</a>            <span class="comment">// The resume point can be ahead of this server's watermarks (a cursor minted from the
+<a href=#382 id=382 data-nosnippet>382</a>            // live stream, or by a more caught-up server). Waiting for them to reach it raises the
+<a href=#383 id=383 data-nosnippet>383</a>            // ledger readers' monotonic-read floor past it, so no replica scans from a view behind
+<a href=#384 id=384 data-nosnippet>384</a>            // the resume point. `scan_page` then waits for each page's end the same way, keeping
+<a href=#385 id=385 data-nosnippet>385</a>            // the floor at or above every later resume point.
+<a href=#386 id=386 data-nosnippet>386</a>            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(checkpoint) = resume_checkpoint
+<a href=#387 id=387 data-nosnippet>387</a>                &amp;&amp; <span class="kw">let </span><span class="prelude-val">Err</span>(e) = wait_for_pipelines_catching_up_at(checkpoint, <span class="kw-2">&amp;mut </span>watermarks_rx).<span class="kw">await
+<a href=#388 id=388 data-nosnippet>388</a>            </span>{
+<a href=#389 id=389 data-nosnippet>389</a>                guard.terminate(SubscriptionTerminationReason::BackfillError);
+<a href=#390 id=390 data-nosnippet>390</a>                <span class="kw">yield </span><span class="prelude-val">Err</span>(RpcError::from(e));
+<a href=#391 id=391 data-nosnippet>391</a>                <span class="kw">return</span>;
+<a href=#392 id=392 data-nosnippet>392</a>            }
+<a href=#393 id=393 data-nosnippet>393</a>
+<a href=#394 id=394 data-nosnippet>394</a>            <span class="kw">let </span>checkpoint_lo = after_checkpoint.map_or(<span class="number">0</span>, |cp| cp.saturating_add(<span class="number">1</span>));
+<a href=#395 id=395 data-nosnippet>395</a>            <span class="kw">let </span>scan = backfill::&lt;S&gt;(
+<a href=#396 id=396 data-nosnippet>396</a>                reader,
+<a href=#397 id=397 data-nosnippet>397</a>                caches.clone(),
+<a href=#398 id=398 data-nosnippet>398</a>                resolver_limits.clone(),
+<a href=#399 id=399 data-nosnippet>399</a>                watermarks_rx,
+<a href=#400 id=400 data-nosnippet>400</a>                filter.clone(),
+<a href=#401 id=401 data-nosnippet>401</a>                after,
+<a href=#402 id=402 data-nosnippet>402</a>                checkpoint_lo,
+<a href=#403 id=403 data-nosnippet>403</a>                scan_page_size,
+<a href=#404 id=404 data-nosnippet>404</a>            );
+<a href=#405 id=405 data-nosnippet>405</a>            <span class="kw">for await </span>scanned <span class="kw">in </span>scan {
+<a href=#406 id=406 data-nosnippet>406</a>                <span class="kw">let </span>scanned = <span class="kw">match </span>scanned {
+<a href=#407 id=407 data-nosnippet>407</a>                    <span class="prelude-val">Ok</span>(scanned) =&gt; scanned,
+<a href=#408 id=408 data-nosnippet>408</a>                    <span class="prelude-val">Err</span>(e) =&gt; {
+<a href=#409 id=409 data-nosnippet>409</a>                        guard.terminate(SubscriptionTerminationReason::BackfillError);
+<a href=#410 id=410 data-nosnippet>410</a>                        <span class="kw">yield </span><span class="prelude-val">Err</span>(e);
+<a href=#411 id=411 data-nosnippet>411</a>                        <span class="kw">return</span>;
+<a href=#412 id=412 data-nosnippet>412</a>                    }
+<a href=#413 id=413 data-nosnippet>413</a>                };
+<a href=#414 id=414 data-nosnippet>414</a>
+<a href=#415 id=415 data-nosnippet>415</a>                <span class="comment">// A page's end is progress once every match on it has been delivered. A match past
+<a href=#416 id=416 data-nosnippet>416</a>                // the handoff ends the scan before its coverage marker is reached, so `page_end`
+<a href=#417 id=417 data-nosnippet>417</a>                // for this page would not run; that is fine, live resumes from the handoff.
+<a href=#418 id=418 data-nosnippet>418</a>                //
+<a href=#419 id=419 data-nosnippet>419</a>                // Consecutive match-less pages each send one, uncoalesced: at most one small payload
+<a href=#420 id=420 data-nosnippet>420</a>                // per ledger request (which the scan already paces, waiting at the tip and never
+<a href=#421 id=421 data-nosnippet>421</a>                // resending an end that did not move), each moving a deep backfill's resume point on.
+<a href=#422 id=422 data-nosnippet>422</a>                </span><span class="kw">let </span>page_end = <span class="kw">match </span><span class="kw-2">&amp;</span>scanned {
+<a href=#423 id=423 data-nosnippet>423</a>                    Scanned::Covered { cursor, .. } =&gt; <span class="prelude-val">Some</span>(cursor.clone()),
+<a href=#424 id=424 data-nosnippet>424</a>                    Scanned::Match { .. } =&gt; <span class="prelude-val">None</span>,
+<a href=#425 id=425 data-nosnippet>425</a>                };
+<a href=#426 id=426 data-nosnippet>426</a>
+<a href=#427 id=427 data-nosnippet>427</a>                <span class="kw">let </span>step = handoff.step(scanned, broadcast.network_tip(), || {
+<a href=#428 id=428 data-nosnippet>428</a>                    pending_receiver = <span class="prelude-val">Some</span>(broadcast.broadcaster().resubscribe());
+<a href=#429 id=429 data-nosnippet>429</a>                    broadcast.network_tip()
+<a href=#430 id=430 data-nosnippet>430</a>                });
+<a href=#431 id=431 data-nosnippet>431</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(end_cursor) = page_end
+<a href=#432 id=432 data-nosnippet>432</a>                    &amp;&amp; tracker.commit_page_end(S::resume_position(<span class="kw-2">&amp;</span>end_cursor))
+<a href=#433 id=433 data-nosnippet>433</a>                {
+<a href=#434 id=434 data-nosnippet>434</a>                    <span class="kw">yield </span><span class="prelude-val">Ok</span>(S::output(end_cursor.encode_cursor(), <span class="prelude-val">None</span>));
+<a href=#435 id=435 data-nosnippet>435</a>                }
+<a href=#436 id=436 data-nosnippet>436</a>                <span class="kw">match </span>step {
+<a href=#437 id=437 data-nosnippet>437</a>                    ScanStep::Deliver { cursor, node } =&gt; {
+<a href=#438 id=438 data-nosnippet>438</a>                        <span class="kw">if </span>tracker.commit_match(S::resume_position(<span class="kw-2">&amp;</span>cursor)) {
+<a href=#439 id=439 data-nosnippet>439</a>                            <span class="kw">yield </span><span class="prelude-val">Ok</span>(S::output(cursor.encode_cursor(), <span class="prelude-val">Some</span>(node)));
+<a href=#440 id=440 data-nosnippet>440</a>                            guard.record_backfill_delivered();
+<a href=#441 id=441 data-nosnippet>441</a>                        }
+<a href=#442 id=442 data-nosnippet>442</a>                    }
+<a href=#443 id=443 data-nosnippet>443</a>                    ScanStep::Continue =&gt; {}
+<a href=#444 id=444 data-nosnippet>444</a>                    ScanStep::Done =&gt; <span class="kw">break</span>,
+<a href=#445 id=445 data-nosnippet>445</a>                }
+<a href=#446 id=446 data-nosnippet>446</a>            }
+<a href=#447 id=447 data-nosnippet>447</a>            last_checkpoint = handoff.pinned();
+<a href=#448 id=448 data-nosnippet>448</a>        }
+<a href=#449 id=449 data-nosnippet>449</a>
+<a href=#450 id=450 data-nosnippet>450</a>        <span class="comment">// Phase 2: follow live from `handoff + 1` (a fresh receiver if there was no backfill).
+<a href=#451 id=451 data-nosnippet>451</a>        </span><span class="kw">let </span>receiver = pending_receiver.unwrap_or_else(|| broadcast.broadcaster().resubscribe());
+<a href=#452 id=452 data-nosnippet>452</a>        <span class="kw">for await </span>delivery <span class="kw">in
+<a href=#453 id=453 data-nosnippet>453</a>            </span>live::&lt;S&gt;(receiver, last_checkpoint, caches, resolver_limits, filter, tracker, guard)
+<a href=#454 id=454 data-nosnippet>454</a>        {
+<a href=#455 id=455 data-nosnippet>455</a>            <span class="kw">yield </span>delivery;
+<a href=#456 id=456 data-nosnippet>456</a>        }
+<a href=#457 id=457 data-nosnippet>457</a>    })
+<a href=#458 id=458 data-nosnippet>458</a>}
+<a href=#459 id=459 data-nosnippet>459</a>
+<a href=#460 id=460 data-nosnippet>460</a><span class="doccomment">/// Scan matches from the resume point toward the tip, yielding each match and a per-page coverage
+<a href=#461 id=461 data-nosnippet>461</a>/// marker. Open-ended: the caller stops it once the handoff is covered.
+<a href=#462 id=462 data-nosnippet>462</a></span><span class="kw">fn </span>backfill&lt;S: Subscribable&gt;(
+<a href=#463 id=463 data-nosnippet>463</a>    reader: LedgerGrpcReader,
+<a href=#464 id=464 data-nosnippet>464</a>    caches: Arc&lt;StreamedCaches&gt;,
+<a href=#465 id=465 data-nosnippet>465</a>    resolver_limits: sui_package_resolver::Limits,
+<a href=#466 id=466 data-nosnippet>466</a>    <span class="kw-2">mut </span>watermarks_rx: watch::Receiver&lt;Arc&lt;Watermarks&gt;&gt;,
+<a href=#467 id=467 data-nosnippet>467</a>    filter: S::Filter,
+<a href=#468 id=468 data-nosnippet>468</a>    <span class="kw-2">mut </span>after: <span class="prelude-ty">Option</span>&lt;S::Cursor&gt;,
+<a href=#469 id=469 data-nosnippet>469</a>    checkpoint_lo: u64,
+<a href=#470 id=470 data-nosnippet>470</a>    scan_page_size: usize,
+<a href=#471 id=471 data-nosnippet>471</a>) -&gt; <span class="kw">impl </span>Stream&lt;Item = <span class="prelude-ty">Result</span>&lt;Scanned&lt;S::Cursor, S::Item&gt;, RpcError&gt;&gt; {
+<a href=#472 id=472 data-nosnippet>472</a>    <span class="macro">stream!</span> {
+<a href=#473 id=473 data-nosnippet>473</a>        <span class="kw">let </span>limits = PageLimits {
+<a href=#474 id=474 data-nosnippet>474</a>            default: scan_page_size <span class="kw">as </span>u32,
+<a href=#475 id=475 data-nosnippet>475</a>            max: scan_page_size <span class="kw">as </span>u32,
+<a href=#476 id=476 data-nosnippet>476</a>        };
+<a href=#477 id=477 data-nosnippet>477</a>
+<a href=#478 id=478 data-nosnippet>478</a>        <span class="comment">// Resume from whichever is later: the `after` cursor or `[checkpoint_lo, ..]`. The upper
+<a href=#479 id=479 data-nosnippet>479</a>        // bound is `u64::MAX` because backfill is open-ended, chasing the moving tip; `subscribe`
+<a href=#480 id=480 data-nosnippet>480</a>        // stops it once the handoff is covered.
+<a href=#481 id=481 data-nosnippet>481</a>        </span><span class="kw">let </span>cp_bounds = checkpoint_lo..=u64::MAX;
+<a href=#482 id=482 data-nosnippet>482</a>
+<a href=#483 id=483 data-nosnippet>483</a>        <span class="kw">loop </span>{
+<a href=#484 id=484 data-nosnippet>484</a>            <span class="kw">let </span>(items, next_after) = <span class="kw">match </span>scan_page::&lt;S&gt;(
+<a href=#485 id=485 data-nosnippet>485</a>                <span class="kw-2">&amp;</span>reader,
+<a href=#486 id=486 data-nosnippet>486</a>                <span class="kw-2">&amp;</span>caches,
+<a href=#487 id=487 data-nosnippet>487</a>                <span class="kw-2">&amp;</span>resolver_limits,
+<a href=#488 id=488 data-nosnippet>488</a>                <span class="kw-2">&amp;</span>limits,
+<a href=#489 id=489 data-nosnippet>489</a>                cp_bounds.clone(),
+<a href=#490 id=490 data-nosnippet>490</a>                after.as_ref(),
+<a href=#491 id=491 data-nosnippet>491</a>                <span class="kw-2">&amp;</span>filter,
+<a href=#492 id=492 data-nosnippet>492</a>                <span class="kw-2">&amp;mut </span>watermarks_rx,
+<a href=#493 id=493 data-nosnippet>493</a>            )
+<a href=#494 id=494 data-nosnippet>494</a>            .<span class="kw">await
+<a href=#495 id=495 data-nosnippet>495</a>            </span>{
+<a href=#496 id=496 data-nosnippet>496</a>                <span class="prelude-val">Ok</span>(page) =&gt; page,
+<a href=#497 id=497 data-nosnippet>497</a>                <span class="prelude-val">Err</span>(e) =&gt; {
+<a href=#498 id=498 data-nosnippet>498</a>                    <span class="kw">yield </span><span class="prelude-val">Err</span>(e);
+<a href=#499 id=499 data-nosnippet>499</a>                    <span class="kw">return</span>;
+<a href=#500 id=500 data-nosnippet>500</a>                }
+<a href=#501 id=501 data-nosnippet>501</a>            };
+<a href=#502 id=502 data-nosnippet>502</a>            <span class="kw">for </span>item <span class="kw">in </span>items {
+<a href=#503 id=503 data-nosnippet>503</a>                <span class="kw">yield </span><span class="prelude-val">Ok</span>(item);
+<a href=#504 id=504 data-nosnippet>504</a>            }
+<a href=#505 id=505 data-nosnippet>505</a>            after = <span class="prelude-val">Some</span>(next_after);
+<a href=#506 id=506 data-nosnippet>506</a>        }
+<a href=#507 id=507 data-nosnippet>507</a>    }
+<a href=#508 id=508 data-nosnippet>508</a>}
+<a href=#509 id=509 data-nosnippet>509</a>
+<a href=#510 id=510 data-nosnippet>510</a><span class="doccomment">/// Whether a scan page that ended at `end` moved past `after`, the cursor it started from. A page
+<a href=#511 id=511 data-nosnippet>511</a>/// that scanned nothing new (at the ledger's tip, or past it, where the ledger echoes `after`) ends
+<a href=#512 id=512 data-nosnippet>512</a>/// where `after` resumes.
+<a href=#513 id=513 data-nosnippet>513</a></span><span class="kw">fn </span>moved_past&lt;S: Subscribable&gt;(end: <span class="kw-2">&amp;</span>S::Cursor, after: <span class="kw-2">&amp;</span>S::Cursor) -&gt; bool {
+<a href=#514 id=514 data-nosnippet>514</a>    S::resume_position(end) &gt; S::resume_position(after)
+<a href=#515 id=515 data-nosnippet>515</a>}
+<a href=#516 id=516 data-nosnippet>516</a>
+<a href=#517 id=517 data-nosnippet>517</a><span class="doccomment">/// Follow the live broadcast from `last_checkpoint + 1`, delivering matching items the client does
+<a href=#518 id=518 data-nosnippet>518</a>/// not already hold. Drops the one-checkpoint seam overlap (the resubscribe/tip race), gap-checks,
+<a href=#519 id=519 data-nosnippet>519</a>/// and disconnects on anomalies.
+<a href=#520 id=520 data-nosnippet>520</a></span><span class="kw">fn </span>live&lt;S: Subscribable&gt;(
+<a href=#521 id=521 data-nosnippet>521</a>    <span class="kw-2">mut </span>receiver: CheckpointBroadcaster,
+<a href=#522 id=522 data-nosnippet>522</a>    <span class="kw-2">mut </span>last_checkpoint: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#523 id=523 data-nosnippet>523</a>    caches: Arc&lt;StreamedCaches&gt;,
+<a href=#524 id=524 data-nosnippet>524</a>    resolver_limits: sui_package_resolver::Limits,
+<a href=#525 id=525 data-nosnippet>525</a>    filter: S::Filter,
+<a href=#526 id=526 data-nosnippet>526</a>    <span class="kw-2">mut </span>tracker: DeliveryTracker&lt;S::Position&gt;,
+<a href=#527 id=527 data-nosnippet>527</a>    guard: SubscriptionLifecycleGuard,
+<a href=#528 id=528 data-nosnippet>528</a>) -&gt; <span class="kw">impl </span>Stream&lt;Item = <span class="prelude-ty">Result</span>&lt;S::Output, RpcError&gt;&gt; {
+<a href=#529 id=529 data-nosnippet>529</a>    <span class="macro">stream!</span> {
+<a href=#530 id=530 data-nosnippet>530</a>        <span class="kw">let </span><span class="kw-2">mut </span>delivered_live = <span class="bool-val">false</span>;
+<a href=#531 id=531 data-nosnippet>531</a>        <span class="kw">loop </span>{
+<a href=#532 id=532 data-nosnippet>532</a>            <span class="kw">match </span>receiver.recv().<span class="kw">await </span>{
+<a href=#533 id=533 data-nosnippet>533</a>                <span class="prelude-val">Ok</span>(checkpoint) =&gt; {
+<a href=#534 id=534 data-nosnippet>534</a>                    <span class="kw">let </span>seq = checkpoint.summary.sequence_number;
+<a href=#535 id=535 data-nosnippet>535</a>                    <span class="kw">if let </span><span class="prelude-val">Some</span>(last) = last_checkpoint {
+<a href=#536 id=536 data-nosnippet>536</a>                        <span class="comment">// Already covered by the scan (resubscribe/tip overlap): skip.
+<a href=#537 id=537 data-nosnippet>537</a>                        </span><span class="kw">if </span>seq &lt;= last {
+<a href=#538 id=538 data-nosnippet>538</a>                            <span class="kw">continue</span>;
+<a href=#539 id=539 data-nosnippet>539</a>                        }
+<a href=#540 id=540 data-nosnippet>540</a>                        <span class="kw">if </span>seq &gt; last + <span class="number">1 </span>{
+<a href=#541 id=541 data-nosnippet>541</a>                            <span class="macro">warn!</span>(
+<a href=#542 id=542 data-nosnippet>542</a>                                last_checkpoint = last,
+<a href=#543 id=543 data-nosnippet>543</a>                                received = seq,
+<a href=#544 id=544 data-nosnippet>544</a>                                <span class="string">"Unexpected gap between scan and live; disconnecting"
+<a href=#545 id=545 data-nosnippet>545</a>                            </span>);
+<a href=#546 id=546 data-nosnippet>546</a>                            guard.terminate(SubscriptionTerminationReason::UnexpectedGap);
+<a href=#547 id=547 data-nosnippet>547</a>                            <span class="kw">yield </span><span class="prelude-val">Err</span>(reconnect_error());
+<a href=#548 id=548 data-nosnippet>548</a>                            <span class="kw">return</span>;
+<a href=#549 id=549 data-nosnippet>549</a>                        }
+<a href=#550 id=550 data-nosnippet>550</a>                    }
+<a href=#551 id=551 data-nosnippet>551</a>
+<a href=#552 id=552 data-nosnippet>552</a>                    <span class="comment">// Deliver each matching item as its own payload, ordered within the checkpoint,
+<a href=#553 id=553 data-nosnippet>553</a>                    // skipping those the client already holds: the rest of a resume cursor's
+<a href=#554 id=554 data-nosnippet>554</a>                    // checkpoint up to the cursor, or what backfill progress past the handoff
+<a href=#555 id=555 data-nosnippet>555</a>                    // covered. Checkpoints that deliver nothing may advance the resume point as
+<a href=#556 id=556 data-nosnippet>556</a>                    // progress.
+<a href=#557 id=557 data-nosnippet>557</a>                    </span><span class="kw">let </span>items = <span class="kw">match </span>S::matching_items(<span class="kw-2">&amp;</span>checkpoint, <span class="kw-2">&amp;</span>caches, <span class="kw-2">&amp;</span>resolver_limits, <span class="kw-2">&amp;</span>filter) {
+<a href=#558 id=558 data-nosnippet>558</a>                        <span class="prelude-val">Ok</span>(items) =&gt; items,
+<a href=#559 id=559 data-nosnippet>559</a>                        <span class="prelude-val">Err</span>(e) =&gt; {
+<a href=#560 id=560 data-nosnippet>560</a>                            guard.terminate(SubscriptionTerminationReason::Error);
+<a href=#561 id=561 data-nosnippet>561</a>                            <span class="kw">yield </span><span class="prelude-val">Err</span>(e);
+<a href=#562 id=562 data-nosnippet>562</a>                            <span class="kw">return</span>;
+<a href=#563 id=563 data-nosnippet>563</a>                        }
+<a href=#564 id=564 data-nosnippet>564</a>                    };
+<a href=#565 id=565 data-nosnippet>565</a>                    <span class="kw">let </span><span class="kw-2">mut </span>delivered_match = <span class="bool-val">false</span>;
+<a href=#566 id=566 data-nosnippet>566</a>                    <span class="kw">for </span>(cursor, node) <span class="kw">in </span>items {
+<a href=#567 id=567 data-nosnippet>567</a>                        <span class="kw">if </span>!tracker.commit_match(S::resume_position(<span class="kw-2">&amp;</span>cursor)) {
+<a href=#568 id=568 data-nosnippet>568</a>                            <span class="kw">continue</span>;
+<a href=#569 id=569 data-nosnippet>569</a>                        }
+<a href=#570 id=570 data-nosnippet>570</a>                        delivered_match = <span class="bool-val">true</span>;
+<a href=#571 id=571 data-nosnippet>571</a>                        <span class="kw">yield </span><span class="prelude-val">Ok</span>(S::output(cursor.encode_cursor(), <span class="prelude-val">Some</span>(node)));
+<a href=#572 id=572 data-nosnippet>572</a>                        guard.record_delivered(checkpoint.summary.timestamp_ms);
+<a href=#573 id=573 data-nosnippet>573</a>                    }
+<a href=#574 id=574 data-nosnippet>574</a>
+<a href=#575 id=575 data-nosnippet>575</a>                    <span class="kw">if </span>!delivered_match
+<a href=#576 id=576 data-nosnippet>576</a>                        &amp;&amp; <span class="kw">let </span><span class="prelude-val">Some</span>(boundary) = S::boundary_after(<span class="kw-2">&amp;</span>checkpoint)
+<a href=#577 id=577 data-nosnippet>577</a>                        &amp;&amp; tracker.commit_unmatched(S::resume_position(<span class="kw-2">&amp;</span>boundary))
+<a href=#578 id=578 data-nosnippet>578</a>                    {
+<a href=#579 id=579 data-nosnippet>579</a>                        <span class="comment">// If the feed sends progress and the unmatched run is long enough, emit one
+<a href=#580 id=580 data-nosnippet>580</a>                        // progress payload at the boundary past this checkpoint, rather than one on
+<a href=#581 id=581 data-nosnippet>581</a>                        // every match-less checkpoint.
+<a href=#582 id=582 data-nosnippet>582</a>                        </span><span class="kw">yield </span><span class="prelude-val">Ok</span>(S::output(boundary.encode_cursor(), <span class="prelude-val">None</span>));
+<a href=#583 id=583 data-nosnippet>583</a>                    }
+<a href=#584 id=584 data-nosnippet>584</a>                    last_checkpoint = <span class="prelude-val">Some</span>(seq);
+<a href=#585 id=585 data-nosnippet>585</a>                    delivered_live = <span class="bool-val">true</span>;
+<a href=#586 id=586 data-nosnippet>586</a>                }
+<a href=#587 id=587 data-nosnippet>587</a>                <span class="comment">// A lag before the first live checkpoint is catch-up overflow (likely kv-rpc lag).
+<a href=#588 id=588 data-nosnippet>588</a>                </span><span class="prelude-val">Err</span>(broadcast::error::RecvError::Lagged(missed)) <span class="kw">if </span>!delivered_live =&gt; {
+<a href=#589 id=589 data-nosnippet>589</a>                    <span class="macro">warn!</span>(missed, <span class="string">"Subscriber fell behind during catch-up; disconnecting"</span>);
+<a href=#590 id=590 data-nosnippet>590</a>                    guard.terminate(SubscriptionTerminationReason::Lagged);
+<a href=#591 id=591 data-nosnippet>591</a>                    <span class="kw">yield </span><span class="prelude-val">Err</span>(reconnect_error());
+<a href=#592 id=592 data-nosnippet>592</a>                    <span class="kw">return</span>;
+<a href=#593 id=593 data-nosnippet>593</a>                }
+<a href=#594 id=594 data-nosnippet>594</a>                <span class="prelude-val">Err</span>(e) =&gt; {
+<a href=#595 id=595 data-nosnippet>595</a>                    guard.terminate(SubscriptionTerminationReason::from_recv_error(<span class="kw-2">&amp;</span>e));
+<a href=#596 id=596 data-nosnippet>596</a>                    <span class="kw">yield </span><span class="prelude-val">Err</span>(broadcast_error(e));
+<a href=#597 id=597 data-nosnippet>597</a>                    <span class="kw">return</span>;
+<a href=#598 id=598 data-nosnippet>598</a>                }
+<a href=#599 id=599 data-nosnippet>599</a>            }
+<a href=#600 id=600 data-nosnippet>600</a>        }
+<a href=#601 id=601 data-nosnippet>601</a>    }
+<a href=#602 id=602 data-nosnippet>602</a>}
+<a href=#603 id=603 data-nosnippet>603</a>
+<a href=#604 id=604 data-nosnippet>604</a><span class="doccomment">/// Retry policy for the backfill scan: jittered exponential backoff, giving up after 60s (past which
+<a href=#605 id=605 data-nosnippet>605</a>/// a failure is unlikely to be a transient blip).
+<a href=#606 id=606 data-nosnippet>606</a></span><span class="kw">fn </span>scan_backoff() -&gt; ExponentialBackoff {
+<a href=#607 id=607 data-nosnippet>607</a>    ExponentialBackoff {
+<a href=#608 id=608 data-nosnippet>608</a>        initial_interval: Duration::from_millis(<span class="number">100</span>),
+<a href=#609 id=609 data-nosnippet>609</a>        max_interval: Duration::from_secs(<span class="number">5</span>),
+<a href=#610 id=610 data-nosnippet>610</a>        max_elapsed_time: <span class="prelude-val">Some</span>(Duration::from_secs(<span class="number">60</span>)),
+<a href=#611 id=611 data-nosnippet>611</a>        ..Default::default()
+<a href=#612 id=612 data-nosnippet>612</a>    }
+<a href=#613 id=613 data-nosnippet>613</a>}
+<a href=#614 id=614 data-nosnippet>614</a>
+<a href=#615 id=615 data-nosnippet>615</a><span class="doccomment">/// Paces re-requests while the ledger has nothing past the scan's position: waits double from
+<a href=#616 id=616 data-nosnippet>616</a>/// `BACKFILL_POLL_INTERVAL` up to `BACKFILL_POLL_MAX_INTERVAL`, and once `BACKFILL_POLL_DEADLINE`
+<a href=#617 id=617 data-nosnippet>617</a>/// has passed without progress the client is asked to reconnect.
+<a href=#618 id=618 data-nosnippet>618</a></span><span class="kw">struct </span>LedgerPoll {
+<a href=#619 id=619 data-nosnippet>619</a>    interval: Duration,
+<a href=#620 id=620 data-nosnippet>620</a>    deadline: tokio::time::Instant,
+<a href=#621 id=621 data-nosnippet>621</a>}
+<a href=#622 id=622 data-nosnippet>622</a>
+<a href=#623 id=623 data-nosnippet>623</a><span class="kw">impl </span>LedgerPoll {
+<a href=#624 id=624 data-nosnippet>624</a>    <span class="kw">fn </span>new() -&gt; <span class="self">Self </span>{
+<a href=#625 id=625 data-nosnippet>625</a>        <span class="self">Self </span>{
+<a href=#626 id=626 data-nosnippet>626</a>            interval: BACKFILL_POLL_INTERVAL,
+<a href=#627 id=627 data-nosnippet>627</a>            deadline: tokio::time::Instant::now() + BACKFILL_POLL_DEADLINE,
+<a href=#628 id=628 data-nosnippet>628</a>        }
+<a href=#629 id=629 data-nosnippet>629</a>    }
+<a href=#630 id=630 data-nosnippet>630</a>
+<a href=#631 id=631 data-nosnippet>631</a>    <span class="kw">async fn </span>wait(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), RpcError&gt; {
+<a href=#632 id=632 data-nosnippet>632</a>        <span class="kw">if </span>tokio::time::Instant::now() &gt;= <span class="self">self</span>.deadline {
+<a href=#633 id=633 data-nosnippet>633</a>            <span class="macro">warn!</span>(<span class="string">"Ledger made no progress within the backfill deadline; disconnecting"</span>);
+<a href=#634 id=634 data-nosnippet>634</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(reconnect_error());
+<a href=#635 id=635 data-nosnippet>635</a>        }
+<a href=#636 id=636 data-nosnippet>636</a>        tokio::time::sleep(<span class="self">self</span>.interval).<span class="kw">await</span>;
+<a href=#637 id=637 data-nosnippet>637</a>        <span class="self">self</span>.interval = (<span class="self">self</span>.interval * <span class="number">2</span>).min(BACKFILL_POLL_MAX_INTERVAL);
+<a href=#638 id=638 data-nosnippet>638</a>        <span class="prelude-val">Ok</span>(())
+<a href=#639 id=639 data-nosnippet>639</a>    }
+<a href=#640 id=640 data-nosnippet>640</a>}
+<a href=#641 id=641 data-nosnippet>641</a>
+<a href=#642 id=642 data-nosnippet>642</a><span class="doccomment">/// Scan the next page of matches, waiting at the indexer tip if nothing is ready yet. Returns the
+<a href=#643 id=643 data-nosnippet>643</a>/// matches, a trailing coverage marker, and the cursor to resume from.
+<a href=#644 id=644 data-nosnippet>644</a></span><span class="kw">async fn </span>scan_page&lt;S: Subscribable&gt;(
+<a href=#645 id=645 data-nosnippet>645</a>    reader: <span class="kw-2">&amp;</span>LedgerGrpcReader,
+<a href=#646 id=646 data-nosnippet>646</a>    caches: <span class="kw-2">&amp;</span>Arc&lt;StreamedCaches&gt;,
+<a href=#647 id=647 data-nosnippet>647</a>    resolver_limits: <span class="kw-2">&amp;</span>sui_package_resolver::Limits,
+<a href=#648 id=648 data-nosnippet>648</a>    limits: <span class="kw-2">&amp;</span>PageLimits,
+<a href=#649 id=649 data-nosnippet>649</a>    cp_bounds: RangeInclusive&lt;u64&gt;,
+<a href=#650 id=650 data-nosnippet>650</a>    after: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>S::Cursor&gt;,
+<a href=#651 id=651 data-nosnippet>651</a>    filter: <span class="kw-2">&amp;</span>S::Filter,
+<a href=#652 id=652 data-nosnippet>652</a>    watermarks_rx: <span class="kw-2">&amp;mut </span>watch::Receiver&lt;Arc&lt;Watermarks&gt;&gt;,
+<a href=#653 id=653 data-nosnippet>653</a>) -&gt; <span class="prelude-ty">Result</span>&lt;(Vec&lt;Scanned&lt;S::Cursor, S::Item&gt;&gt;, S::Cursor), RpcError&gt; {
+<a href=#654 id=654 data-nosnippet>654</a>    <span class="kw">let </span><span class="kw-2">mut </span>poll = LedgerPoll::new();
+<a href=#655 id=655 data-nosnippet>655</a>    <span class="kw">loop </span>{
+<a href=#656 id=656 data-nosnippet>656</a>        <span class="kw">let </span>result = scan_with_retry::&lt;S&gt;(reader, limits, cp_bounds.clone(), after, filter).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#657 id=657 data-nosnippet>657</a>
+<a href=#658 id=658 data-nosnippet>658</a>        <span class="comment">// No end cursor means nothing past the indexer tip is indexed yet; wait, then re-request. A
+<a href=#659 id=659 data-nosnippet>659</a>        // range that was scanned but matched nothing still returns a boundary cursor, not `None`.
+<a href=#660 id=660 data-nosnippet>660</a>        </span><span class="kw">let </span><span class="prelude-val">Some</span>(end_cursor) = result.last_cursor <span class="kw">else </span>{
+<a href=#661 id=661 data-nosnippet>661</a>            poll.wait().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#662 id=662 data-nosnippet>662</a>            <span class="kw">continue</span>;
+<a href=#663 id=663 data-nosnippet>663</a>        };
+<a href=#664 id=664 data-nosnippet>664</a>
+<a href=#665 id=665 data-nosnippet>665</a>        <span class="comment">// A page that did not move past where it started: wait for the ledger to index more before
+<a href=#666 id=666 data-nosnippet>666</a>        // asking again, rather than re-polling at full speed.
+<a href=#667 id=667 data-nosnippet>667</a>        </span><span class="kw">if </span>after.is_some_and(|after| !moved_past::&lt;S&gt;(<span class="kw-2">&amp;</span>end_cursor, after)) {
+<a href=#668 id=668 data-nosnippet>668</a>            poll.wait().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#669 id=669 data-nosnippet>669</a>            <span class="kw">continue</span>;
+<a href=#670 id=670 data-nosnippet>670</a>        }
+<a href=#671 id=671 data-nosnippet>671</a>
+<a href=#672 id=672 data-nosnippet>672</a>        <span class="comment">// Hold the page until all pipelines have indexed through the checkpoint its end cursor
+<a href=#673 id=673 data-nosnippet>673</a>        // resumes in, which is at or past its coverage claim. The delivered items' nested queries
+<a href=#674 id=674 data-nosnippet>674</a>        // resolve against indexed data, and the ledger readers' floor reaches the next page's
+<a href=#675 id=675 data-nosnippet>675</a>        // resume point.
+<a href=#676 id=676 data-nosnippet>676</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(checkpoint) = S::resume_from(<span class="kw-2">&amp;</span>end_cursor) {
+<a href=#677 id=677 data-nosnippet>677</a>            wait_for_pipelines_catching_up_at(checkpoint, watermarks_rx).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#678 id=678 data-nosnippet>678</a>        }
+<a href=#679 id=679 data-nosnippet>679</a>
+<a href=#680 id=680 data-nosnippet>680</a>        <span class="comment">// A forward page keeps `items` in ascending order, one delivered edge each.
+<a href=#681 id=681 data-nosnippet>681</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>items = Vec::with_capacity(result.items.len() + <span class="number">1</span>);
+<a href=#682 id=682 data-nosnippet>682</a>        <span class="kw">for </span>item <span class="kw">in </span>result.items {
+<a href=#683 id=683 data-nosnippet>683</a>            items.push(Scanned::Match {
+<a href=#684 id=684 data-nosnippet>684</a>                checkpoint: item.checkpoint,
+<a href=#685 id=685 data-nosnippet>685</a>                node: S::build_node(caches, resolver_limits, item.checkpoint, <span class="kw-2">&amp;</span>item.payload)<span class="question-mark">?</span>,
+<a href=#686 id=686 data-nosnippet>686</a>                cursor: item.cursor,
+<a href=#687 id=687 data-nosnippet>687</a>            });
+<a href=#688 id=688 data-nosnippet>688</a>        }
+<a href=#689 id=689 data-nosnippet>689</a>
+<a href=#690 id=690 data-nosnippet>690</a>        <span class="comment">// Coverage marker at the page's coverage claim: advances the handoff even on a match-less
+<a href=#691 id=691 data-nosnippet>691</a>        // page, and carries the page's end cursor so the backfill can deliver it as progress. A
+<a href=#692 id=692 data-nosnippet>692</a>        // page without a claim (some ledger servers send none for a page that scanned nothing)
+<a href=#693 id=693 data-nosnippet>693</a>        // adds no marker; a later page's claim covers it.
+<a href=#694 id=694 data-nosnippet>694</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(checkpoint) = result.covered_checkpoint {
+<a href=#695 id=695 data-nosnippet>695</a>            items.push(Scanned::Covered {
+<a href=#696 id=696 data-nosnippet>696</a>                checkpoint,
+<a href=#697 id=697 data-nosnippet>697</a>                cursor: end_cursor.clone(),
+<a href=#698 id=698 data-nosnippet>698</a>            });
+<a href=#699 id=699 data-nosnippet>699</a>        }
+<a href=#700 id=700 data-nosnippet>700</a>
+<a href=#701 id=701 data-nosnippet>701</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>((items, end_cursor));
+<a href=#702 id=702 data-nosnippet>702</a>    }
+<a href=#703 id=703 data-nosnippet>703</a>}
+<a href=#704 id=704 data-nosnippet>704</a>
+<a href=#705 id=705 data-nosnippet>705</a><span class="doccomment">/// Scan one page over `cp_bounds`, retrying transient failures under a bounded budget.
+<a href=#706 id=706 data-nosnippet>706</a></span><span class="kw">async fn </span>scan_with_retry&lt;S: Subscribable&gt;(
+<a href=#707 id=707 data-nosnippet>707</a>    reader: <span class="kw-2">&amp;</span>LedgerGrpcReader,
+<a href=#708 id=708 data-nosnippet>708</a>    limits: <span class="kw-2">&amp;</span>PageLimits,
+<a href=#709 id=709 data-nosnippet>709</a>    cp_bounds: RangeInclusive&lt;u64&gt;,
+<a href=#710 id=710 data-nosnippet>710</a>    after: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>S::Cursor&gt;,
+<a href=#711 id=711 data-nosnippet>711</a>    filter: <span class="kw-2">&amp;</span>S::Filter,
+<a href=#712 id=712 data-nosnippet>712</a>) -&gt; <span class="prelude-ty">Result</span>&lt;LedgerPage&lt;S::ScanItem, S::Cursor&gt;, RpcError&gt; {
+<a href=#713 id=713 data-nosnippet>713</a>    <span class="kw">let </span>page = Page::from_params(
+<a href=#714 id=714 data-nosnippet>714</a>        limits,
+<a href=#715 id=715 data-nosnippet>715</a>        <span class="prelude-val">Some</span>(limits.default <span class="kw">as </span>u64),
+<a href=#716 id=716 data-nosnippet>716</a>        after.cloned(),
+<a href=#717 id=717 data-nosnippet>717</a>        <span class="prelude-val">None</span>,
+<a href=#718 id=718 data-nosnippet>718</a>        <span class="prelude-val">None</span>,
+<a href=#719 id=719 data-nosnippet>719</a>    )
+<a href=#720 id=720 data-nosnippet>720</a>    .map_err(anyhow::Error::from)<span class="question-mark">?</span>;
+<a href=#721 id=721 data-nosnippet>721</a>
+<a href=#722 id=722 data-nosnippet>722</a>    backoff::future::retry(scan_backoff(), || <span class="kw">async </span>{
+<a href=#723 id=723 data-nosnippet>723</a>        S::scan(reader, cp_bounds.clone(), <span class="kw-2">&amp;</span>page, filter)
+<a href=#724 id=724 data-nosnippet>724</a>            .<span class="kw">await
+<a href=#725 id=725 data-nosnippet>725</a>            </span>.map_err(|e| {
+<a href=#726 id=726 data-nosnippet>726</a>                <span class="macro">warn!</span>(error = <span class="question-mark">?</span>e, <span class="string">"scan failed, retrying"</span>);
+<a href=#727 id=727 data-nosnippet>727</a>                backoff::Error::transient(e)
+<a href=#728 id=728 data-nosnippet>728</a>            })
+<a href=#729 id=729 data-nosnippet>729</a>    })
+<a href=#730 id=730 data-nosnippet>730</a>    .<span class="kw">await
+<a href=#731 id=731 data-nosnippet>731</a></span>}
+<a href=#732 id=732 data-nosnippet>732</a>
+<a href=#733 id=733 data-nosnippet>733</a><span class="attr">#[cfg(test)]
+<a href=#734 id=734 data-nosnippet>734</a></span><span class="kw">mod </span>tests {
+<a href=#735 id=735 data-nosnippet>735</a>    <span class="kw">use </span><span class="kw">crate</span>::api::types::ledger_cursor::LedgerKey;
+<a href=#736 id=736 data-nosnippet>736</a>    <span class="kw">use </span><span class="kw">crate</span>::api::types::ledger_cursor::Point;
+<a href=#737 id=737 data-nosnippet>737</a>    <span class="kw">use </span><span class="kw">crate</span>::api::types::ledger_cursor::TransactionKey;
+<a href=#738 id=738 data-nosnippet>738</a>    <span class="kw">use </span><span class="kw">crate</span>::api::types::transaction::Transaction;
+<a href=#739 id=739 data-nosnippet>739</a>    <span class="kw">use </span><span class="kw">crate</span>::api::types::transaction::TransactionToken;
+<a href=#740 id=740 data-nosnippet>740</a>
+<a href=#741 id=741 data-nosnippet>741</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#742 id=742 data-nosnippet>742</a>
+<a href=#743 id=743 data-nosnippet>743</a>    <span class="kw">fn </span>tx(checkpoint: u64, transaction_index: u64) -&gt; TransactionKey {
+<a href=#744 id=744 data-nosnippet>744</a>        TransactionKey {
+<a href=#745 id=745 data-nosnippet>745</a>            checkpoint,
+<a href=#746 id=746 data-nosnippet>746</a>            transaction_index,
+<a href=#747 id=747 data-nosnippet>747</a>        }
+<a href=#748 id=748 data-nosnippet>748</a>    }
+<a href=#749 id=749 data-nosnippet>749</a>
+<a href=#750 id=750 data-nosnippet>750</a>    <span class="doccomment">/// One scan output, reduced to what the handoff decisions look at.
+<a href=#751 id=751 data-nosnippet>751</a>    </span><span class="attr">#[derive(Clone, Copy, Debug)]
+<a href=#752 id=752 data-nosnippet>752</a>    </span><span class="kw">enum </span>Out {
+<a href=#753 id=753 data-nosnippet>753</a>        <span class="doccomment">/// A match in this checkpoint, as its payload names it.
+<a href=#754 id=754 data-nosnippet>754</a>        </span>Match(u64),
+<a href=#755 id=755 data-nosnippet>755</a>        <span class="doccomment">/// A page's end, with the coverage claim it carried.
+<a href=#756 id=756 data-nosnippet>756</a>        </span>End(u64),
+<a href=#757 id=757 data-nosnippet>757</a>    }
+<a href=#758 id=758 data-nosnippet>758</a>
+<a href=#759 id=759 data-nosnippet>759</a>    <span class="doccomment">/// Runs scan outputs through [`Handoff::step`] against a fixed streamed `tip`, as the backfill
+<a href=#760 id=760 data-nosnippet>760</a>    /// loop in `subscribe` does. Returns the delivered match checkpoints and the checkpoint live
+<a href=#761 id=761 data-nosnippet>761</a>    /// starts after (`None` if still scanning).
+<a href=#762 id=762 data-nosnippet>762</a>    </span><span class="kw">fn </span>drive(threshold: u64, tip: u64, outputs: <span class="kw-2">&amp;</span>[Out]) -&gt; (Vec&lt;u64&gt;, <span class="prelude-ty">Option</span>&lt;u64&gt;) {
+<a href=#763 id=763 data-nosnippet>763</a>        <span class="kw">let </span><span class="kw-2">mut </span>handoff = Handoff::new(threshold);
+<a href=#764 id=764 data-nosnippet>764</a>        <span class="kw">let </span><span class="kw-2">mut </span>delivered = <span class="macro">vec!</span>[];
+<a href=#765 id=765 data-nosnippet>765</a>        <span class="kw">for </span>out <span class="kw">in </span>outputs {
+<a href=#766 id=766 data-nosnippet>766</a>            <span class="comment">// Matches carry their checkpoint as the node, so delivery order is observable.
+<a href=#767 id=767 data-nosnippet>767</a>            </span><span class="kw">let </span>scanned = <span class="kw">match </span><span class="kw-2">*</span>out {
+<a href=#768 id=768 data-nosnippet>768</a>                Out::Match(checkpoint) =&gt; Scanned::Match {
+<a href=#769 id=769 data-nosnippet>769</a>                    checkpoint,
+<a href=#770 id=770 data-nosnippet>770</a>                    cursor: (),
+<a href=#771 id=771 data-nosnippet>771</a>                    node: checkpoint,
+<a href=#772 id=772 data-nosnippet>772</a>                },
+<a href=#773 id=773 data-nosnippet>773</a>                Out::End(checkpoint) =&gt; Scanned::Covered {
+<a href=#774 id=774 data-nosnippet>774</a>                    checkpoint,
+<a href=#775 id=775 data-nosnippet>775</a>                    cursor: (),
+<a href=#776 id=776 data-nosnippet>776</a>                },
+<a href=#777 id=777 data-nosnippet>777</a>            };
+<a href=#778 id=778 data-nosnippet>778</a>            <span class="kw">match </span>handoff.step(scanned, tip, || tip) {
+<a href=#779 id=779 data-nosnippet>779</a>                ScanStep::Deliver { node, .. } =&gt; delivered.push(node),
+<a href=#780 id=780 data-nosnippet>780</a>                ScanStep::Continue =&gt; {}
+<a href=#781 id=781 data-nosnippet>781</a>                ScanStep::Done =&gt; <span class="kw">return </span>(delivered, handoff.pinned()),
+<a href=#782 id=782 data-nosnippet>782</a>            }
+<a href=#783 id=783 data-nosnippet>783</a>        }
+<a href=#784 id=784 data-nosnippet>784</a>        (delivered, <span class="prelude-val">None</span>)
+<a href=#785 id=785 data-nosnippet>785</a>    }
+<a href=#786 id=786 data-nosnippet>786</a>
+<a href=#787 id=787 data-nosnippet>787</a>    <span class="doccomment">/// The streamed tip (11) is one checkpoint ahead of the index (10) when the handoff pins. The
+<a href=#788 id=788 data-nosnippet>788</a>    /// first page drains the ledger tip and claims coverage only through 10, so the scan must keep
+<a href=#789 id=789 data-nosnippet>789</a>    /// going until the index has 11 and deliver it; live starts after 11.
+<a href=#790 id=790 data-nosnippet>790</a>    </span><span class="attr">#[test]
+<a href=#791 id=791 data-nosnippet>791</a>    </span><span class="kw">fn </span>handoff_waits_for_the_index_to_reach_the_streamed_tip() {
+<a href=#792 id=792 data-nosnippet>792</a>        <span class="kw">let </span>outputs = [
+<a href=#793 id=793 data-nosnippet>793</a>            Out::Match(<span class="number">10</span>),
+<a href=#794 id=794 data-nosnippet>794</a>            Out::End(<span class="number">10</span>),
+<a href=#795 id=795 data-nosnippet>795</a>            <span class="comment">// Next page, once the index reaches 11.
+<a href=#796 id=796 data-nosnippet>796</a>            </span>Out::Match(<span class="number">11</span>),
+<a href=#797 id=797 data-nosnippet>797</a>            Out::End(<span class="number">11</span>),
+<a href=#798 id=798 data-nosnippet>798</a>        ];
+<a href=#799 id=799 data-nosnippet>799</a>        <span class="kw">let </span>(delivered, live_after) = drive(<span class="number">5</span>, <span class="number">11</span>, <span class="kw-2">&amp;</span>outputs);
+<a href=#800 id=800 data-nosnippet>800</a>        <span class="macro">assert_eq!</span>(delivered, <span class="macro">vec!</span>[<span class="number">10</span>, <span class="number">11</span>]);
+<a href=#801 id=801 data-nosnippet>801</a>        <span class="macro">assert_eq!</span>(live_after, <span class="prelude-val">Some</span>(<span class="number">11</span>));
+<a href=#802 id=802 data-nosnippet>802</a>    }
+<a href=#803 id=803 data-nosnippet>803</a>
+<a href=#804 id=804 data-nosnippet>804</a>    <span class="doccomment">/// With nothing left to scan, a page claims coverage only up to the index tip, so a streamed tip
+<a href=#805 id=805 data-nosnippet>805</a>    /// ahead of it keeps the backfill open rather than skipping the checkpoints in between.
+<a href=#806 id=806 data-nosnippet>806</a>    </span><span class="attr">#[test]
+<a href=#807 id=807 data-nosnippet>807</a>    </span><span class="kw">fn </span>claim_below_the_streamed_tip_keeps_the_backfill_open() {
+<a href=#808 id=808 data-nosnippet>808</a>        <span class="kw">let </span>(delivered, live_after) = drive(<span class="number">5</span>, <span class="number">11</span>, <span class="kw-2">&amp;</span>[Out::End(<span class="number">10</span>)]);
+<a href=#809 id=809 data-nosnippet>809</a>        <span class="macro">assert!</span>(delivered.is_empty());
+<a href=#810 id=810 data-nosnippet>810</a>        <span class="macro">assert_eq!</span>(live_after, <span class="prelude-val">None</span>, <span class="string">"checkpoint 11 is not covered yet"</span>);
+<a href=#811 id=811 data-nosnippet>811</a>    }
+<a href=#812 id=812 data-nosnippet>812</a>
+<a href=#813 id=813 data-nosnippet>813</a>    <span class="doccomment">/// The client resumes after a transaction in checkpoint 10, but this replica has only streamed
+<a href=#814 id=814 data-nosnippet>814</a>    /// up to 9. The scan hands off at the streamed tip, and live takes over at checkpoint 10.
+<a href=#815 id=815 data-nosnippet>815</a>    </span><span class="attr">#[test]
+<a href=#816 id=816 data-nosnippet>816</a>    </span><span class="kw">fn </span>cursor_ahead_of_the_streamed_tip_hands_off_at_the_tip() {
+<a href=#817 id=817 data-nosnippet>817</a>        <span class="kw">let </span>outputs = [Out::Match(<span class="number">10</span>), Out::Match(<span class="number">10</span>), Out::Match(<span class="number">11</span>)];
+<a href=#818 id=818 data-nosnippet>818</a>        <span class="kw">let </span>(delivered, live_after) = drive(<span class="number">5</span>, <span class="number">9</span>, <span class="kw-2">&amp;</span>outputs);
+<a href=#819 id=819 data-nosnippet>819</a>        <span class="macro">assert_eq!</span>((delivered, live_after), (<span class="macro">vec!</span>[], <span class="prelude-val">Some</span>(<span class="number">9</span>)));
+<a href=#820 id=820 data-nosnippet>820</a>    }
+<a href=#821 id=821 data-nosnippet>821</a>
+<a href=#822 id=822 data-nosnippet>822</a>    <span class="doccomment">/// Live drops the items the client already holds, by position: everything up to its cursor in
+<a href=#823 id=823 data-nosnippet>823</a>    /// the cursor's own checkpoint.
+<a href=#824 id=824 data-nosnippet>824</a>    </span><span class="attr">#[test]
+<a href=#825 id=825 data-nosnippet>825</a>    </span><span class="kw">fn </span>live_drops_what_the_client_holds() {
+<a href=#826 id=826 data-nosnippet>826</a>        <span class="kw">let </span>resume = Transaction::resume_position(<span class="kw-2">&amp;</span>TransactionToken::at(tx(<span class="number">10</span>, <span class="number">1</span>)));
+<a href=#827 id=827 data-nosnippet>827</a>        <span class="kw">let </span><span class="kw-2">mut </span>tracker = DeliveryTracker::new(<span class="bool-val">false</span>, <span class="number">20</span>, <span class="prelude-val">Some</span>(resume));
+<a href=#828 id=828 data-nosnippet>828</a>        <span class="kw">let </span>delivered: Vec&lt;<span class="kw">_</span>&gt; = (<span class="number">0</span>..<span class="number">4</span>)
+<a href=#829 id=829 data-nosnippet>829</a>            .filter(|index| tracker.commit_match(tx(<span class="number">10</span>, <span class="kw-2">*</span>index).successor()))
+<a href=#830 id=830 data-nosnippet>830</a>            .collect();
+<a href=#831 id=831 data-nosnippet>831</a>        <span class="macro">assert_eq!</span>(delivered, [<span class="number">2</span>, <span class="number">3</span>]);
+<a href=#832 id=832 data-nosnippet>832</a>    }
+<a href=#833 id=833 data-nosnippet>833</a>
+<a href=#834 id=834 data-nosnippet>834</a>    <span class="doccomment">/// The caught-up case: pin at the streamed tip once the frontier is within the threshold,
+<a href=#835 id=835 data-nosnippet>835</a>    /// deliver matches up to it, and hand off after it.
+<a href=#836 id=836 data-nosnippet>836</a>    </span><span class="attr">#[test]
+<a href=#837 id=837 data-nosnippet>837</a>    </span><span class="kw">fn </span>caught_up_resume_hands_off_at_streamed_tip() {
+<a href=#838 id=838 data-nosnippet>838</a>        <span class="kw">let </span>outputs = [
+<a href=#839 id=839 data-nosnippet>839</a>            Out::Match(<span class="number">12</span>),
+<a href=#840 id=840 data-nosnippet>840</a>            Out::End(<span class="number">14</span>),
+<a href=#841 id=841 data-nosnippet>841</a>            Out::Match(<span class="number">16</span>),
+<a href=#842 id=842 data-nosnippet>842</a>            Out::Match(<span class="number">20</span>),
+<a href=#843 id=843 data-nosnippet>843</a>            Out::Match(<span class="number">21</span>),
+<a href=#844 id=844 data-nosnippet>844</a>        ];
+<a href=#845 id=845 data-nosnippet>845</a>        <span class="kw">let </span>(delivered, live_after) = drive(<span class="number">5</span>, <span class="number">20</span>, <span class="kw-2">&amp;</span>outputs);
+<a href=#846 id=846 data-nosnippet>846</a>        <span class="macro">assert_eq!</span>(delivered, <span class="macro">vec!</span>[<span class="number">12</span>, <span class="number">16</span>, <span class="number">20</span>]);
+<a href=#847 id=847 data-nosnippet>847</a>        <span class="macro">assert_eq!</span>(live_after, <span class="prelude-val">Some</span>(<span class="number">20</span>));
+<a href=#848 id=848 data-nosnippet>848</a>    }
+<a href=#849 id=849 data-nosnippet>849</a>
+<a href=#850 id=850 data-nosnippet>850</a>    <span class="doccomment">/// Polls back off to the cap, and the client is asked to reconnect once the ledger has made no
+<a href=#851 id=851 data-nosnippet>851</a>    /// progress for the whole deadline.
+<a href=#852 id=852 data-nosnippet>852</a>    </span><span class="attr">#[tokio::test(start_paused = <span class="bool-val">true</span>)]
+<a href=#853 id=853 data-nosnippet>853</a>    </span><span class="kw">async fn </span>ledger_poll_backs_off_then_gives_up() {
+<a href=#854 id=854 data-nosnippet>854</a>        <span class="kw">let </span>start = tokio::time::Instant::now();
+<a href=#855 id=855 data-nosnippet>855</a>        <span class="kw">let </span><span class="kw-2">mut </span>poll = LedgerPoll::new();
+<a href=#856 id=856 data-nosnippet>856</a>        <span class="kw">let </span><span class="kw-2">mut </span>waits = <span class="macro">vec!</span>[];
+<a href=#857 id=857 data-nosnippet>857</a>        <span class="kw">loop </span>{
+<a href=#858 id=858 data-nosnippet>858</a>            <span class="kw">let </span>before = tokio::time::Instant::now();
+<a href=#859 id=859 data-nosnippet>859</a>            <span class="kw">if </span>poll.wait().<span class="kw">await</span>.is_err() {
+<a href=#860 id=860 data-nosnippet>860</a>                <span class="kw">break</span>;
+<a href=#861 id=861 data-nosnippet>861</a>            }
+<a href=#862 id=862 data-nosnippet>862</a>            waits.push(before.elapsed().as_millis());
+<a href=#863 id=863 data-nosnippet>863</a>        }
+<a href=#864 id=864 data-nosnippet>864</a>
+<a href=#865 id=865 data-nosnippet>865</a>        <span class="macro">assert_eq!</span>(waits[..<span class="number">6</span>], [<span class="number">100</span>, <span class="number">200</span>, <span class="number">400</span>, <span class="number">800</span>, <span class="number">1600</span>, <span class="number">2000</span>]);
+<a href=#866 id=866 data-nosnippet>866</a>        <span class="macro">assert!</span>(waits[<span class="number">6</span>..].iter().all(|w| <span class="kw-2">*</span>w == <span class="number">2000</span>));
+<a href=#867 id=867 data-nosnippet>867</a>        <span class="kw">let </span>elapsed = start.elapsed();
+<a href=#868 id=868 data-nosnippet>868</a>        <span class="macro">assert!</span>(elapsed &gt;= BACKFILL_POLL_DEADLINE, <span class="string">"{elapsed:?}"</span>);
+<a href=#869 id=869 data-nosnippet>869</a>        <span class="macro">assert!</span>(
+<a href=#870 id=870 data-nosnippet>870</a>            elapsed &lt; BACKFILL_POLL_DEADLINE + BACKFILL_POLL_MAX_INTERVAL,
+<a href=#871 id=871 data-nosnippet>871</a>            <span class="string">"{elapsed:?}"
+<a href=#872 id=872 data-nosnippet>872</a>        </span>);
+<a href=#873 id=873 data-nosnippet>873</a>    }
+<a href=#874 id=874 data-nosnippet>874</a>
+<a href=#875 id=875 data-nosnippet>875</a>    <span class="doccomment">/// A page moves past its `after` cursor only when it ends at a later position, whatever bytes
+<a href=#876 id=876 data-nosnippet>876</a>    /// its server encodes the end in. A page that ends where `after` resumes (at the ledger's tip,
+<a href=#877 id=877 data-nosnippet>877</a>    /// or echoing `after` past it) has not moved.
+<a href=#878 id=878 data-nosnippet>878</a>    </span><span class="attr">#[test]
+<a href=#879 id=879 data-nosnippet>879</a>    </span><span class="kw">fn </span>scan_progress_is_compared_by_position() {
+<a href=#880 id=880 data-nosnippet>880</a>        <span class="kw">let </span>ledger = |bytes: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>[u8], point| {
+<a href=#881 id=881 data-nosnippet>881</a>            TransactionToken::from_ledger(bytes::Bytes::from_static(bytes), point)
+<a href=#882 id=882 data-nosnippet>882</a>        };
+<a href=#883 id=883 data-nosnippet>883</a>        <span class="kw">let </span>after = ledger(<span class="string">b"a"</span>, Point::At(tx(<span class="number">16</span>, <span class="number">3</span>)));
+<a href=#884 id=884 data-nosnippet>884</a>
+<a href=#885 id=885 data-nosnippet>885</a>        <span class="comment">// Ending where the page started, in the same bytes or in another server's.
+<a href=#886 id=886 data-nosnippet>886</a>        </span><span class="kw">let </span>echo = Point::Before(tx(<span class="number">16</span>, <span class="number">4</span>));
+<a href=#887 id=887 data-nosnippet>887</a>        <span class="macro">assert!</span>(!moved_past::&lt;Transaction&gt;(<span class="kw-2">&amp;</span>ledger(<span class="string">b"a"</span>, echo), <span class="kw-2">&amp;</span>after));
+<a href=#888 id=888 data-nosnippet>888</a>        <span class="macro">assert!</span>(!moved_past::&lt;Transaction&gt;(<span class="kw-2">&amp;</span>ledger(<span class="string">b"b"</span>, echo), <span class="kw-2">&amp;</span>after));
+<a href=#889 id=889 data-nosnippet>889</a>
+<a href=#890 id=890 data-nosnippet>890</a>        <span class="comment">// Past the start, at an item or a boundary.
+<a href=#891 id=891 data-nosnippet>891</a>        </span><span class="macro">assert!</span>(moved_past::&lt;Transaction&gt;(
+<a href=#892 id=892 data-nosnippet>892</a>            <span class="kw-2">&amp;</span>ledger(<span class="string">b"b"</span>, Point::At(tx(<span class="number">16</span>, <span class="number">4</span>))),
+<a href=#893 id=893 data-nosnippet>893</a>            <span class="kw-2">&amp;</span>after
+<a href=#894 id=894 data-nosnippet>894</a>        ));
+<a href=#895 id=895 data-nosnippet>895</a>        <span class="macro">assert!</span>(moved_past::&lt;Transaction&gt;(
+<a href=#896 id=896 data-nosnippet>896</a>            <span class="kw-2">&amp;</span>ledger(<span class="string">b"b"</span>, Point::checkpoint_start(<span class="number">17</span>)),
+<a href=#897 id=897 data-nosnippet>897</a>            <span class="kw-2">&amp;</span>after
+<a href=#898 id=898 data-nosnippet>898</a>        ));
+<a href=#899 id=899 data-nosnippet>899</a>
+<a href=#900 id=900 data-nosnippet>900</a>        <span class="comment">// A cursor GraphQL minted compares the same way.
+<a href=#901 id=901 data-nosnippet>901</a>        </span><span class="kw">let </span>live = TransactionToken::at(tx(<span class="number">16</span>, <span class="number">3</span>));
+<a href=#902 id=902 data-nosnippet>902</a>        <span class="macro">assert!</span>(!moved_past::&lt;Transaction&gt;(<span class="kw-2">&amp;</span>ledger(<span class="string">b"a"</span>, echo), <span class="kw-2">&amp;</span>live));
+<a href=#903 id=903 data-nosnippet>903</a>    }
+<a href=#904 id=904 data-nosnippet>904</a>
+<a href=#905 id=905 data-nosnippet>905</a>    <span class="doccomment">/// A page with no matches ends past the last delivered cursor, so its end is progress. The same
+<a href=#906 id=906 data-nosnippet>906</a>    /// end offered again is not re-emitted.
+<a href=#907 id=907 data-nosnippet>907</a>    </span><span class="attr">#[test]
+<a href=#908 id=908 data-nosnippet>908</a>    </span><span class="kw">fn </span>backfill_empty_page_delivers_progress() {
+<a href=#909 id=909 data-nosnippet>909</a>        <span class="kw">let </span><span class="kw-2">mut </span>tracker = DeliveryTracker::new(<span class="bool-val">true</span>, <span class="number">20</span>, <span class="prelude-val">None</span>);
+<a href=#910 id=910 data-nosnippet>910</a>        <span class="macro">assert!</span>(tracker.commit_page_end(<span class="number">11</span>));
+<a href=#911 id=911 data-nosnippet>911</a>        <span class="macro">assert!</span>(!tracker.commit_page_end(<span class="number">11</span>));
+<a href=#912 id=912 data-nosnippet>912</a>        <span class="macro">assert!</span>(tracker.commit_page_end(<span class="number">15</span>));
+<a href=#913 id=913 data-nosnippet>913</a>    }
+<a href=#914 id=914 data-nosnippet>914</a>
+<a href=#915 id=915 data-nosnippet>915</a>    <span class="doccomment">/// A full page ends at its last match, so the client already holds that cursor.
+<a href=#916 id=916 data-nosnippet>916</a>    </span><span class="attr">#[test]
+<a href=#917 id=917 data-nosnippet>917</a>    </span><span class="kw">fn </span>backfill_page_ending_at_its_last_match_has_no_progress() {
+<a href=#918 id=918 data-nosnippet>918</a>        <span class="kw">let </span><span class="kw-2">mut </span>tracker = DeliveryTracker::new(<span class="bool-val">true</span>, <span class="number">20</span>, <span class="prelude-val">None</span>);
+<a href=#919 id=919 data-nosnippet>919</a>        <span class="macro">assert!</span>(tracker.commit_match(<span class="number">11</span>));
+<a href=#920 id=920 data-nosnippet>920</a>        <span class="macro">assert!</span>(!tracker.commit_page_end(<span class="number">11</span>));
+<a href=#921 id=921 data-nosnippet>921</a>    }
+<a href=#922 id=922 data-nosnippet>922</a>
+<a href=#923 id=923 data-nosnippet>923</a>    <span class="doccomment">/// Live delivers one progress cursor per run of unmatched checkpoints that reaches the
+<a href=#924 id=924 data-nosnippet>924</a>    /// threshold, and a match restarts the run.
+<a href=#925 id=925 data-nosnippet>925</a>    </span><span class="attr">#[test]
+<a href=#926 id=926 data-nosnippet>926</a>    </span><span class="kw">fn </span>live_progress_fires_once_per_unmatched_run() {
+<a href=#927 id=927 data-nosnippet>927</a>        <span class="kw">let </span><span class="kw-2">mut </span>tracker = DeliveryTracker::new(<span class="bool-val">true</span>, <span class="number">3</span>, <span class="prelude-val">None</span>);
+<a href=#928 id=928 data-nosnippet>928</a>        <span class="kw">let </span>emitted: Vec&lt;u64&gt; = (<span class="number">21</span>..=<span class="number">26</span>)
+<a href=#929 id=929 data-nosnippet>929</a>            .map(|checkpoint| checkpoint + <span class="number">1</span>)
+<a href=#930 id=930 data-nosnippet>930</a>            .filter(|boundary| tracker.commit_unmatched(<span class="kw-2">*</span>boundary))
+<a href=#931 id=931 data-nosnippet>931</a>            .collect();
+<a href=#932 id=932 data-nosnippet>932</a>        <span class="macro">assert_eq!</span>(emitted, <span class="macro">vec!</span>[<span class="number">24</span>, <span class="number">27</span>]);
+<a href=#933 id=933 data-nosnippet>933</a>
+<a href=#934 id=934 data-nosnippet>934</a>        <span class="comment">// Checkpoints 27 and 28 are unmatched, then 29 matches: the run restarts after it.
+<a href=#935 id=935 data-nosnippet>935</a>        </span><span class="macro">assert!</span>(!tracker.commit_unmatched(<span class="number">28</span>));
+<a href=#936 id=936 data-nosnippet>936</a>        <span class="macro">assert!</span>(!tracker.commit_unmatched(<span class="number">29</span>));
+<a href=#937 id=937 data-nosnippet>937</a>        <span class="macro">assert!</span>(tracker.commit_match(<span class="number">30</span>));
+<a href=#938 id=938 data-nosnippet>938</a>        <span class="macro">assert!</span>(!tracker.commit_unmatched(<span class="number">31</span>));
+<a href=#939 id=939 data-nosnippet>939</a>        <span class="macro">assert!</span>(!tracker.commit_unmatched(<span class="number">32</span>));
+<a href=#940 id=940 data-nosnippet>940</a>        <span class="macro">assert!</span>(tracker.commit_unmatched(<span class="number">33</span>));
+<a href=#941 id=941 data-nosnippet>941</a>    }
+<a href=#942 id=942 data-nosnippet>942</a>
+<a href=#943 id=943 data-nosnippet>943</a>    <span class="doccomment">/// The last backfill page can scan past the handoff. Live delivers neither matches nor progress
+<a href=#944 id=944 data-nosnippet>944</a>    /// behind its end, and live progress past it advances the resume point.
+<a href=#945 id=945 data-nosnippet>945</a>    </span><span class="attr">#[test]
+<a href=#946 id=946 data-nosnippet>946</a>    </span><span class="kw">fn </span>live_progress_does_not_move_behind_backfill_progress() {
+<a href=#947 id=947 data-nosnippet>947</a>        <span class="kw">let </span><span class="kw-2">mut </span>tracker = DeliveryTracker::new(<span class="bool-val">true</span>, <span class="number">1</span>, <span class="prelude-val">None</span>);
+<a href=#948 id=948 data-nosnippet>948</a>        <span class="macro">assert!</span>(tracker.commit_page_end(<span class="number">31</span>));
+<a href=#949 id=949 data-nosnippet>949</a>        <span class="macro">assert!</span>((<span class="number">21</span>..=<span class="number">30</span>).all(|checkpoint| !tracker.commit_match(checkpoint + <span class="number">1</span>)));
+<a href=#950 id=950 data-nosnippet>950</a>        <span class="macro">assert!</span>(!tracker.commit_unmatched(<span class="number">31</span>));
+<a href=#951 id=951 data-nosnippet>951</a>        <span class="macro">assert!</span>(tracker.commit_unmatched(<span class="number">32</span>));
+<a href=#952 id=952 data-nosnippet>952</a>    }
+<a href=#953 id=953 data-nosnippet>953</a>
+<a href=#954 id=954 data-nosnippet>954</a>    <span class="doccomment">/// A zero threshold disables live progress, while backfill progress still fires: the
+<a href=#955 id=955 data-nosnippet>955</a>    /// server-wide knob tunes live pacing without silencing the backfill resume point.
+<a href=#956 id=956 data-nosnippet>956</a>    </span><span class="attr">#[test]
+<a href=#957 id=957 data-nosnippet>957</a>    </span><span class="kw">fn </span>zero_threshold_disables_live_progress() {
+<a href=#958 id=958 data-nosnippet>958</a>        <span class="kw">let </span><span class="kw-2">mut </span>tracker = DeliveryTracker::new(<span class="bool-val">true</span>, <span class="number">0</span>, <span class="prelude-val">None</span>);
+<a href=#959 id=959 data-nosnippet>959</a>        <span class="macro">assert!</span>((<span class="number">0</span>..<span class="number">100</span>).all(|checkpoint| !tracker.commit_unmatched(checkpoint + <span class="number">1</span>)));
+<a href=#960 id=960 data-nosnippet>960</a>        <span class="macro">assert!</span>(tracker.commit_page_end(<span class="number">11</span>));
+<a href=#961 id=961 data-nosnippet>961</a>    }
+<a href=#962 id=962 data-nosnippet>962</a>
+<a href=#963 id=963 data-nosnippet>963</a>    <span class="doccomment">/// Without the per-subscription opt-in, neither a backfill page end nor an unmatched live run
+<a href=#964 id=964 data-nosnippet>964</a>    /// delivers anything, and the resume point stays with the last match.
+<a href=#965 id=965 data-nosnippet>965</a>    </span><span class="attr">#[test]
+<a href=#966 id=966 data-nosnippet>966</a>    </span><span class="kw">fn </span>disabled_progress_delivers_nothing() {
+<a href=#967 id=967 data-nosnippet>967</a>        <span class="kw">let </span><span class="kw-2">mut </span>tracker = DeliveryTracker::new(<span class="bool-val">false</span>, <span class="number">1</span>, <span class="prelude-val">None</span>);
+<a href=#968 id=968 data-nosnippet>968</a>        <span class="macro">assert!</span>(!tracker.commit_page_end(<span class="number">10</span>));
+<a href=#969 id=969 data-nosnippet>969</a>        <span class="macro">assert!</span>((<span class="number">11</span>..<span class="number">100</span>).all(|checkpoint| !tracker.commit_unmatched(checkpoint + <span class="number">1</span>)));
+<a href=#970 id=970 data-nosnippet>970</a>        <span class="macro">assert!</span>(tracker.commit_match(<span class="number">5</span>));
+<a href=#971 id=971 data-nosnippet>971</a>    }
+<a href=#972 id=972 data-nosnippet>972</a>
+<a href=#973 id=973 data-nosnippet>973</a>    <span class="doccomment">/// A resume checkpoint is measured against the tip in checkpoints, and a resume point that
+<a href=#974 id=974 data-nosnippet>974</a>    /// names none (one at the start of genesis) is never too far ahead.
+<a href=#975 id=975 data-nosnippet>975</a>    </span><span class="attr">#[test]
+<a href=#976 id=976 data-nosnippet>976</a>    </span><span class="kw">fn </span>only_a_named_checkpoint_is_too_far_ahead() {
+<a href=#977 id=977 data-nosnippet>977</a>        <span class="macro">assert!</span>(!is_too_far_ahead(<span class="prelude-val">Some</span>(<span class="number">102</span>), <span class="number">99</span>, <span class="number">3</span>));
+<a href=#978 id=978 data-nosnippet>978</a>        <span class="macro">assert!</span>(is_too_far_ahead(<span class="prelude-val">Some</span>(<span class="number">103</span>), <span class="number">99</span>, <span class="number">3</span>));
+<a href=#979 id=979 data-nosnippet>979</a>        <span class="macro">assert!</span>(!is_too_far_ahead(<span class="prelude-val">None</span>, <span class="number">99</span>, <span class="number">0</span>));
+<a href=#980 id=980 data-nosnippet>980</a>    }
+<a href=#981 id=981 data-nosnippet>981</a>}
+</code></pre></div></section></main></body></html>

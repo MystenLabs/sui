@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["watermark_service_client","watermark_service_server"],"struct":["PipelineWatermark","SubscribeWatermarksRequest","SubscribeWatermarksResponse"]};

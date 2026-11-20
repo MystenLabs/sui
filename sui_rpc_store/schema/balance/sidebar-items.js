@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["NAME"],"fn":["address_delta","coin_delta","delta","options"],"struct":["Balance","Key","OwnerPrefix"],"type":["Value"]};

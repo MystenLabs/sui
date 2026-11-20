@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ObjectRemovalKind","ObjectVersionCursor","ObjectVersionItem"],"struct":["CheckpointWindow","ObjectVersionsPlan","ObjectVersionsQuery"],"type":["ObjectVersionFrames"]};

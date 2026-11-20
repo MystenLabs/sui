@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["cp_sequence_number","events","raw_effects","raw_transaction","star","timestamp_ms","tx_digest","user_signatures"]};

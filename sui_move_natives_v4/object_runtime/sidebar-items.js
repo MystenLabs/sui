@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["MoveAccumulatorAction","MoveAccumulatorValue","ObjectEvent","TransferResult"],"fn":["get_all_uids","max_event_error"],"struct":["InputObject","LoadedRuntimeObject","MoveAccumulatorEvent","ObjectRuntime","RuntimeResults"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["pipeline_task"],"struct":["CommitterWatermark","InitWatermark","PrunerWatermark","ReaderWatermark"],"trait":["ConcurrentConnection","ConcurrentStore","Connection","SequentialConnection","SequentialStore","Store"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_is_consensus","get_move_struct","get_owner_address","get_owner_type","initial_shared_version","parse_struct"],"mod":["checkpoint","df","event","move_call","object","package","package_bcs","transaction","transaction_bcs","transaction_objects","wrapped_object"],"struct":["InputObjectTracker","ObjectStatusTracker","WrappedStruct"]};
