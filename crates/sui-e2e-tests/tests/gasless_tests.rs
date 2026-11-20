@@ -988,7 +988,7 @@ async fn test_gasless_rate_limit_rejects() {
 }
 
 /// Issues a rate-limited allowance of `coin_type` from `funder` to `spender`, returning the shared
-/// allowance's id and initial shared version.
+/// allowance's id and initial shared version, and the funder's `AllowanceCap`.
 async fn issue_rate_limited_allowance(
     test_env: &mut TestEnv,
     funder: SuiAddress,
@@ -1127,6 +1127,7 @@ async fn test_gasless_allowance_spend() {
         .unwrap();
 
     // The first spend anchors the rate-limit window (the allowance grows); the second does not.
+    let mut prev = initial.clone();
     for (nonce, amount) in [(0, 1_000), (1, 2_000)] {
         let tx_kind = build_allowance_spend_ptb(
             amount,
@@ -1146,8 +1147,18 @@ async fn test_gasless_allowance_spend() {
             .get_object_from_fullnode_store(&allowance_id)
             .await
             .unwrap();
-        assert!(allowance.version() > initial.version());
+        assert!(allowance.version() > prev.version());
         assert_eq!(allowance.storage_rebate, initial.storage_rebate);
+        let (size, prev_size) = (
+            allowance.object_size_for_gas_metering(),
+            prev.object_size_for_gas_metering(),
+        );
+        if nonce == 0 {
+            assert!(size > prev_size, "the first spend grows the allowance");
+        } else {
+            assert_eq!(size, prev_size, "later spends do not grow the allowance");
+        }
+        prev = allowance;
     }
 
     assert_eq!(test_env.get_balance_ab(funder, coin_type.clone()), 7_000);
@@ -1232,9 +1243,9 @@ async fn test_gasless_allowance_revoke_after_growth() {
     assert_eq!(grown.storage_rebate, initial.storage_rebate);
 
     let funder_gas = test_env.get_gas_for_sender(funder)[0];
-    let mut old_rebates = 0;
-    for id in [funder_gas.0, cap.0, allowance_id] {
-        old_rebates += test_env
+    let mut gas_and_cap_rebates = 0;
+    for id in [funder_gas.0, cap.0] {
+        gas_and_cap_rebates += test_env
             .cluster
             .get_object_from_fullnode_store(&id)
             .await
@@ -1273,12 +1284,13 @@ async fn test_gasless_allowance_revoke_after_growth() {
             .iter()
             .any(|obj_ref| obj_ref.0 == allowance_id)
     );
-    // The gas coin, cap, and allowance are the only objects touched, so the refund (including the
-    // non-refundable part) is exactly their prior rebates.
+    // The allowance refunds what was paid to store it at issuance, not its grown size. Per-tx
+    // conservation (checked in debug builds) would have failed the revoke otherwise, and the
+    // reconfiguration below checks epoch-level SUI conservation.
     let summary = effects.gas_cost_summary();
     assert_eq!(
         summary.storage_rebate + summary.non_refundable_storage_fee,
-        old_rebates
+        gas_and_cap_rebates + initial.storage_rebate
     );
 
     test_env.trigger_reconfiguration().await;
