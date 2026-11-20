@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Gasless allowance spends rejected at signing. Signing checks do not run under the simulator,
-// so these live apart from gasless_allowance.move.
+// Gasless allowance spends rejected at signing, run without the simulator so that the validator's
+// signing path is exercised.
 
 //# init --addresses test=0x0 --accounts A B C --enable-gasless
 
@@ -123,12 +123,17 @@ module test::app {
 //> 0: sui::allowance::balance_spend<test::usdc::USDC>(Input(1), Input(0), Input(2));
 //> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(3));
 
+//# programmable --sender B --address-balance-gas --gas-price 0 --gas-budget 0 --inputs allowance_withdraw<sui::balance::Balance<test::usdc::USDC>>(10,@A,object(18,0)) mutshared(18,0) @C
+// Rejected: a pure argument in the Clock slot fails execution, so no Clock input means no spend.
+//> 0: sui::allowance::balance_spend<test::usdc::USDC>(Input(1), Input(0), Input(2));
+//> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(2));
+
 //# programmable --sender A --inputs b"expiring" @B vector[5000u256] vector[] vector[1000]
 // A issues B an allowance that expired at 1000 ms.
 //> 0: std::option::none<sui::allowance::RateLimit>();
 //> 1: sui::allowance::new<sui::balance::Balance<test::usdc::USDC>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
 
-//# programmable --sender B --address-balance-gas --gas-price 0 --gas-budget 0 --inputs allowance_withdraw<sui::balance::Balance<test::usdc::USDC>>(100,@A,object(21,0)) mutshared(21,0) immshared(6) @C
+//# programmable --sender B --address-balance-gas --gas-price 0 --gas-budget 0 --inputs allowance_withdraw<sui::balance::Balance<test::usdc::USDC>>(100,@A,object(22,0)) mutshared(22,0) immshared(6) @C
 // Rejected: the allowance has expired.
 //> 0: sui::allowance::balance_spend<test::usdc::USDC>(Input(1), Input(0), Input(2));
 //> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(3));

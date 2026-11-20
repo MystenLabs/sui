@@ -701,9 +701,9 @@ mod checked {
         Ok(())
     }
 
-    /// Runs the gasless-specific input checks from signing: the allowed object inputs, and the
-    /// rejection of allowance spends that must abort. Signing also runs the general checks. Keep
-    /// in sync with the gasless checks in `check_transaction_input`.
+    /// Runs the input checks from signing that decide gasless eligibility: the allowed object
+    /// inputs, the allowance declarations, and the rejection of allowance spends that must abort.
+    /// Keep in sync with `check_transaction_input`.
     pub fn check_gasless_inputs(
         transaction: &TransactionData,
         input_objects: &InputObjects,
@@ -771,8 +771,8 @@ mod checked {
     }
 
     /// Only the read-only Clock and the allowances backing this transaction's withdrawals (written
-    /// by `balance_spend`) may be shared inputs. Anything else would fail execution, and failed
-    /// gasless transactions are free.
+    /// by `balance_spend`) may be shared inputs. Gasless transactions support no other shared input,
+    /// and failed gasless transactions are free.
     ///
     /// `check_objects` already rejects a shared object passed as owned and a mutable Clock. Those
     /// cases are re-checked here so this function does not depend on call order.
@@ -857,9 +857,10 @@ mod checked {
         Ok(())
     }
 
-    /// Rejects a gasless spend from an allowance that must abort in `consume`. A failed gasless
-    /// transaction is free but still writes the funder's allowance, so the spender could otherwise
-    /// write it indefinitely at no cost.
+    /// Rejects a gasless spend from an allowance that must abort in `consume`, or that cannot reach
+    /// `consume` because the transaction has no Clock input. A failed gasless transaction is free
+    /// but still writes the funder's allowance. Other free failures, such as a later command
+    /// aborting, still write it; the gasless rate limit bounds those.
     ///
     /// Runs at signing and in simulate, never at execution. At execution the allowance and Clock
     /// are read at consensus-assigned versions, where a rejection is fatal. `spend_must_abort`
@@ -893,7 +894,8 @@ mod checked {
             let Some(allowance) = allowances.get(&allowance_id) else {
                 continue;
             };
-            if allowance.spend_must_abort(amount, now_ms) {
+            // `balance_spend` takes `&Clock`, which only a Clock input can supply.
+            if now_ms.is_none() || allowance.spend_must_abort(amount, now_ms) {
                 // Reachability is expected only where SUI is gasless-allowlisted.
                 assert_reachable_gated!(
                     "gasless spend of an expired or exhausted allowance rejected",
@@ -903,7 +905,8 @@ mod checked {
                 );
                 return Err(UserInputError::Unsupported(format!(
                     "Gasless transactions cannot spend from allowance {allowance_id}: it has \
-                     expired, or the spend exceeds its lifetime cap or rate limit"
+                     expired, the spend exceeds its lifetime cap or rate limit, or the \
+                     transaction has no Clock input"
                 )));
             }
         }
