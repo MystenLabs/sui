@@ -236,7 +236,9 @@ pub struct StateSyncConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint_content_timeout_min_ms: Option<u64>,
 
-    /// Maximum timeout for checkpoint content downloads (adaptive timeout upper bound).
+    /// Maximum timeout for checkpoint content downloads (adaptive timeout upper bound). Each
+    /// full-contents request that times out doubles the timeout of the next request for the same
+    /// checkpoint, up to this value. It is also the timeout of each paginated download request.
     ///
     /// If unspecified, this will default to `60,000` milliseconds.
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -1934,6 +1934,7 @@ async fn sync_checkpoint_contents<S>(
     let mut checkpoint_contents_tasks = FuturesOrdered::new();
 
     let running = Arc::new(RunningDownloads::default());
+    let mut last_notified_sequence = None;
 
     let hedge = checkpoint_content_hedge_delay.map(|delay| ContentHedge {
         delay,
@@ -1951,6 +1952,7 @@ async fn sync_checkpoint_contents<S>(
                     }
                     Err(_) => {
                         // Watch channel is closed, exit loop.
+                        metrics.set_checkpoint_content_downloads_running(0);
                         return
                     }
                 }
@@ -2057,11 +2059,13 @@ async fn sync_checkpoint_contents<S>(
         }
         metrics.set_checkpoint_content_downloads_running(running.count());
 
-        if highest_synced
-            .sequence_number()
-            .is_multiple_of(checkpoint_content_download_concurrency as u64)
-            || checkpoint_contents_tasks.is_empty()
+        if last_notified_sequence != Some(*highest_synced.sequence_number())
+            && (highest_synced
+                .sequence_number()
+                .is_multiple_of(checkpoint_content_download_concurrency as u64)
+                || checkpoint_contents_tasks.is_empty())
         {
+            last_notified_sequence = Some(*highest_synced.sequence_number());
             // Periodically notify event loop to notify our peers that we've synced to a new checkpoint height
             if let Some(sender) = sender.upgrade() {
                 let message = StateSyncMessage::SyncedCheckpoint(Box::new(highest_synced.clone()));
@@ -2118,7 +2122,7 @@ where
     let fetch = ContentFetch {
         network: &network,
         max_timeout: timeout_max,
-        failed_requests: AtomicU32::new(0),
+        timed_out_requests: AtomicU32::new(0),
         peer_heights: &peer_heights,
         checkpoint: &checkpoint,
         use_get_checkpoint_contents_v2,
@@ -2270,6 +2274,8 @@ impl RunningDownloads {
 struct ContentResponse {
     peer_id: PeerId,
     elapsed: Duration,
+    /// Whether the request ran until its timeout.
+    timed_out: bool,
     /// `None` if the request failed or timed out, or the peer had no contents.
     contents: Option<VersionedFullCheckpointContents>,
 }
@@ -2287,10 +2293,10 @@ enum FullContentsDownload {
 /// Downloads the contents of one checkpoint from peers.
 struct ContentFetch<'a> {
     network: &'a anemo::Network,
-    /// Upper bound for the timeout of a request, which doubles after each failed request.
+    /// Upper bound for the timeout of a request, which doubles after each request that timed out.
     max_timeout: Duration,
-    /// Requests for this checkpoint that failed so far.
-    failed_requests: AtomicU32,
+    /// Requests for this checkpoint that ran until their timeout so far.
+    timed_out_requests: AtomicU32,
     peer_heights: &'a Arc<RwLock<PeerHeights>>,
     checkpoint: &'a VerifiedCheckpoint,
     use_get_checkpoint_contents_v2: bool,
@@ -2488,11 +2494,12 @@ impl ContentFetch<'_> {
         let peer_id = peer.inner().peer_id();
         let digest = self.checkpoint.content_digest;
         // A checkpoint that timed out with one peer is likely too large for the current timeout,
-        // so each failed request doubles the timeout of the next one, up to `max_timeout`.
-        let failed = self.failed_requests.load(Ordering::Relaxed).min(6);
+        // so each request that timed out doubles the timeout of the next one, up to `max_timeout`.
+        // A fast failure, such as a peer without the contents, does not escalate.
+        let timed_out = self.timed_out_requests.load(Ordering::Relaxed).min(6);
         let timeout = self
             .timeout
-            .saturating_mul(1 << failed)
+            .saturating_mul(1 << timed_out)
             .min(self.max_timeout.max(self.timeout));
         let use_get_checkpoint_contents_v2 = self.use_get_checkpoint_contents_v2;
         debug!(
@@ -2528,6 +2535,7 @@ impl ContentFetch<'_> {
             ContentResponse {
                 peer_id,
                 elapsed,
+                timed_out: contents.is_none() && elapsed >= timeout,
                 contents,
             }
         }
@@ -2542,11 +2550,14 @@ impl ContentFetch<'_> {
         let ContentResponse {
             peer_id,
             elapsed,
+            timed_out,
             contents,
         } = response;
         let peer_label = content_metrics_peer_label(self.network, peer_id);
         let Some(contents) = contents else {
-            self.failed_requests.fetch_add(1, Ordering::Relaxed);
+            if timed_out {
+                self.timed_out_requests.fetch_add(1, Ordering::Relaxed);
+            }
             self.peer_heights.write().unwrap().record_failure(peer_id);
             self.metrics.record_checkpoint_content_peer_request(
                 &peer_label,
