@@ -1587,6 +1587,8 @@ async fn validator_streams_locally_built_checkpoints() {
     // certifying checkpoints, and serving them to the fullnode, meanwhile.
     let cluster = TestClusterBuilder::new()
         .with_num_validators(4)
+        // The final comparison reads checkpoints from the previous epoch.
+        .disable_fullnode_pruning()
         .build()
         .await;
     let sender = cluster.get_address_0();
