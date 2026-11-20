@@ -3061,8 +3061,20 @@ async fn build_http_servers(
         rpc_service.into_router().await
     };
 
+    let http_address = match config.rpc().and_then(|rpc| rpc.http_address) {
+        Some(http_address) => http_address,
+        None => {
+            warn!(
+                json_rpc_address = %config.json_rpc_address,
+                "rpc.http-address is unset, so plaintext RPC is served on json-rpc-address, \
+                 which is deprecated and will be removed; set rpc.http-address instead"
+            );
+            config.json_rpc_address
+        }
+    };
+
     Ok((
-        serve_rpc_router(config, Some(config.json_rpc_address), rpc_router)?,
+        serve_rpc_router(config, Some(http_address), rpc_router)?,
         Some(subscription_service_checkpoint_sender),
         None,
     ))

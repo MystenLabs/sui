@@ -108,15 +108,15 @@ ls -la suidb/
 
 ### Investigate local RPC connectivity issues
 
-Update the `json-rpc-address` in the Full node config to listen on all addresses:
+Update `rpc.http-address` in the Full node config to listen on all addresses:
 
 ```shell
 sed -i 's/127.0.0.1/0.0.0.0/' fullnode-template.yaml
 ```
 
 ```shell
--json-rpc-address: "127.0.0.1:9000"
-+json-rpc-address: "0.0.0.0:9000"
+-  http-address: "127.0.0.1:9000"
++  http-address: "0.0.0.0:9000"
 ```
 
 ### Install wget and curl

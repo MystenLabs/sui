@@ -71,9 +71,11 @@ pub struct NodeConfig {
     pub db_path: PathBuf,
     #[serde(default = "default_grpc_address")]
     pub network_address: Multiaddr,
-    /// The address the fullnode's HTTP server (gRPC and REST) listens on. The
-    /// key keeps its historical name from when the JSON-RPC service was also
-    /// served on this address, so that existing configs keep working.
+    /// Deprecated: set `rpc.http-address` instead, which takes precedence.
+    /// When `rpc.http-address` is unset, a fullnode's HTTP server (gRPC and
+    /// REST) listens here. The key keeps its historical name from when the
+    /// JSON-RPC service was also served on this address. Validators do not
+    /// use it.
     #[serde(default = "default_json_rpc_address")]
     pub json_rpc_address: SocketAddr,
 

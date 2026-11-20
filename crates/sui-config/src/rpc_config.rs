@@ -19,10 +19,11 @@ pub struct RpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enable_indexing: Option<bool>,
 
-    /// Address to listen on for plaintext gRPC on a validator with
-    /// `enable-validator-rpc` set. Unset, the validator serves no plaintext.
+    /// Address to listen on for plaintext gRPC.
     ///
-    /// Not allowed on fullnodes, which serve plaintext on `json-rpc-address`.
+    /// When this is unset, a fullnode serves plaintext on the top-level
+    /// `json-rpc-address`, which is deprecated, and a validator with
+    /// `enable-validator-rpc` serves no plaintext.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub http_address: Option<SocketAddr>,
 
@@ -247,12 +248,6 @@ impl RpcConfig {
                 self.http_address.is_some() || self.tls.is_some(),
                 "rpc.enable-validator-rpc needs rpc.http-address, rpc.tls, or both"
             );
-        } else {
-            anyhow::ensure!(
-                self.http_address.is_none(),
-                "rpc.http-address applies only with rpc.enable-validator-rpc; \
-                 fullnodes serve plaintext on json-rpc-address"
-            );
         }
         self.ledger_history().validate()
     }
@@ -448,7 +443,7 @@ mod validator_rpc_tests {
     use super::*;
 
     #[test]
-    fn validator_rpc_needs_a_listener_and_http_address_needs_validator_rpc() {
+    fn validator_rpc_needs_a_listener() {
         let address = SocketAddr::from(([127, 0, 0, 1], 9000));
         let tls = RpcTlsConfig {
             cert: "cert.pem".to_owned(),
@@ -463,20 +458,8 @@ mod validator_rpc_tests {
 
         assert!(config(Some(true), None, None).validate().is_err());
         assert!(config(Some(true), Some(address), None).validate().is_ok());
-        assert!(
-            config(Some(true), None, Some(tls.clone()))
-                .validate()
-                .is_ok()
-        );
-        assert!(
-            config(Some(true), Some(address), Some(tls.clone()))
-                .validate()
-                .is_ok()
-        );
-
-        assert!(config(None, Some(address), None).validate().is_err());
-        assert!(config(Some(false), Some(address), None).validate().is_err());
-        assert!(config(None, None, Some(tls)).validate().is_ok());
+        assert!(config(Some(true), None, Some(tls)).validate().is_ok());
+        assert!(config(None, Some(address), None).validate().is_ok());
     }
 }
 
