@@ -21,6 +21,6 @@ fun create(ctx: &TxContext) {
 }
 
 #[test_only]
-public(package) fun create_for_testing(ctx: &TxContext) {
+public fun create_for_testing(ctx: &TxContext) {
     create(ctx);
 }

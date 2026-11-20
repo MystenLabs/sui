@@ -1312,6 +1312,9 @@ fun create_system_objects() {
     let deny_list = scenario.take_shared<sui::deny_list::DenyList>();
     test_scenario::return_shared(deny_list);
 
+    let freeze_list = scenario.take_shared<sui::coin_regulation::FreezeList>();
+    test_scenario::return_shared(freeze_list);
+
     scenario.end();
 }
 
