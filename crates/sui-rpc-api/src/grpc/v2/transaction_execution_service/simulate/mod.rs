@@ -152,6 +152,11 @@ pub fn simulate_transaction(
                 }
             }
 
+            // A price of 0 is treated as unset, and the priced flow needs a real price.
+            if transaction.gas_data().price == 0 {
+                transaction.gas_data_mut().price = reference_gas_price;
+            }
+
             // Priced-flow budget estimation and gas selection.
             // At this point, the budget on the transaction can be set to one of the following:
             // - The budget from the request, if specified.

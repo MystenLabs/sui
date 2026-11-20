@@ -522,11 +522,11 @@ async fn simulate_falls_back_to_priced_for_expired_allowance_spend() {
     let expired = issue_sui_allowance(&mut test_env, funder, spender, 1).await;
 
     let mut client = connect(&test_env).await;
-    let mut simulate = async |allowance| {
+    let mut simulate = async |allowance, price| {
         let tx = build_allowance_spend_tx(spender, funder, allowance);
         client
             .simulate_transaction(
-                SimulateTransactionRequest::new(to_unresolved_proto(tx, None))
+                SimulateTransactionRequest::new(to_unresolved_proto(tx, price))
                     .with_do_gas_selection(true),
             )
             .await
@@ -534,28 +534,31 @@ async fn simulate_falls_back_to_priced_for_expired_allowance_spend() {
             .into_inner()
     };
 
-    let response = simulate(live).await;
+    let response = simulate(live, None).await;
     let returned = response.transaction();
     assert_eq!(returned.transaction().gas_payment().price, Some(0));
     assert!(returned.effects().status().success());
 
-    let response = simulate(expired).await;
-    let returned = response.transaction();
-    let gas_payment = returned.transaction().gas_payment();
-    assert_eq!(gas_payment.price, Some(test_env.rgp));
-    assert!(!gas_payment.objects.is_empty());
-    let status = returned.effects().status();
-    assert!(!status.success());
-    let abort = status.error().abort();
-    assert_eq!(
-        abort.location().module(),
-        "allowance",
-        "{:?}",
-        status.error()
-    );
-    assert!(
-        abort.clever_error().constant_name().contains("EExpired"),
-        "{:?}",
-        status.error()
-    );
+    // A caller echoing a previous gasless price of 0 gets the same priced fallback.
+    for price in [None, Some(0)] {
+        let response = simulate(expired, price).await;
+        let returned = response.transaction();
+        let gas_payment = returned.transaction().gas_payment();
+        assert_eq!(gas_payment.price, Some(test_env.rgp));
+        assert!(!gas_payment.objects.is_empty());
+        let status = returned.effects().status();
+        assert!(!status.success());
+        let abort = status.error().abort();
+        assert_eq!(
+            abort.location().module(),
+            "allowance",
+            "{:?}",
+            status.error()
+        );
+        assert!(
+            abort.clever_error().constant_name().contains("EExpired"),
+            "{:?}",
+            status.error()
+        );
+    }
 }
