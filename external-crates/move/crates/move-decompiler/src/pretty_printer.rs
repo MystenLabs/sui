@@ -1123,21 +1123,24 @@ fn data_op_doc(context: FunctionContext<'_>, op: &DataOp, args: &[Exp]) -> Doc {
             assert!(fields.len() == args.len());
             let enum_name = variant.enum_.name;
             let variant_name = variant.variant.name;
-            D::text(format!("{enum_name}::{variant_name}")).concat_space(if fields.is_empty() {
-                D::nil().braces()
+
+            if fields.is_empty() {
+                D::text(format!("{enum_name}::{variant_name}"))
             } else {
-                D::space()
-                    .concat(D::intersperse(
-                        fields.iter().zip(args.iter()).map(|((name, _ty), e)| {
-                            D::text(name.as_str())
-                                .concat(D::text(":"))
-                                .concat_space(exp(context, e))
-                        }),
-                        D::text(",").concat(D::space()),
-                    ))
-                    .concat(D::space())
-                    .braces()
-            })
+                D::text(format!("{enum_name}::{variant_name}")).concat_space(
+                    D::space()
+                        .concat(D::intersperse(
+                            fields.iter().zip(args.iter()).map(|((name, _ty), e)| {
+                                D::text(name.as_str())
+                                    .concat(D::text(":"))
+                                    .concat_space(exp(context, e))
+                            }),
+                            D::text(",").concat(D::space()),
+                        ))
+                        .concat(D::space())
+                        .braces(),
+                )
+            }
         }
 
         DataOp::Pack(struct_) => {
