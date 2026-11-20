@@ -20,6 +20,11 @@ pub trait ExecutionMode {
     /// Controls the calling of arbitrary Move functions
     fn allow_arbitrary_function_calls() -> bool;
 
+    /// Controls whether `allow_arbitrary_function_calls` extends to non-entry private and
+    /// `public(package)` functions of system packages. Those functions assume their caller is
+    /// framework code that has already validated the arguments.
+    fn allow_private_system_package_calls() -> bool;
+
     /// Controls the ability to instantiate any Move function parameter with a Pure call arg.
     ///  In other words, you can instantiate any struct or object or other value with its BCS byte
     fn allow_arbitrary_values() -> bool;
@@ -67,6 +72,10 @@ where
         false
     }
 
+    fn allow_private_system_package_calls() -> bool {
+        false
+    }
+
     fn allow_arbitrary_values() -> bool {
         false
     }
@@ -111,6 +120,10 @@ impl ExecutionMode for Genesis {
     type Error = ExecutionError;
 
     fn allow_arbitrary_function_calls() -> bool {
+        true
+    }
+
+    fn allow_private_system_package_calls() -> bool {
         true
     }
 
@@ -168,6 +181,10 @@ where
         true
     }
 
+    fn allow_private_system_package_calls() -> bool {
+        true
+    }
+
     fn allow_arbitrary_values() -> bool {
         // For AuthenticatorStateUpdate, we need to be able to pass in a vector of
         // JWKs, so we need to allow arbitrary values.
@@ -217,6 +234,10 @@ impl<const SKIP_ALL_CHECKS: bool> ExecutionMode for DevInspect<SKIP_ALL_CHECKS> 
 
     fn allow_arbitrary_function_calls() -> bool {
         SKIP_ALL_CHECKS
+    }
+
+    fn allow_private_system_package_calls() -> bool {
+        false
     }
 
     fn allow_arbitrary_values() -> bool {

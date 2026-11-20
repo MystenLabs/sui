@@ -67,31 +67,37 @@ task 9, lines 59-61:
 Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package::original_package_id (function index 23) at offset 12, Abort Code: 5
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 23, instruction: 12, function_name: Some("original_package_id") }, 5), source: Some(VMError { major_status: ABORTED, sub_status: Some(5), message: Some("sui::package::original_package_id at offset 12"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("package") }), indices: [], offsets: [(FunctionDefinitionIndex(23), 12)] }), command: Some(0) } }
 
-task 10, lines 63-66:
-// The native rejects
-//# programmable --sender A --inputs @0xf 1 --dev-inspect
+task 10, lines 63-68:
+// The native rejects bad (package, version) pairs. A forged UpgradeCap
+// (`struct(id, package, version, policy)`) passes them through the public API.
+//# programmable --sender A --inputs struct(@empty,@0xf,1,0u8) --dev-inspect
 // ..  unknown package IDs
-//> 0: sui::package::original_package_id_impl(Input(0), Input(1));
+//> 0: sui::package::original_package_id(Input(0));
+//> 1: sui::package::make_immutable(Input(0));
 Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 24, instruction: 0, function_name: Some("original_package_id_impl") }, 6) in command 0
 Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 24, instruction: 0, function_name: Some("original_package_id_impl") }, 6) in command 0
 
-task 11, lines 68-70:
-//# programmable --sender A --inputs @test_v3 4 --dev-inspect
+task 11, lines 70-73:
+//# programmable --sender A --inputs struct(@empty,@test_v3,4,0u8) --dev-inspect
 //.. and known package IDs at nonexistent versions
-//> 0: sui::package::original_package_id_impl(Input(0), Input(1));
+//> 0: sui::package::original_package_id(Input(0));
+//> 1: sui::package::make_immutable(Input(0));
 Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 24, instruction: 0, function_name: Some("original_package_id_impl") }, 6) in command 0
 Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 24, instruction: 0, function_name: Some("original_package_id_impl") }, 6) in command 0
 
-task 12, lines 72-74:
-//# programmable --sender A --inputs @test_v3 2 --dev-inspect
+task 12, lines 75-78:
+//# programmable --sender A --inputs struct(@empty,@test_v3,2,0u8) --dev-inspect
 //.. and known package IDs at incorrect versions
-//> 0: sui::package::original_package_id_impl(Input(0), Input(1));
+//> 0: sui::package::original_package_id(Input(0));
+//> 1: sui::package::make_immutable(Input(0));
 Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 24, instruction: 0, function_name: Some("original_package_id_impl") }, 6) in command 0
 Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 24, instruction: 0, function_name: Some("original_package_id_impl") }, 6) in command 0
 
-task 13, lines 76-78:
-//# programmable --sender A --inputs @test_v3 3 --dev-inspect
+task 13, lines 80-83:
+//# programmable --sender A --inputs struct(@empty,@test_v3,3,0u8) --dev-inspect
 // double check that it works if we pass it the right version
-//> 0: sui::package::original_package_id_impl(Input(0), Input(1));
+//> 0: sui::package::original_package_id(Input(0));
+//> 1: sui::package::make_immutable(Input(0));
 mutated: object(_)
+unwrapped_then_deleted: object(_)
 gas summary: computation_cost: 500000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
