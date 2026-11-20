@@ -47,6 +47,9 @@ pub struct PayloadAllowances {
     pub neighbor: AllowanceInfo,
     /// Funded by the sender itself.
     pub own: AllowanceInfo,
+    /// Funded by the sender itself and already expired, so validators must reject every gasless
+    /// spend from it.
+    pub expired: AllowanceInfo,
 }
 
 pub const ALIAS_TX: &str = "alias_tx";
@@ -96,6 +99,7 @@ pub const COIN_STALE_MERGE: &str = "coin_stale_merge";
 pub const GASLESS_TRANSFER: &str = "gasless_transfer";
 pub const GASLESS_ALLOWANCE_SPEND: &str = "gasless_allowance_spend";
 pub const GASLESS_SELF_ALLOWANCE_SPEND: &str = "gasless_self_allowance_spend";
+pub const GASLESS_EXPIRED_ALLOWANCE_SPEND: &str = "gasless_expired_allowance_spend";
 
 pub const SPONSORED_TX: &str = "sponsored_tx";
 
@@ -1324,11 +1328,12 @@ fn allowance_spend_amount(address_balance_amount: u64) -> u64 {
 }
 
 /// Issues an `Allowance<Balance<SUI>>` funded by the tx sender for `spender`.
-/// The cap, expiration, and rate limit are effectively unlimited so spends never trip them. The
-/// rate limit still makes the first spend anchor its window, which grows the allowance.
+/// The cap and rate limit are effectively unlimited so spends never trip them. The rate limit
+/// still makes the first spend anchor its window, which grows the allowance.
 pub fn add_allowance_issue_commands(
     builder: &mut ProgrammableTransactionBuilder,
     spender: SuiAddress,
+    expiration_timestamp_ms: u64,
 ) {
     let period_ms = builder.pure(86_400_000u64).unwrap();
     let limit = builder.pure(U256::from(u64::MAX)).unwrap();
@@ -1351,7 +1356,7 @@ pub fn add_allowance_issue_commands(
         builder.pure(spender).unwrap(),
         builder.pure(Some(U256::from(u64::MAX))).unwrap(),
         builder.pure(None::<u64>).unwrap(),
-        builder.pure(Some(u64::MAX)).unwrap(),
+        builder.pure(Some(expiration_timestamp_ms)).unwrap(),
         rate_limit,
     ];
     builder.programmable_move_call(

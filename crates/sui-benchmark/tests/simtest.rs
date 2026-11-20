@@ -2448,6 +2448,22 @@ mod test {
                     success_count > 0,
                     "expected at least one gasless allowance spend success"
                 );
+                // Signing must reject these, so none may execute, even as a Move abort.
+                assert_eq!(
+                    sum_containing(GASLESS_EXPIRED_ALLOWANCE_SPEND, |s| s.success_count
+                        + s.abort_count
+                        + s.insufficient_funds_count
+                        + s.cancellation_count),
+                    0,
+                    "a gasless spend from an expired allowance executed"
+                );
+                // Direct submission reports signing rejections as retriable failures.
+                info!(
+                    "gasless expired allowance spend rejections: {}",
+                    sum_containing(GASLESS_EXPIRED_ALLOWANCE_SPEND, |s| s
+                        .permanent_failure_count
+                        + s.retriable_failure_count)
+                );
             }
         }
     }

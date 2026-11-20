@@ -17,16 +17,16 @@ pub use operations::{
     ALIAS_ADD, ALIAS_REMOVE, ALIAS_TX, ALL_OPERATIONS, ALLOWED_PROPOSERS_TX,
     AccumulatorBalanceRead, AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw,
     AllowanceSelfWithdraw, AllowanceWithdraw, AuthenticatedEventEmit, COIN_MERGE,
-    CoinReservationWithdraw, GASLESS_ALLOWANCE_SPEND, GASLESS_SELF_ALLOWANCE_SPEND,
-    GASLESS_TRANSFER, INVALID_ALIAS_TX, ImmutableObjectRead, MULTISIG_TX, OWNED_CREATE,
-    OWNED_DELETE, OWNED_FREEZE, ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw,
-    OperationDescriptor, PACKAGE_UPGRADE, PARTY_CREATE, PARTY_END_STREAM, PARTY_HAND_OFF,
-    PARTY_MUTATE, PARTY_OLD_STREAM, PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE, PARTY_RESTART_STREAM,
-    PARTY_RETRANSFER, PARTY_UNWRAP, PARTY_WRAP, RECEIVE_CHILD, RECEIVE_CREATE_PARENT,
-    RandomnessRead, SHARED_DELETE, SHARED_DELETE_CREATE, SHARED_DELETE_INCREMENT,
-    SHARED_DELETE_RACING, SHARED_DELETE_STALE, SPONSORED_TX, SharedCounterIncrement,
-    SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw, TestCoinMint,
-    TestCoinObjectWithdraw,
+    CoinReservationWithdraw, GASLESS_ALLOWANCE_SPEND, GASLESS_EXPIRED_ALLOWANCE_SPEND,
+    GASLESS_SELF_ALLOWANCE_SPEND, GASLESS_TRANSFER, INVALID_ALIAS_TX, ImmutableObjectRead,
+    MULTISIG_TX, OWNED_CREATE, OWNED_DELETE, OWNED_FREEZE, ObjectBalanceDeposit,
+    ObjectBalanceOverdraw, ObjectBalanceWithdraw, OperationDescriptor, PACKAGE_UPGRADE,
+    PARTY_CREATE, PARTY_END_STREAM, PARTY_HAND_OFF, PARTY_MUTATE, PARTY_OLD_STREAM,
+    PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE, PARTY_RESTART_STREAM, PARTY_RETRANSFER, PARTY_UNWRAP,
+    PARTY_WRAP, RECEIVE_CHILD, RECEIVE_CREATE_PARENT, RandomnessRead, SHARED_DELETE,
+    SHARED_DELETE_CREATE, SHARED_DELETE_INCREMENT, SHARED_DELETE_RACING, SHARED_DELETE_STALE,
+    SPONSORED_TX, SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit,
+    TestCoinAddressWithdraw, TestCoinMint, TestCoinObjectWithdraw,
 };
 use rand::seq::SliceRandom;
 
@@ -188,10 +188,6 @@ fn sample_timestamp_window(rng: &mut impl Rng) -> (Option<u64>, Option<u64>) {
             (min, Some(max))
         }
     }
-}
-
-fn gasless_allowance_spend_enabled(protocol_config: Option<&ProtocolConfig>) -> bool {
-    protocol_config.is_some_and(|cfg| cfg.gasless_allowance_spend())
 }
 
 /// Gasless allowance spends need SUI in the gasless allowlist as well as `gasless_allowance_spend`.
@@ -446,8 +442,8 @@ pub struct CompositeWorkloadConfig {
     /// Zero disables both.
     pub owned_object_probability: f32,
     /// Per-batch probability of adding a gasless tx. It transfers SUI to the partner or, when
-    /// `gasless_allowance_spend` is on and allowances are issued, spends through the neighbor or
-    /// own allowance. The protocol config must allow SUI in gasless txs, or validators reject
+    /// `gasless_allowance_spend` is on and allowances are issued, spends through the neighbor,
+    /// own, or expired allowance. The protocol config must allow SUI in gasless txs, or validators reject
     /// these txs.
     pub gasless_probability: f32,
     /// Per-tx probability that the partner payload sponsors a composite tx. Zero disables
@@ -706,14 +702,6 @@ struct AliasState {
     address_aliases_id: ObjectID,
     address_aliases_initial_shared_version: SequenceNumber,
     cycle_state: AliasRevokeCycleState,
-}
-
-/// Where a gasless tx withdraws its SUI from.
-#[derive(Clone, Copy, Debug)]
-enum GaslessSource {
-    SenderBalance,
-    NeighborAllowance,
-    OwnAllowance,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1235,23 +1223,19 @@ impl CompositePayload {
         tx
     }
 
-    /// Builds a gasless tx that sends SUI from `source` to the partner, or for an allowance
-    /// back to its funder. Gasless txs may call only framework fund functions, so it carries no
-    /// sampled ops.
+    /// Builds a gasless tx that sends SUI from `allowance` back to its funder, or with no
+    /// allowance from the sender's balance to the partner. Gasless txs may call only framework
+    /// fund functions, so it carries no sampled ops.
     fn generate_gasless_transaction(
         &mut self,
         sender: SuiAddress,
         keypair: &AccountKeyPair,
         current_epoch: u64,
-        source: GaslessSource,
+        allowance: Option<AllowanceInfo>,
+        op_name: &'static str,
     ) -> Transaction {
         let mut builder = ProgrammableTransactionBuilder::new();
-        let allowance = match source {
-            GaslessSource::SenderBalance => None,
-            GaslessSource::NeighborAllowance => Some(self.allowances.unwrap().neighbor),
-            GaslessSource::OwnAllowance => Some(self.allowances.unwrap().own),
-        };
-        let op_name = if let Some((allowance_id, initial_shared_version, funder)) = allowance {
+        if let Some((allowance_id, initial_shared_version, funder)) = allowance {
             add_allowance_spend_commands(
                 &mut builder,
                 allowance_id,
@@ -1259,11 +1243,6 @@ impl CompositePayload {
                 funder,
                 1,
             );
-            if funder == sender {
-                GASLESS_SELF_ALLOWANCE_SPEND
-            } else {
-                GASLESS_ALLOWANCE_SPEND
-            }
         } else {
             let withdrawal = builder
                 .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(1, GAS::type_tag()))
@@ -1283,8 +1262,7 @@ impl CompositePayload {
                 vec![GAS::type_tag()],
                 vec![balance, recipient],
             );
-            GASLESS_TRANSFER
-        };
+        }
         let nonce = self.nonce_counter.fetch_add(1, Ordering::Relaxed);
         let mut data = TransactionData::new_programmable_with_address_balance_gas(
             sender,
@@ -1745,24 +1723,32 @@ impl Payload for CompositePayload {
             && rng.gen_bool(self.config.gasless_probability as f64)
         {
             self.direct_submission = true;
-            let source = if self.allowances.is_some()
-                && gasless_allowance_spend_enabled(system_state.protocol_config.as_ref())
-            {
-                *[
-                    GaslessSource::SenderBalance,
-                    GaslessSource::NeighborAllowance,
-                    GaslessSource::OwnAllowance,
-                ]
-                .choose(&mut rng)
-                .unwrap()
-            } else {
-                GaslessSource::SenderBalance
+            // Half go to plain transfers, which the simtest requires at least one success of.
+            let (allowance, op_name) = match self.allowances {
+                Some(a)
+                    if system_state
+                        .protocol_config
+                        .as_ref()
+                        .is_some_and(gasless_sui_allowance_spend_allowed) =>
+                {
+                    [
+                        ((None, GASLESS_TRANSFER), 5),
+                        ((Some(a.neighbor), GASLESS_ALLOWANCE_SPEND), 2),
+                        ((Some(a.own), GASLESS_SELF_ALLOWANCE_SPEND), 2),
+                        ((Some(a.expired), GASLESS_EXPIRED_ALLOWANCE_SPEND), 1),
+                    ]
+                    .choose_weighted(&mut rng, |(_, weight)| *weight)
+                    .unwrap()
+                    .0
+                }
+                _ => (None, GASLESS_TRANSFER),
             };
             transactions.push(self.generate_gasless_transaction(
                 sender,
                 keypair.as_ref(),
                 current_epoch,
-                source,
+                allowance,
+                op_name,
             ));
         }
 
@@ -1804,10 +1790,12 @@ impl Payload for CompositePayload {
                 (tx_info.kind, &result.status)
                 && effects.is_ok()
             {
-                assert_reachable_gated!(
-                    "gasless composite transfer executed",
-                    gasless_sui_transfer_allowed
-                );
+                if tx_info.op_set.contains(GASLESS_TRANSFER) {
+                    assert_reachable_gated!(
+                        "gasless composite transfer executed",
+                        gasless_sui_transfer_allowed
+                    );
+                }
                 if tx_info.op_set.contains(GASLESS_ALLOWANCE_SPEND)
                     || tx_info.op_set.contains(GASLESS_SELF_ALLOWANCE_SPEND)
                 {
@@ -2209,13 +2197,18 @@ impl CompositeWorkload {
         execution_proxy: &Arc<dyn ValidatorProxy + Sync + Send>,
         gas_price: u64,
         spenders: &[SuiAddress],
+        expiration_timestamp_ms: u64,
     ) -> Vec<AllowanceInfo> {
         let futures = itertools::zip_eq(&self.payload_gas, spenders).map(
             |((gas_coins, sender, keypair), spender)| {
                 assert_eq!(gas_coins.len(), 1);
                 let proxy_ref = execution_proxy.clone();
                 let mut tx_builder = TestTransactionBuilder::new(*sender, gas_coins[0], gas_price);
-                add_allowance_issue_commands(tx_builder.ptb_builder_mut(), *spender);
+                add_allowance_issue_commands(
+                    tx_builder.ptb_builder_mut(),
+                    *spender,
+                    expiration_timestamp_ms,
+                );
                 let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
 
                 async move {
@@ -2466,21 +2459,28 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 .collect();
             let n = senders.len();
 
-            // Two rounds (one tx creating both allowances can't tell them apart in the effects),
-            // in sequence because each payload pays with its single gas coin.
+            // One round per allowance (one tx creating several can't tell them apart in the
+            // effects), in sequence because each payload pays with its single gas coin.
             let neighbors: Vec<_> = senders.iter().cycle().skip(1).take(n).copied().collect();
             let mut neighbor = self
-                .issue_allowances(&execution_proxy, gas_price, &neighbors)
+                .issue_allowances(&execution_proxy, gas_price, &neighbors, u64::MAX)
                 .await;
             // Payload `i` spends what payload `i - 1` funded.
             neighbor.rotate_right(1);
             let own = self
-                .issue_allowances(&execution_proxy, gas_price, &senders)
+                .issue_allowances(&execution_proxy, gas_price, &senders, u64::MAX)
                 .await;
-            self.allowances = itertools::zip_eq(neighbor, own)
-                .map(|(neighbor, own)| PayloadAllowances { neighbor, own })
+            let expired = self
+                .issue_allowances(&execution_proxy, gas_price, &senders, 1)
+                .await;
+            self.allowances = itertools::zip_eq(itertools::zip_eq(neighbor, own), expired)
+                .map(|((neighbor, own), expired)| PayloadAllowances {
+                    neighbor,
+                    own,
+                    expired,
+                })
                 .collect();
-            info!("Issued a neighbor and a self allowance for {n} payloads");
+            info!("Issued neighbor, self, and expired allowances for {n} payloads");
         }
 
         if init_requirements.contains(&InitRequirement::CreateBalancePool) {
