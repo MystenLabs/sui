@@ -5,7 +5,7 @@ use futures::future::join_all;
 use futures::join;
 use rand::distributions::Distribution;
 use std::net::SocketAddr;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use sui_macros::{register_fail_point_async, sim_test};
 use sui_protocol_config::ProtocolVersion;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
@@ -15,6 +15,7 @@ use sui_test_transaction_builder::{
 use sui_types::base_types::{FullObjectRef, ObjectID};
 use sui_types::crypto::{AccountKeyPair, get_key_pair};
 use sui_types::effects::{InputConsensusObject, TransactionEffects, TransactionEffectsAPI};
+use sui_types::event::Event;
 use sui_types::execution_status::{
     CommandArgumentError, ExecutionErrorKind, ExecutionFailure, ExecutionStatus,
 };
@@ -675,6 +676,83 @@ async fn call_shared_object_contract() {
             .dependencies()
             .contains(&assert_value_mut_transaction)
     );
+}
+
+#[sim_test]
+async fn access_clock_object_test() {
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(4)
+        .with_production_config()
+        .build()
+        .await;
+    let package_id = publish_basics_package(&test_cluster.wallet).await.0;
+
+    let transaction = test_cluster
+        .wallet
+        .sign_transaction(
+            &test_cluster
+                .test_transaction_builder()
+                .await
+                .move_call(package_id, "clock", "access", vec![CallArg::CLOCK_IMM])
+                .build(),
+        )
+        .await;
+    let digest = *transaction.digest();
+    let (effects, events) = test_cluster
+        .execute_transaction_return_raw_effects(transaction)
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok());
+
+    let finish = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap();
+
+    assert_eq!(1, events.data.len());
+    let event = events.data.first().unwrap();
+    let Event { contents, .. } = event;
+
+    use serde::{Deserialize, Serialize};
+    #[derive(Serialize, Deserialize)]
+    struct TimeEvent {
+        timestamp_ms: u64,
+    }
+    let event = bcs::from_bytes::<TimeEvent>(contents).unwrap();
+
+    // The consensus commit timestamp can precede the submission time, so only an upper bound holds.
+    assert!(event.timestamp_ms <= finish.as_millis() as u64);
+
+    let mut attempt = 0;
+    let (previous, checkpoint) = loop {
+        let checkpoints = test_cluster
+            .fullnode_handle
+            .sui_node
+            .with_async(|node| async {
+                let state = node.state();
+                let checkpoint = state
+                    .get_transaction_checkpoint_for_tests(&digest, &state.epoch_store_for_testing())
+                    .unwrap()?;
+                let previous = state
+                    .get_checkpoint_by_sequence_number(checkpoint.sequence_number - 1)
+                    .unwrap()
+                    .unwrap();
+                Some((previous, checkpoint))
+            })
+            .await;
+        if let Some(checkpoints) = checkpoints {
+            break checkpoints;
+        }
+        attempt += 1;
+        if attempt > 30 {
+            panic!("Could not get transaction checkpoint");
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    };
+
+    // A checkpoint can hold several consensus commits and takes the timestamp of the last one, so
+    // the Clock read in Move lies between the previous checkpoint's timestamp and this one's.
+    assert!(previous.timestamp_ms <= event.timestamp_ms);
+    assert!(event.timestamp_ms <= checkpoint.timestamp_ms);
 }
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
