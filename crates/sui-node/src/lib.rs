@@ -1583,9 +1583,9 @@ impl SuiNode {
             node_role,
         );
 
-        // The checkpoint executor waits for checkpoints built before the restart to be rebuilt,
+        // The checkpoint executor waits for checkpoints built before a restart to be rebuilt,
         // and rebuilding them requires the consensus handler to reprocess commits. Backpressure
-        // must not pause the handler until the rebuild completes.
+        // is suppressed from the start of each epoch until the rebuild completes.
         backpressure_manager.set_checkpoint_rebuild_pending(true);
         {
             let checkpoint_service = checkpoint_service.clone();

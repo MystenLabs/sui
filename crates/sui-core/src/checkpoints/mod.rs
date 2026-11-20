@@ -392,12 +392,13 @@ impl CheckpointStore {
     }
 
     fn from_tables(tables: CheckpointStoreTables) -> Arc<Self> {
-        let highest_verified = tables
-            .watermarks
-            .get(&CheckpointWatermark::HighestVerified)
-            .expect("db error")
-            .map(|(seq, _)| seq)
-            .unwrap_or_default();
+        let highest_verified = match tables.watermarks.get(&CheckpointWatermark::HighestVerified) {
+            Ok(watermark) => watermark.map(|(seq, _)| seq).unwrap_or_default(),
+            Err(e) => {
+                error!("Failed to read highest verified checkpoint watermark: {e:?}");
+                0
+            }
+        };
         Arc::new(Self {
             tables,
             synced_checkpoint_notify_read: NotifyRead::new(),

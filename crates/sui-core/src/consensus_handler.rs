@@ -1111,12 +1111,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         consensus_commit: impl ConsensusCommitAPI,
         transactions: ParsedConsensusTransactions,
     ) -> Result<(), RuntimeShutdown> {
-        // This may block until one of three conditions happens:
+        // This may block until one of two conditions happens:
         // - Number of uncommitted transactions in the writeback cache goes below the
         //   backpressure threshold.
         // - The highest executed checkpoint catches up to both the highest certified checkpoint
         //   and the highest verified checkpoint summary.
-        // - The checkpoint builder starts rebuilding checkpoints built before a restart.
         self.backpressure_subscriber.await_no_backpressure().await;
 
         let epoch = self.epoch_store.epoch();

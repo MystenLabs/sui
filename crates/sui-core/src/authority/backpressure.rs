@@ -24,13 +24,14 @@ impl Watermarks {
     // checkpoint. Otherwise, backpressure might prevent construction of the next checkpoint,
     // because it could stop consensus commits from being processed.
     //
-    // A verified checkpoint summary ahead of the executed checkpoint also counts: the rest of
-    // the committee has already certified it, so state sync can download its contents and the
+    // A verified checkpoint summary ahead of the executed checkpoint also counts: a quorum has
+    // already certified it, so state sync can download its contents and the
     // checkpoint executor can execute it without this node processing more consensus commits.
     // While backpressure holds on this basis, the node makes progress only through state sync.
     //
-    // While checkpoints built before a restart are being rebuilt, backpressure is suppressed:
-    // the checkpoint executor waits for the rebuild, and the rebuild needs the consensus handler.
+    // From the start of each epoch until the builder has rebuilt the checkpoints it built before
+    // a restart, backpressure is suppressed: the checkpoint executor waits for the rebuild, and
+    // the rebuild needs the consensus handler.
     fn should_suppress_backpressure(&self) -> bool {
         self.checkpoint_rebuild_pending || self.certified.max(self.verified) <= self.executed
     }
@@ -38,8 +39,8 @@ impl Watermarks {
 
 pub struct BackpressureManager {
     // Holds the executed, certified and verified checkpoint watermarks.
-    // Because we never execute an uncertified checkpoint, the executed watermark is always
-    // less than or equal to the certified and verified watermarks.
+    // The executed watermark is always less than or equal to the certified watermark. The
+    // verified watermark is forwarded asynchronously and can briefly lag the executed watermark.
     //
     // If neither the certified nor the verified watermark is ahead of the executed watermark,
     // we must not apply backpressure to consensus handler, because we could be waiting on the
@@ -93,8 +94,6 @@ impl BackpressureManager {
         });
         match tokio::runtime::Handle::try_current() {
             Ok(handle) => {
-                // The task holds a weak reference, and exits on the first verified checkpoint
-                // update after the manager is dropped.
                 let weak = Arc::downgrade(&manager);
                 handle.spawn(async move {
                     while verified_rx.changed().await.is_ok() {
