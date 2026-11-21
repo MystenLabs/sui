@@ -20,15 +20,18 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     SUI_FRAMEWORK_ADDRESS, SUI_GUARDRAILS_REGISTRY_OBJECT_ID,
-    base_types::{ConsensusObjectSequenceKey, ObjectID, SuiAddress},
+    base_types::{ObjectID, SuiAddress},
     collection_types::{Entry, VecMap},
+    committee::EpochId,
     derived_object::derive_object_id,
     id::UID,
     object::Object,
     transaction::{
-        InputObjectKind, SharedInputObject, SharedObjectMutability, TransactionKind, WithdrawFrom,
+        SharedInputObject, SharedObjectMutability, TransactionData, TransactionDataAPI,
+        TransactionKind, WithdrawFrom,
     },
 };
+use sui_protocol_config::ProtocolConfig;
 
 pub const GUARDRAILS_MODULE_NAME: &IdentStr = ident_str!("guardrails");
 pub const POLICY_STRUCT_NAME: &IdentStr = ident_str!("Policy");
@@ -141,31 +144,41 @@ impl Policy {
             None => self.spent.contents.push(Entry { key, value: amount }),
         }
     }
-
-    /// The consensus sequence key of `object` if it is a policy enforced in `epoch`.
-    pub fn active_sequence_key(object: &Object, epoch: u64) -> Option<ConsensusObjectSequenceKey> {
-        let policy = Self::from_object(object)?;
-        if !policy.is_active(epoch) {
-            return None;
-        }
-        Some((object.id(), object.owner().start_version()?))
-    }
 }
 
-pub fn implicit_input(key: ConsensusObjectSequenceKey) -> InputObjectKind {
-    InputObjectKind::SharedMoveObject {
-        id: key.0,
-        initial_shared_version: key.1,
-        mutability: SharedObjectMutability::Mutable,
+/// The policy consensus adds to `tx_data` as a mutable shared input: the sender's, when the
+/// transaction does not declare it and the policy is active in `epoch`. `latest` reads the
+/// latest version of an object.
+///
+/// Every validator reaches the same answer from its own latest state. Whether a policy is
+/// active in an epoch never changes within that epoch, since enabling and disabling take effect
+/// at later epochs, and the initial shared version of a policy never changes.
+pub fn implicit_policy_input(
+    protocol_config: &ProtocolConfig,
+    epoch: EpochId,
+    tx_data: &TransactionData,
+    latest: impl FnOnce(&ObjectID) -> Option<Object>,
+) -> Option<SharedInputObject> {
+    if !protocol_config.enable_guardrails() {
+        return None;
     }
-}
-
-pub fn implicit_shared_input(key: ConsensusObjectSequenceKey) -> SharedInputObject {
-    SharedInputObject {
-        id: key.0,
-        initial_shared_version: key.1,
-        mutability: SharedObjectMutability::Mutable,
+    let id = sender_policy_id(tx_data.kind(), tx_data.sender())?;
+    if tx_data
+        .shared_input_objects()
+        .iter()
+        .any(|input| input.id == id)
+    {
+        return None;
     }
+    let object = latest(&id)?;
+    if !Policy::from_object(&object)?.is_active(epoch) {
+        return None;
+    }
+    Some(SharedInputObject {
+        id,
+        initial_shared_version: object.owner().start_version()?,
+        mutability: SharedObjectMutability::Mutable,
+    })
 }
 
 /// The policy that binds a transaction: its sender's. `None` for anything but a user

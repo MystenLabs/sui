@@ -12,13 +12,15 @@ use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
 use crate::congestion_tracker::CongestionTracker;
+use crate::consensus_inputs::{
+    assigned_shared_inputs, input_objects_for_execution, sequenced_shared_inputs,
+};
 use crate::execution_cache::ExecutionCacheTraitPointers;
 use crate::execution_cache::TransactionCacheRead;
 use crate::execution_cache::writeback_cache::WritebackCache;
 use crate::execution_scheduler::ExecutionScheduler;
 use crate::execution_scheduler::funds_withdraw_scheduler::FundsSettlement;
 use crate::gasless_rate_limiter::ConsensusGaslessCounter;
-use crate::guardrails::assigned_policy_input;
 use crate::traffic_controller::TrafficController;
 use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use crate::transaction_deny_config_manager::TransactionDenyConfigManager;
@@ -1190,7 +1192,7 @@ impl AuthorityState {
             epoch_store,
         )?;
 
-        self.handle_guardrails_checks(transaction.data(), epoch_store)?;
+        self.handle_guardrails_checks(tx_data, epoch_store)?;
 
         Ok(checked_input_objects)
     }
@@ -1395,8 +1397,13 @@ impl AuthorityState {
                 self.update_overload_metrics("execution_queue");
             })?;
         }
+        let shared_input_objects = sequenced_shared_inputs(
+            &self.load_epoch_store_one_call_per_task(),
+            self.get_object_cache_reader().as_ref(),
+            tx_data.transaction_data(),
+        );
         self.execution_scheduler
-            .check_execution_overload(self.overload_config(), tx_data)
+            .check_execution_overload(self.overload_config(), &shared_input_objects)
             .tap_err(|_| {
                 self.update_overload_metrics("execution_pending");
             })?;
@@ -1617,6 +1624,10 @@ impl AuthorityState {
         }
 
         let accumulator_version = execution_env.assigned_versions.accumulator_version();
+        let shared_input_objects = assigned_shared_inputs(
+            certificate.data().transaction_data(),
+            &execution_env.assigned_versions,
+        );
 
         let (transaction_outputs, timings, execution_error_opt) = match self.process_certificate(
             &tx_guard,
@@ -1692,6 +1703,7 @@ impl AuthorityState {
         let elapsed = execution_start_time.elapsed();
         epoch_store.record_local_execution_time(
             certificate.data().transaction_data(),
+            shared_input_objects,
             &effects,
             timings,
             elapsed,
@@ -1718,14 +1730,10 @@ impl AuthorityState {
             .metrics
             .execution_load_input_objects_latency
             .start_timer();
-        let tx_data = certificate.data().transaction_data();
-        let mut input_objects = tx_data.input_objects()?;
-        if epoch_store.protocol_config().enable_guardrails() {
-            input_objects.extend(assigned_policy_input(
-                tx_data,
-                assigned_shared_object_versions,
-            ));
-        }
+        let input_objects = input_objects_for_execution(
+            certificate.data().transaction_data(),
+            assigned_shared_object_versions,
+        )?;
         self.input_loader.read_objects_for_execution(
             &certificate.key(),
             tx_lock,
@@ -2369,14 +2377,22 @@ impl AuthorityState {
             .into());
         }
 
+        if checks.enabled() {
+            self.handle_guardrails_checks(&transaction, &epoch_store)?;
+        }
+
         let transaction_deny_config = self
             .transaction_deny_config_manager
             .effective_config()
             .load();
         let epoch_data = epoch_store.epoch_start_config().epoch_data();
-        let suggested_gas_price = self
-            .congestion_tracker
-            .get_suggested_gas_prices(&transaction);
+        let suggested_gas_price =
+            self.congestion_tracker
+                .get_suggested_gas_prices(&sequenced_shared_inputs(
+                    &epoch_store,
+                    self.get_object_cache_reader().as_ref(),
+                    &transaction,
+                ));
 
         crate::transaction_simulation::simulate_transaction(
             transaction,

@@ -1922,7 +1922,7 @@ impl Display for ProgrammableTransaction {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SharedInputObject {
     pub id: ObjectID,
     pub initial_shared_version: SequenceNumber,
@@ -1957,6 +1957,16 @@ impl SharedInputObject {
         match self.mutability {
             SharedObjectMutability::Immutable => false,
             SharedObjectMutability::Mutable | SharedObjectMutability::NonExclusiveWrite => true,
+        }
+    }
+}
+
+impl From<SharedInputObject> for InputObjectKind {
+    fn from(input: SharedInputObject) -> Self {
+        InputObjectKind::SharedMoveObject {
+            id: input.id,
+            initial_shared_version: input.initial_shared_version,
+            mutability: input.mutability,
         }
     }
 }

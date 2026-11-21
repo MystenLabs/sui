@@ -1,132 +1,36 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Core-side support for guardrails (see `DESIGN.md` next to this file): which policy object a
-//! transaction takes as an implicit mutable input, and the signing-time checks.
+//! The signing-time checks of guardrails (see `DESIGN.md` next to this file). Consensus adds the
+//! sender's policy to a transaction as described in `consensus_inputs`, and execution enforces
+//! the sender's limits.
 //!
-//! Execution enforces the sender's limits. The signing-time checks refuse what execution cannot
-//! handle: a transaction that could only fail, and a withdrawal from another account that has a
-//! policy. They depend only on whether a policy is active this epoch, which does not change
-//! within the epoch, so every validator decides the same.
+//! The signing-time checks refuse what execution cannot handle: a transaction that could only
+//! fail, and a transaction that reaches the funds of another account that has a policy. Most of
+//! them depend only on whether a policy is active this epoch, which does not change within the
+//! epoch, so every validator decides the same. The check on declared policies depends on whether
+//! a declared object is a policy, which changes when a policy is created. A policy created in the
+//! current epoch is not active yet, so no transaction of its owner depends on it, and a validator
+//! that signs before it sees the policy only lets another account contend on it for that epoch.
 
-use mysten_common::debug_fatal;
 use sui_types::{
-    base_types::{ConsensusObjectSequenceKey, ObjectID, SuiAddress},
-    committee::EpochId,
-    effects::{TransactionEffects, TransactionEffectsAPI},
+    base_types::SuiAddress,
     error::{SuiResult, UserInputError},
-    guardrails::{Policy, allowance_funders, implicit_input, policy_object_id, sender_policy_id},
-    storage::ObjectStore,
-    transaction::{
-        InputObjectKind, SenderSignedData, SharedObjectMutability, TransactionData,
-        TransactionDataAPI,
-    },
+    guardrails::{Policy, allowance_funders, policy_object_id, sender_policy_id},
+    transaction::{SharedObjectMutability, TransactionData, TransactionDataAPI, TransactionKind},
 };
 
-use crate::authority::{
-    AuthorityState, authority_per_epoch_store::AuthorityPerEpochStore,
-    shared_object_version_manager::AssignedVersions,
-};
-use crate::execution_cache::ObjectCacheRead;
-
-/// The ID of the policy `tx_data` could take implicitly: its sender's, unless it declares the
-/// policy itself.
-fn undeclared_policy_id(tx_data: &TransactionData) -> Option<ObjectID> {
-    let id = sender_policy_id(tx_data.kind(), tx_data.sender())?;
-    tx_data
-        .shared_input_objects()
-        .iter()
-        .all(|input| input.id != id)
-        .then_some(id)
-}
-
-/// The policy consensus adds to `tx_data` as a mutable input when sequencing it: the sender's,
-/// if it is active this epoch.
-///
-/// Reads the latest version of the policy, and every validator still gets the same answer:
-/// whether a policy is active in the current epoch never changes within it, since enabling and
-/// disabling take effect at later epochs, and its initial shared version never changes.
-pub(crate) fn implicit_policy_key(
-    epoch_store: &AuthorityPerEpochStore,
-    cache_reader: &dyn ObjectCacheRead,
-    tx_data: &TransactionData,
-) -> Option<ConsensusObjectSequenceKey> {
-    if !epoch_store.protocol_config().enable_guardrails() {
-        return None;
-    }
-    let policy = cache_reader.get_object(&undeclared_policy_id(tx_data)?)?;
-    Policy::active_sequence_key(&policy, epoch_store.epoch())
-}
-
-/// The policy `effects` show `tx_data` took as an implicit input. Effects carry no initial
-/// shared version, so it comes from the store, which holds every active policy: a policy
-/// activates no earlier than the epoch after it is created.
-pub(crate) fn policy_input_from_effects(
-    epoch_store: &AuthorityPerEpochStore,
-    cache_reader: &dyn ObjectCacheRead,
-    tx_data: &TransactionData,
-    effects: &TransactionEffects,
-) -> Option<ConsensusObjectSequenceKey> {
-    if !epoch_store.protocol_config().enable_guardrails() {
-        return None;
-    }
-    let id = undeclared_policy_id(tx_data)?;
-    effects
-        .accessed_consensus_objects()
-        .iter()
-        .any(|accessed| accessed.id_and_version().0 == id)
-        .then_some(())?;
-    let initial_shared_version = cache_reader
-        .get_object(&id)
-        .and_then(|object| object.owner().start_version());
-    if initial_shared_version.is_none() {
-        debug_fatal!("guardrails policy {id} accessed by a transaction is missing");
-    }
-    Some((id, initial_shared_version?))
-}
-
-/// The policy `tx_data` was assigned as an implicit input, as the key consensus or effects gave
-/// it.
-pub(crate) fn assigned_policy_key(
-    tx_data: &TransactionData,
-    assigned_versions: &AssignedVersions,
-) -> Option<ConsensusObjectSequenceKey> {
-    let id = undeclared_policy_id(tx_data)?;
-    assigned_versions
-        .iter()
-        .map(|(key, _)| *key)
-        .find(|(assigned, _)| *assigned == id)
-}
-
-/// The same policy as an input object to load for execution.
-pub fn assigned_policy_input(
-    tx_data: &TransactionData,
-    assigned_versions: &AssignedVersions,
-) -> Option<InputObjectKind> {
-    assigned_policy_key(tx_data, assigned_versions).map(implicit_input)
-}
-
-/// The policy a simulation of `tx_data` takes as an implicit input: the one consensus would
-/// add, judged from the latest state.
-pub(crate) fn policy_input_for_simulation(
-    store: &dyn ObjectStore,
-    epoch: EpochId,
-    tx_data: &TransactionData,
-) -> Option<InputObjectKind> {
-    let policy = store.get_object(&undeclared_policy_id(tx_data)?)?;
-    Policy::active_sequence_key(&policy, epoch).map(implicit_input)
-}
+use crate::authority::{AuthorityState, authority_per_epoch_store::AuthorityPerEpochStore};
 
 impl AuthorityState {
     pub(crate) fn handle_guardrails_checks(
         &self,
-        transaction: &SenderSignedData,
+        tx_data: &TransactionData,
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<()> {
         if !epoch_store.protocol_config().enable_guardrails() {
             return Ok(());
         }
-        let tx_data = transaction.transaction_data();
         let sender = tx_data.sender();
         if sender_policy_id(tx_data.kind(), sender).is_none() {
             return Ok(());
@@ -177,15 +81,22 @@ impl AuthorityState {
             );
         }
 
-        // Execution checks the sender's policy only. A transaction can spend its gas coins, so
-        // paying the gas of someone else's transaction would move the gas owner's SUI past its
-        // policy.
+        // Execution checks the sender's policy only. A transaction reaches the funds of its gas
+        // owner beyond the gas it pays only through `Argument::GasCoin`, so a gas owner with a
+        // policy can lose at most the gas budget of a transaction that does not use it.
         let gas_owner = tx_data.gas_owner();
-        if gas_owner != sender && active_policy(gas_owner).is_some() {
+        if gas_owner != sender
+            && let TransactionKind::ProgrammableTransaction(ptb) = tx_data.kind()
+            && ptb
+                .commands
+                .iter()
+                .any(|command| command.is_gas_coin_used())
+            && active_policy(gas_owner).is_some()
+        {
             return violation(
                 gas_owner,
-                "an account with an active policy cannot pay the gas of another account's \
-                 transaction",
+                "a transaction whose gas owner has an active policy and is not its sender \
+                 cannot use the gas coin as an argument",
             );
         }
 

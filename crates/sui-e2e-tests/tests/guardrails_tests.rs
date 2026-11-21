@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::PathBuf;
+
 use shared_crypto::intent::Intent;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
@@ -46,6 +48,43 @@ fn pure<T: serde::Serialize>(value: &T) -> CallArg {
 
 fn sui() -> TypeTag {
     GAS::type_tag()
+}
+
+/// Asserts that execution failed the transaction because `account`'s budget of `coin_type` had
+/// no room.
+fn assert_over_budget(effects: &TransactionEffects, account: SuiAddress, coin_type: &TypeTag) {
+    let ExecutionStatus::Failure(ExecutionFailure {
+        error:
+            ExecutionFailureStatus::GuardrailsViolation {
+                account: violated,
+                kind:
+                    GuardrailsViolationKind::BudgetExhausted {
+                        coin_type: violated_type,
+                    },
+            },
+        ..
+    }) = effects.status()
+    else {
+        panic!(
+            "expected a guardrails violation, got {:?}",
+            effects.status()
+        );
+    };
+    assert_eq!(*violated, account);
+    assert_eq!(**violated_type, *coin_type);
+}
+
+/// Asserts that the transaction aborted in `sui::guardrails::<function>`.
+fn assert_aborted_in(effects: &TransactionEffects, function: &str) {
+    let ExecutionStatus::Failure(ExecutionFailure {
+        error: ExecutionFailureStatus::MoveAbort(location, _),
+        ..
+    }) = effects.status()
+    else {
+        panic!("expected an abort, got {:?}", effects.status());
+    };
+    assert_eq!(location.module.name().as_str(), "guardrails");
+    assert_eq!(location.function_name.as_deref(), Some(function));
 }
 
 impl Env {
@@ -98,25 +137,10 @@ impl Env {
         effects
     }
 
-    /// Asserts that execution fails `tx_data` because `account`'s SUI budget has no room.
-    async fn execute_over_budget(&self, tx_data: TransactionData, account: SuiAddress) {
+    /// Asserts that execution fails `tx_data` because the owner's SUI budget has no room.
+    async fn execute_over_budget(&self, tx_data: TransactionData) {
         let effects = self.execute(tx_data).await;
-        let ExecutionStatus::Failure(ExecutionFailure {
-            error:
-                ExecutionFailureStatus::GuardrailsViolation {
-                    account: violated,
-                    kind: GuardrailsViolationKind::BudgetExhausted { coin_type },
-                },
-            ..
-        }) = effects.status()
-        else {
-            panic!(
-                "expected a guardrails violation, got {:?}",
-                effects.status()
-            );
-        };
-        assert_eq!(*violated, account);
-        assert_eq!(**coin_type, sui());
+        assert_over_budget(&effects, self.owner, &sui());
     }
 
     /// Asserts that validators refuse to sign `tx_data` because of a guardrails policy.
@@ -194,6 +218,21 @@ impl Env {
         self.policy(self.owner).await.spent(epoch, &sui())
     }
 
+    /// An owner transaction calling `guardrails::set_limit<coin_type>(policy, limit, ctx)`.
+    async fn set_limit_tx(&self, coin_type: TypeTag, limit: u64) -> TransactionData {
+        let policy = self.policy_arg(self.owner).await;
+        self.builder(self.owner)
+            .await
+            .move_call_with_type_args(
+                SUI_FRAMEWORK_PACKAGE_ID,
+                "guardrails",
+                "set_limit",
+                vec![coin_type],
+                vec![policy, pure(&limit)],
+            )
+            .build()
+    }
+
     async fn policy_arg(&self, owner: SuiAddress) -> CallArg {
         let id = policy_object_id(owner);
         let policy = self
@@ -220,6 +259,10 @@ impl Env {
 
     /// Creates the owner's policy with a SUI limit. The policy is pending until the next epoch.
     async fn enable_policy(&self) {
+        self.enable_policy_of(self.owner, self.guardian).await;
+    }
+
+    async fn enable_policy_of(&self, owner: SuiAddress, guardian: SuiAddress) {
         let registry = self
             .cluster
             .get_object_from_fullnode_store(&SUI_GUARDRAILS_REGISTRY_OBJECT_ID)
@@ -231,7 +274,7 @@ impl Env {
             mutability: SharedObjectMutability::Mutable,
         });
         let tx = self
-            .builder(self.owner)
+            .builder(owner)
             .await
             .move_call(
                 SUI_FRAMEWORK_PACKAGE_ID,
@@ -239,7 +282,7 @@ impl Env {
                 "enable",
                 vec![
                     registry,
-                    pure(&self.guardian),
+                    pure(&guardian),
                     pure(&SUI_LIMIT),
                     pure(&RECOVERY_DELAY_EPOCHS),
                 ],
@@ -299,7 +342,7 @@ async fn test_budget_spans_the_epoch() {
     assert_eq!(env.sui_spent().await, 2 * amount);
 
     let tx = env.transfer_sui_tx(amount, env.stranger).await;
-    env.execute_over_budget(tx, env.owner).await;
+    env.execute_over_budget(tx).await;
     assert_eq!(env.sui_spent().await, 2 * amount);
 
     env.cluster.trigger_reconfiguration().await;
@@ -371,7 +414,7 @@ async fn test_what_counts_as_outflow() {
 
     let gas = env.gas_objects(env.owner).await[0];
     let tx = own_transfer(FundSource::coin(gas), gas, 1, env.stranger);
-    env.execute_over_budget(tx, env.owner).await;
+    env.execute_over_budget(tx).await;
 
     // A stake stays with the owner, but not as a coin.
     env.cluster.trigger_reconfiguration().await;
@@ -382,7 +425,7 @@ async fn test_what_counts_as_outflow() {
         .await
         .call_staking(stake_coin, validator)
         .build();
-    env.execute_over_budget(tx, env.owner).await;
+    env.execute_over_budget(tx).await;
 }
 
 /// A transaction the guardian sponsors is exempt and leaves the recorded spend alone. Changing
@@ -401,42 +444,28 @@ async fn test_guardian_sponsorship() {
     // The same transfer sponsored by anyone else is checked against the owner's policy.
     let tx = env.transfer_owner_coin_tx(5 * SUI_LIMIT).await;
     let effects = env.execute_sponsored(tx, env.sponsor).await;
-    assert!(effects.status().is_err(), "{:?}", effects.status());
+    assert_over_budget(&effects, env.owner, &sui());
     assert_eq!(env.sui_spent().await, 0);
 
     // The key alone cannot change the active policy.
-    let type_args = vec![sui()];
-    let limit_tx = |env: &Env, policy: CallArg, gas: ObjectRef| {
-        TestTransactionBuilder::new(env.owner, gas, env.rgp)
-            .with_gas_budget(GAS_BUDGET)
-            .move_call_with_type_args(
-                SUI_FRAMEWORK_PACKAGE_ID,
-                "guardrails",
-                "set_limit",
-                type_args.clone(),
-                vec![policy, pure(&(10 * SUI_LIMIT))],
-            )
-            .build()
-    };
-    let gas = env.gas_objects(env.owner).await[0];
     let effects = env
-        .execute(limit_tx(&env, env.policy_arg(env.owner).await, gas))
+        .execute(env.set_limit_tx(sui(), 10 * SUI_LIMIT).await)
         .await;
-    assert!(effects.status().is_err(), "{:?}", effects.status());
+    assert_aborted_in(&effects, "assert_authorized");
     let effects = env
         .execute(env.policy_call_tx("disable", vec![]).await)
         .await;
-    assert!(effects.status().is_err(), "{:?}", effects.status());
+    assert_aborted_in(&effects, "assert_authorized");
 
     // With the guardian the limit changes at once.
-    let gas = env.gas_objects(env.owner).await[0];
-    env.execute_with_guardian(limit_tx(&env, env.policy_arg(env.owner).await, gas))
+    env.execute_with_guardian(env.set_limit_tx(sui(), 10 * SUI_LIMIT).await)
         .await;
     assert_eq!(env.policy(env.owner).await.limit(&sui()), 10 * SUI_LIMIT);
     let tx = env.transfer_sui_tx(5 * SUI_LIMIT, env.stranger).await;
     env.execute_ok(tx).await;
 
-    // The key alone can start the recovery delay, and only the guardian can stop it.
+    // The key alone can start the recovery delay, and only the guardian can stop it. The policy
+    // holds while the delay runs.
     let epoch = env.policy(env.owner).await.spent_epoch;
     env.execute_ok(env.policy_call_tx("request_disable", vec![]).await)
         .await;
@@ -444,30 +473,85 @@ async fn test_guardian_sponsorship() {
         env.policy(env.owner).await.active_until,
         epoch + RECOVERY_DELAY_EPOCHS
     );
+    let tx = env.transfer_sui_tx(6 * SUI_LIMIT, env.stranger).await;
+    env.execute_over_budget(tx).await;
     let effects = env
         .execute(env.policy_call_tx("cancel_disable", vec![]).await)
         .await;
-    assert!(effects.status().is_err(), "{:?}", effects.status());
+    assert_aborted_in(&effects, "cancel_disable");
     env.execute_with_guardian(env.policy_call_tx("cancel_disable", vec![]).await)
         .await;
     assert_eq!(env.policy(env.owner).await.active_until, u64::MAX);
 
-    // The guardian ends the policy at the next epoch.
+    // The guardian ends the policy at the next epoch, and it holds until then.
     env.execute_with_guardian(env.policy_call_tx("disable", vec![]).await)
         .await;
+    let tx = env.transfer_sui_tx(6 * SUI_LIMIT, env.stranger).await;
+    env.execute_over_budget(tx).await;
     env.cluster.trigger_reconfiguration().await;
     let tx = env.transfer_sui_tx(20 * SUI_LIMIT, env.stranger).await;
     env.execute_ok(tx).await;
 }
 
-/// A transaction can spend its gas coins, and the policy binds only what the owner sends. So
-/// validators refuse to sign a transaction of someone else that the owner pays the gas for.
+/// A coin type other than SUI cannot leave the account until the policy has a limit for it, and
+/// then only up to that limit.
 #[sim_test]
-async fn test_owner_cannot_sponsor() {
+async fn test_limit_of_another_coin_type() {
+    let env = Env::new().await;
+    // The package mints 10000 of each of its coin types into the owner's address balance.
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend(["tests", "data", "coins"]);
+    let publish = env
+        .builder(env.owner)
+        .await
+        .with_gas_budget(100 * GAS_BUDGET)
+        .publish_async(path)
+        .await
+        .build();
+    let package_id = env
+        .cluster
+        .sign_and_execute_transaction(&publish)
+        .await
+        .get_new_package_obj()
+        .unwrap()
+        .0;
+    let coin_a: TypeTag = format!("{package_id}::coin_a::COIN_A").parse().unwrap();
+    env.enable_policy().await;
+    env.cluster.trigger_reconfiguration().await;
+
+    let send_coin_a = |gas: ObjectRef, amount: u64| {
+        TestTransactionBuilder::new(env.owner, gas, env.rgp)
+            .with_gas_budget(GAS_BUDGET)
+            .transfer_funds_to_address_balance(
+                FundSource::address_fund(),
+                vec![(amount, env.stranger)],
+                coin_a.clone(),
+            )
+            .build()
+    };
+    let gas = env.gas_objects(env.owner).await[0];
+    let effects = env.execute(send_coin_a(gas, 1)).await;
+    assert_over_budget(&effects, env.owner, &coin_a);
+
+    env.execute_with_guardian(env.set_limit_tx(coin_a.clone(), 1000).await)
+        .await;
+    let gas = env.gas_objects(env.owner).await[0];
+    env.execute_ok(send_coin_a(gas, 1000)).await;
+    let gas = env.gas_objects(env.owner).await[0];
+    let effects = env.execute(send_coin_a(gas, 1)).await;
+    assert_over_budget(&effects, env.owner, &coin_a);
+    assert_eq!(env.sui_spent().await, 0);
+}
+
+/// The policy binds only what the owner sends, and a transaction reaches its gas owner's SUI
+/// beyond gas only through the gas coin argument. So the owner can pay the gas of someone else's
+/// transaction that does not use the gas coin, and validators refuse to sign one that does.
+#[sim_test]
+async fn test_owner_as_gas_owner() {
     let env = Env::new().await;
     env.enable_policy().await;
 
-    let stranger_tx = |gas: ObjectRef| {
+    let takes_gas_coin = |gas: ObjectRef| {
         TestTransactionBuilder::new(env.stranger, gas, env.rgp)
             .with_gas_budget(GAS_BUDGET)
             .transfer_sui(Some(SUI_LIMIT), env.stranger)
@@ -476,13 +560,44 @@ async fn test_owner_cannot_sponsor() {
 
     // Pending: the stranger takes SUI out of the gas coin the owner pays with.
     let gas = env.gas_objects(env.stranger).await[0];
-    let effects = env.execute_sponsored(stranger_tx(gas), env.owner).await;
+    let effects = env.execute_sponsored(takes_gas_coin(gas), env.owner).await;
     assert!(effects.status().is_ok(), "{:?}", effects.status());
 
     env.cluster.trigger_reconfiguration().await;
     let gas = env.gas_objects(env.stranger).await[0];
-    let tx = env.sponsored(stranger_tx(gas), env.owner).await;
+    let tx = env.sponsored(takes_gas_coin(gas), env.owner).await;
     env.execute_rejected(tx).await;
+
+    // The stranger sends from a coin of its own, and the owner only pays the gas.
+    let [gas, coin] = env.gas_objects(env.stranger).await[..2] else {
+        unreachable!()
+    };
+    let tx = TestTransactionBuilder::new(env.stranger, gas, env.rgp)
+        .with_gas_budget(GAS_BUDGET)
+        .transfer_sui_to_address_balance(FundSource::coin(coin), vec![(SUI_LIMIT, env.owner)])
+        .build();
+    let effects = env.execute_sponsored(tx, env.owner).await;
+    assert!(effects.status().is_ok(), "{:?}", effects.status());
+    assert_eq!(env.sui_spent().await, 0);
+}
+
+/// A guardian with an active policy of its own can still approve the owner's transactions, so a
+/// stolen owner key cannot outwait the guardian with `request_disable`.
+#[sim_test]
+async fn test_guardian_with_its_own_policy() {
+    let env = Env::new().await;
+    env.enable_policy().await;
+    env.enable_policy_of(env.guardian, env.sponsor).await;
+    env.cluster.trigger_reconfiguration().await;
+
+    env.execute_ok(env.policy_call_tx("request_disable", vec![]).await)
+        .await;
+    env.execute_with_guardian(env.policy_call_tx("cancel_disable", vec![]).await)
+        .await;
+    assert_eq!(env.policy(env.owner).await.active_until, u64::MAX);
+
+    let tx = env.transfer_owner_coin_tx(5 * SUI_LIMIT).await;
+    env.execute_with_guardian(tx).await;
 }
 
 /// A policy cancelled before it becomes active never restricts the account.

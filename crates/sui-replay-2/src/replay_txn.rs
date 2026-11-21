@@ -23,17 +23,17 @@ use sui_data_store::{
     EpochStore, ObjectKey, ObjectStore, ReadDataStore, TransactionStore, VersionQuery,
 };
 use sui_types::TypeTag;
-use sui_types::guardrails::{implicit_input, sender_policy_id};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,
     effects::{
         InputConsensusObject, TransactionEffects, TransactionEffectsAPI, UnchangedConsensusKind,
+        undeclared_consensus_inputs,
     },
     object::Object,
     transaction::{
-        CallArg, Command, GasData, InputObjects, ObjectArg, TransactionData, TransactionDataAPI,
-        TransactionKind,
+        CallArg, Command, GasData, InputObjects, ObjectArg, SharedObjectMutability,
+        TransactionData, TransactionDataAPI, TransactionKind,
     },
 };
 use sui_types::{
@@ -358,19 +358,22 @@ impl ReplayTransaction {
             "Failed to get input objects from transaction {}",
             self.digest,
         ))?;
-        // Consensus added the sender's guardrails policy as a mutable input. The object cache
-        // holds the policy only if the effects show it.
-        if let Some(policy_id) = sender_policy_id(self.txn_data.kind(), self.txn_data.sender())
-            && input_objects_kind
-                .iter()
-                .all(|kind| kind.object_id() != policy_id)
-            && let Some(policy) = self
+        // Consensus may add mutable shared inputs the transaction does not declare. The effects
+        // show them, and the object cache holds every object the effects show.
+        for id in undeclared_consensus_inputs(&self.txn_data, &self.effects) {
+            let initial_shared_version = self
                 .object_cache
-                .get(&policy_id)
+                .get(&id)
                 .and_then(|versions| versions.values().next())
-            && let Some(initial_shared_version) = policy.owner().start_version()
-        {
-            input_objects_kind.push(implicit_input((policy_id, initial_shared_version)));
+                .and_then(|object| object.owner().start_version())
+                .ok_or_else(|| {
+                    anyhow::anyhow!("consensus object {id} added to {} is missing", self.digest)
+                })?;
+            input_objects_kind.push(InputObjectKind::SharedMoveObject {
+                id,
+                initial_shared_version,
+                mutability: SharedObjectMutability::Mutable,
+            });
         }
         for kind in input_objects_kind.iter() {
             match kind {

@@ -1232,8 +1232,8 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_forwarding_addresses: bool,
 
-    // If true, create the guardrails registry at genesis, take the guardrails policy of every
-    // account a transaction draws on as an implicit mutable input, and enforce it in execution.
+    // If true, create the guardrails registry at genesis, take the guardrails policy of a
+    // transaction's sender as an implicit mutable input, and enforce it in execution.
     #[serde(skip_serializing_if = "is_false")]
     enable_guardrails: bool,
 
