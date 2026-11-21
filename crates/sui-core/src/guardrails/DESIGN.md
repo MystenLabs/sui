@@ -452,3 +452,19 @@ transactions and one new rule in the transaction model for it.
    account that rarely transacts, exactly our target user, accumulates budget that a stolen key
    drains at once.
 9. A package allowlist with custody rules for non-coin objects. That's a later layer.
+
+## Implementation notes
+
+- Implementation note: congestion control counts the implicit policy input when it decides to
+  defer, when it adds a transaction's cost, and when it loads and stores debts. Three other places
+  still read only the declared shared inputs: the execution time estimator's per object
+  utilization, the overload tracker at signing, and the gas price suggestion. None of them decides
+  what executes.
+- Implementation note: consensus derives the policy ID and looks the object up three times per
+  transaction per commit (debts, deferral, version assignment). Each is a cache hit or a negative
+  cache hit after the first.
+- Implementation note: replay and simulation inject the policy input. Backtest does not yet.
+- Implementation note: the registry is created at genesis only. A network that started without it
+  needs an end-of-epoch creation transaction, which is a follow-up.
+- Implementation note: the signing checks for gasless transactions and allowance funders have no
+  test yet.

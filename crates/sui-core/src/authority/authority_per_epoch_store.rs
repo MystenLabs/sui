@@ -2438,6 +2438,7 @@ impl AuthorityPerEpochStore {
         generating_randomness: bool,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         shared_object_congestion_tracker: &SharedObjectCongestionTracker,
+        implicit_input: Option<sui_types::transaction::SharedInputObject>,
     ) -> Option<(DeferralKey, DeferralReason)> {
         // Defer transaction if it uses randomness but we aren't generating any this round.
         // Don't defer if DKG has permanently failed; in that case we need to ignore.
@@ -2463,6 +2464,7 @@ impl AuthorityPerEpochStore {
                 cert,
                 previously_deferred_tx_digests,
                 commit_info,
+                implicit_input,
             )
         {
             Some((

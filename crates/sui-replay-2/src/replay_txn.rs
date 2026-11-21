@@ -23,6 +23,7 @@ use sui_data_store::{
     EpochStore, ObjectKey, ObjectStore, ReadDataStore, TransactionStore, VersionQuery,
 };
 use sui_types::TypeTag;
+use sui_types::guardrails::{implicit_input, sender_policy_id};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,
@@ -353,10 +354,24 @@ impl ReplayTransaction {
     // be computed for a `ReplayTransaction` and cached.
     pub fn get_input_objects_for_replay(&self) -> Result<InputObjects, anyhow::Error> {
         let mut resolved_input_objs = vec![];
-        let input_objects_kind = self.txn_data.input_objects().context(format!(
+        let mut input_objects_kind = self.txn_data.input_objects().context(format!(
             "Failed to get input objects from transaction {}",
             self.digest,
         ))?;
+        // Consensus added the sender's guardrails policy as a mutable input. The object cache
+        // holds the policy only if the effects show it.
+        if let Some(policy_id) = sender_policy_id(self.txn_data.kind(), self.txn_data.sender())
+            && input_objects_kind
+                .iter()
+                .all(|kind| kind.object_id() != policy_id)
+            && let Some(policy) = self
+                .object_cache
+                .get(&policy_id)
+                .and_then(|versions| versions.values().next())
+            && let Some(initial_shared_version) = policy.owner().start_version()
+        {
+            input_objects_kind.push(implicit_input((policy_id, initial_shared_version)));
+        }
         for kind in input_objects_kind.iter() {
             match kind {
                 InputObjectKind::MovePackage(pkg_id) => {

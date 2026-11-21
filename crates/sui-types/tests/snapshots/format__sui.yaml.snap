@@ -685,6 +685,13 @@ ExecutionErrorKind:
               TYPENAME: ObjectID
     42:
       TransactionExpired: UNIT
+    43:
+      GuardrailsViolation:
+        STRUCT:
+          - account:
+              TYPENAME: SuiAddress
+          - kind:
+              TYPENAME: GuardrailsViolationKind
 ExecutionFailure:
   STRUCT:
     - error:
@@ -775,6 +782,15 @@ GenesisTransaction:
     - objects:
         SEQ:
           TYPENAME: GenesisObject
+GuardrailsViolationKind:
+  ENUM:
+    0:
+      BudgetExhausted:
+        STRUCT:
+          - coin_type:
+              TYPENAME: TypeTag
+    1:
+      PolicyNotWritable: UNIT
 IDOperation:
   ENUM:
     0:

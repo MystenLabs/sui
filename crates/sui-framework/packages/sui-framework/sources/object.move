@@ -58,6 +58,9 @@ const SUI_ADDRESS_ALIAS_STATE_ID: address = @0xa;
 /// The hardcoded ID for the singleton ForwardingAddressRegistry object.
 const SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID: address = @0xfa;
 
+/// The hardcoded ID for the singleton GuardrailsRegistry object.
+const SUI_GUARDRAILS_REGISTRY_OBJECT_ID: address = @0xab;
+
 /// Sender is not @0x0 the system address.
 const ENotSystemAddress: u64 = 0;
 
@@ -207,6 +210,14 @@ public(package) fun address_alias_state(): UID {
 public(package) fun forwarding_address_registry(): UID {
     UID {
         id: ID { bytes: SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID },
+    }
+}
+
+/// Create the `UID` for the singleton `GuardrailsRegistry` object.
+/// This should only be called once from `guardrails`.
+public(package) fun guardrails_registry(): UID {
+    UID {
+        id: ID { bytes: SUI_GUARDRAILS_REGISTRY_OBJECT_ID },
     }
 }
 

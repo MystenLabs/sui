@@ -59,6 +59,9 @@ use sui_types::{
 use tokio::task::JoinSet;
 use tracing::{debug, error, info, instrument, trace, warn};
 
+use crate::guardrails::implicit_policy_key;
+use sui_types::guardrails::implicit_shared_input;
+
 use crate::{
     authority::{
         AuthorityMetrics, AuthorityState, ExecutionEnv,
@@ -2085,6 +2088,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             state.indirect_state_observer.as_mut().unwrap(),
         );
 
+        let guardrails_key = implicit_policy_key(
+            &self.epoch_store,
+            self.cache_reader.as_ref(),
+            transaction.tx().transaction_data(),
+        );
         let deferral_info = self.epoch_store.should_defer(
             transaction.tx(),
             commit_info,
@@ -2092,6 +2100,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             state.randomness_round.is_some(),
             previously_deferred_tx_digests,
             shared_object_congestion_tracker,
+            guardrails_key.map(implicit_shared_input),
         );
 
         if let Some((deferral_key, deferral_reason)) = deferral_info {
@@ -2144,7 +2153,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         } else {
             // Update object execution cost for all scheduled transactions
-            shared_object_congestion_tracker.bump_object_execution_cost(tx_cost, transaction.tx());
+            shared_object_congestion_tracker.bump_object_execution_cost(
+                tx_cost,
+                transaction.tx(),
+                guardrails_key.map(implicit_shared_input),
+            );
             scheduled_txns.push(transaction);
         }
     }
@@ -2270,6 +2283,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .read()
                 .load_initial_object_debts(
                     &self.epoch_store,
+                    self.cache_reader.as_ref(),
                     commit_info.round,
                     for_randomness,
                     txns,

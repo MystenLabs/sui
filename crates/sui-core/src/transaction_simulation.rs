@@ -98,7 +98,14 @@ pub fn simulate_transaction(
     // Compute input/receiving object kinds before mock gas injection so the mock
     // gas reference is not included in input_object_kinds (it is added to
     // input_objects directly after object loading).
-    let input_object_kinds = transaction.input_objects()?;
+    let mut input_object_kinds = transaction.input_objects()?;
+    if protocol_config.enable_guardrails() {
+        input_object_kinds.extend(crate::guardrails::policy_input_for_simulation(
+            backing_store,
+            execution_epoch_id,
+            &transaction,
+        ));
+    }
     let receiving_object_refs = transaction.receiving_objects();
 
     // Inject mock gas coin before validity_check so that on protocol versions
