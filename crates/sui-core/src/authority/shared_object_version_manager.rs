@@ -718,7 +718,7 @@ mod tests {
         CertificateProof, ExecutableTransaction, VerifiedExecutableTransaction,
     };
 
-    use sui_types::object::Object;
+    use sui_types::object::{OBJECT_START_VERSION, Object};
     use sui_types::transaction::{
         InputObjectKind, InputObjects, ObjectArg, ObjectReadResult, SenderSignedData,
         VerifiedTransaction,
@@ -753,6 +753,8 @@ mod tests {
             // Only a consensus commit prologue advances the Clock, and these tests sequence
             // none, so the Clock stays at its genesis version.
             (SUI_CLOCK_OBJECT_ID, Some(SUI_CLOCK_OBJECT_SHARED_VERSION)),
+            // These tests never write the FreezeList, so it stays at its genesis version.
+            (SUI_FREEZE_LIST_OBJECT_ID, Some(OBJECT_START_VERSION)),
         ]
         .into_iter()
         .filter_map(|(id, version)| Some((id, at_start_version(version?))))
@@ -1134,7 +1136,6 @@ mod tests {
 
     async fn authority_with_freeze_list(enable_coin_regulation: bool) -> Arc<AuthorityState> {
         let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
-        config.set_create_freeze_list_for_testing(true);
         config.set_enable_coin_regulation_for_testing(enable_coin_regulation);
         TestAuthorityBuilder::new()
             .with_protocol_config(config)
@@ -1567,6 +1568,7 @@ mod tests {
         shared_input_next_versions
             .remove(&(SUI_ACCUMULATOR_ROOT_OBJECT_ID, SequenceNumber::from_u64(1)));
         shared_input_next_versions.remove(&(SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION));
+        shared_input_next_versions.remove(&(SUI_FREEZE_LIST_OBJECT_ID, OBJECT_START_VERSION));
         assert_eq!(
             shared_input_next_versions,
             HashMap::from([
@@ -1913,6 +1915,10 @@ mod tests {
                         (SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION),
                         SUI_CLOCK_OBJECT_SHARED_VERSION
                     ),
+                    (
+                        (SUI_FREEZE_LIST_OBJECT_ID, OBJECT_START_VERSION),
+                        OBJECT_START_VERSION
+                    ),
                 ]),
             }
         );
@@ -2002,6 +2008,10 @@ mod tests {
                         (SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION),
                         SUI_CLOCK_OBJECT_SHARED_VERSION
                     ),
+                    (
+                        (SUI_FREEZE_LIST_OBJECT_ID, OBJECT_START_VERSION),
+                        OBJECT_START_VERSION
+                    ),
                 ]),
             }
         );
@@ -2059,6 +2069,10 @@ mod tests {
                     (
                         (SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION),
                         SUI_CLOCK_OBJECT_SHARED_VERSION
+                    ),
+                    (
+                        (SUI_FREEZE_LIST_OBJECT_ID, OBJECT_START_VERSION),
+                        OBJECT_START_VERSION
                     ),
                 ]),
             }
