@@ -6,8 +6,8 @@ use mysten_common::debug_fatal;
 
 use crate::authority::AuthorityPerEpochStore;
 use crate::authority::authority_per_epoch_store::CancelConsensusCertificateReason;
+use crate::consensus_inputs::{sequenced_shared_inputs, shared_inputs_from_effects};
 use crate::execution_cache::ObjectCacheRead;
-use either::Either;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -29,7 +29,7 @@ use sui_types::storage::{
     ObjectKey, transaction_non_shared_input_object_keys, transaction_receiving_object_keys,
 };
 use sui_types::transaction::SharedObjectMutability;
-use sui_types::transaction::{SharedInputObject, TransactionDataAPI, TransactionKey};
+use sui_types::transaction::{SharedInputObject, TransactionKey};
 use sui_types::{
     IMPLICITLY_READ_SYSTEM_OBJECTS, SUI_RANDOMNESS_STATE_OBJECT_ID, base_types::SequenceNumber,
     error::SuiResult,
@@ -241,41 +241,45 @@ impl<T> Schedulable<T> {
         }
     }
 
+    /// The shared objects consensus sequences this on.
     pub fn shared_input_objects(
         &self,
         epoch_store: &AuthorityPerEpochStore,
-    ) -> impl Iterator<Item = SharedInputObject> + '_
+        cache_reader: &dyn ObjectCacheRead,
+    ) -> Vec<SharedInputObject>
     where
         T: AsTx,
     {
         match self {
-            Schedulable::Transaction(tx) => Either::Left(tx.as_tx().shared_input_objects()),
+            Schedulable::Transaction(tx) => {
+                sequenced_shared_inputs(epoch_store, cache_reader, tx.as_tx().transaction_data())
+            }
             Schedulable::RandomnessStateUpdate(_, _) => {
-                Either::Right(std::iter::once(SharedInputObject {
+                vec![SharedInputObject {
                     id: SUI_RANDOMNESS_STATE_OBJECT_ID,
                     initial_shared_version: epoch_store
                         .epoch_start_config()
                         .randomness_obj_initial_shared_version()
                         .expect("randomness obj initial shared version should be set"),
                     mutability: SharedObjectMutability::Mutable,
-                }))
+                }]
             }
             Schedulable::AccumulatorSettlement(_, _) => {
-                Either::Right(std::iter::once(SharedInputObject {
+                vec![SharedInputObject {
                     id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
                     initial_shared_version: epoch_store
                         .epoch_start_config()
                         .accumulator_root_obj_initial_shared_version()
                         .expect("accumulator root obj initial shared version should be set"),
                     mutability: SharedObjectMutability::Mutable,
-                }))
+                }]
             }
             Schedulable::ConsensusCommitPrologue(_, _, _) => {
-                Either::Right(std::iter::once(SharedInputObject {
+                vec![SharedInputObject {
                     id: SUI_CLOCK_OBJECT_ID,
                     initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
                     mutability: SharedObjectMutability::Mutable,
-                }))
+                }]
             }
         }
     }
@@ -341,15 +345,17 @@ impl SharedObjVerManager {
     where
         T: AsTx + 'a,
     {
+        let shared_inputs: Vec<Vec<SharedInputObject>> = assignables
+            .clone()
+            .map(|a| a.shared_input_objects(epoch_store, cache_reader))
+            .collect();
         let mut shared_input_next_versions = get_or_init_versions(
-            assignables
-                .clone()
-                .flat_map(|a| a.shared_input_objects(epoch_store)),
+            shared_inputs.iter().flatten().cloned(),
             epoch_store,
             cache_reader,
         )?;
         let mut assigned_versions = Vec::new();
-        for assignable in assignables {
+        for (assignable, shared_input_objects) in assignables.zip_debug_eq(shared_inputs) {
             assert!(
                 !matches!(assignable, Schedulable::AccumulatorSettlement(_, _))
                     || epoch_store.accumulators_enabled(),
@@ -359,6 +365,7 @@ impl SharedObjVerManager {
             let cert_assigned_versions = Self::assign_versions_for_certificate(
                 epoch_store,
                 assignable,
+                shared_input_objects,
                 &mut shared_input_next_versions,
                 cancelled_txns,
             );
@@ -388,18 +395,22 @@ impl SharedObjVerManager {
         // of a consensus object in an epoch by reading the current version from the object store.
         // This must be done before we mutate it the first time, otherwise we would be initializing
         // it with the wrong version.
+        let shared_inputs: Vec<Vec<SharedInputObject>> = certs_and_effects
+            .iter()
+            .map(|(cert, effects, _)| {
+                shared_inputs_from_effects(cache_reader, cert.transaction_data(), effects)
+            })
+            .collect();
         let _ = get_or_init_versions(
-            certs_and_effects.iter().flat_map(|(cert, _, _)| {
-                cert.transaction_data().shared_input_objects().into_iter()
-            }),
+            shared_inputs.iter().flatten().cloned(),
             epoch_store,
             cache_reader,
         );
         let mut assigned_versions = Vec::new();
-        for (cert, effects, accumulator_version) in certs_and_effects {
-            let initial_version_map: BTreeMap<_, _> = cert
-                .transaction_data()
-                .shared_input_objects()
+        for ((cert, effects, accumulator_version), shared_input_objects) in
+            certs_and_effects.iter().zip_debug_eq(shared_inputs)
+        {
+            let initial_version_map: BTreeMap<_, _> = shared_input_objects
                 .into_iter()
                 .map(|input| input.into_id_and_version())
                 .collect();
@@ -496,11 +507,10 @@ impl SharedObjVerManager {
     pub fn assign_versions_for_certificate(
         epoch_store: &AuthorityPerEpochStore,
         assignable: &Schedulable<impl AsTx>,
+        shared_input_objects: Vec<SharedInputObject>,
         shared_input_next_versions: &mut HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
     ) -> AssignedVersions {
-        let shared_input_objects: Vec<_> = assignable.shared_input_objects(epoch_store).collect();
-
         let system_object_versions = SystemObjectVersions::from_map(
             implicitly_read_system_objects(epoch_store)
                 .into_iter()

@@ -5,7 +5,7 @@ use crate::ObjectID;
 use crate::base_types::SuiAddress;
 use crate::error::{BoxError, ExecutionError, ExecutionErrorMetadata, ExecutionErrorTrait};
 use move_binary_format::file_format::{CodeOffset, TypeParameterIndex};
-use move_core_types::language_storage::ModuleId;
+use move_core_types::language_storage::{ModuleId, TypeTag};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
@@ -301,8 +301,25 @@ pub enum ExecutionErrorKind {
 
     #[error("Transaction expired: the consensus commit timestamp is after its max_timestamp")]
     TransactionExpired,
+
+    #[error("Transaction exceeds the guardrails policy of {account}: {kind}")]
+    GuardrailsViolation {
+        account: SuiAddress,
+        kind: GuardrailsViolationKind,
+    },
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
+}
+
+/// Why a transaction did not pass the guardrails policy of its sender.
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash, Error)]
+pub enum GuardrailsViolationKind {
+    #[error("the epoch budget of {coin_type} has no room for this transaction's outflow")]
+    BudgetExhausted { coin_type: Box<TypeTag> },
+    #[error("the transaction declares the policy object without write access")]
+    PolicyNotWritable,
+    #[error("the transaction takes a party owned coin, which the policy does not count")]
+    PartyCoin,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash)]

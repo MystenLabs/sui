@@ -18,6 +18,7 @@ mod forwarding_address_tests;
 mod full_node_tests;
 mod grpc_simulate_gas_coin_tests;
 mod grpc_simulate_gasless_tests;
+mod guardrails_tests;
 mod implicit_clock_tests;
 mod mldsa_tests;
 mod object_balance_tests;

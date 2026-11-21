@@ -550,6 +550,7 @@ impl ValidatorService {
 
         // Check system overload
         self.state.check_system_overload(
+            &epoch_store,
             transaction.data(),
             self.state.check_system_overload_at_signing(),
         )?;
@@ -897,6 +898,7 @@ impl ValidatorService {
             }
 
             let overload_check_res = state.check_system_overload(
+                &epoch_store,
                 transaction.data(),
                 state.check_system_overload_at_signing(),
             );

@@ -9,7 +9,7 @@ use sui_types::base_types::ObjectID;
 use sui_types::effects::{InputConsensusObject, TransactionEffects, TransactionEffectsAPI};
 use sui_types::execution_status::CongestedObjects;
 use sui_types::messages_checkpoint::{CheckpointTimestamp, VerifiedCheckpoint};
-use sui_types::transaction::{TransactionData, TransactionDataAPI};
+use sui_types::transaction::{SharedInputObject, TransactionDataAPI};
 
 use crate::execution_cache::TransactionCacheRead;
 
@@ -117,11 +117,13 @@ impl CongestionTracker {
 
     /// For all the mutable shared inputs, get the highest minimum clearing price (if any exists)
     /// and the lowest maximum cancelled price.
-    pub fn get_suggested_gas_prices(&self, transaction: &TransactionData) -> Option<u64> {
+    pub fn get_suggested_gas_prices(
+        &self,
+        shared_input_objects: &[SharedInputObject],
+    ) -> Option<u64> {
         self.get_suggested_gas_price_for_objects(
-            transaction
-                .shared_input_objects()
-                .into_iter()
+            shared_input_objects
+                .iter()
                 .filter(|id| id.is_accessed_exclusively())
                 .map(|id| id.id),
         )

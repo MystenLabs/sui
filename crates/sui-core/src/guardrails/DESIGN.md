@@ -452,3 +452,27 @@ transactions and one new rule in the transaction model for it.
    account that rarely transacts, exactly our target user, accumulates budget that a stolen key
    drains at once.
 9. A package allowlist with custody rules for non-coin objects. That's a later layer.
+
+## Implementation notes
+
+- Implementation note: `sui_core::consensus_inputs` owns which shared objects a transaction takes.
+  The consensus handler computes each transaction's shared inputs once per commit for congestion
+  control, version assignment computes them again, and the overload check at submission and the gas
+  price suggestion compute their own. Each computation is one object cache read, a hit or a
+  negative hit.
+- Implementation note: after version assignment, and in effects, a consensus object a transaction
+  does not declare is a mutable input, outside the implicitly read system objects. Only a
+  guardrails policy can be one today.
+- Implementation note: the execution scheduler's barrier dependencies for non-exclusive writes read
+  only declared inputs. No dependency is missed, because only the owner declares a policy and only
+  as a mutable input, so nothing takes a non-exclusive write on it.
+- Implementation note: backtest does not add the policy input yet.
+- Implementation note: the registry is created at genesis only. A network that started without it
+  needs an end-of-epoch creation transaction, which is a follow-up.
+- Implementation note: the signing checks for gasless transactions, withdrawals from other
+  accounts and party coins, and the `PartyCoin` execution check, have no test yet. Validity
+  checks reject sponsor withdrawals today, and no test path creates a coin with several party
+  owners yet.
+- Implementation note: a consensus object that effects show was added to a transaction but that
+  the store does not hold is fatal during checkpoint execution, since running the transaction
+  without it would produce other effects than the certified ones.

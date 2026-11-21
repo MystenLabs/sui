@@ -13,6 +13,7 @@ use sui_core::{
         funds_read::AccountFundsRead, object_funds_checker::metrics::ObjectFundsCheckerMetrics,
         unsettled_object_withdrawals::UnsettledObjectWithdrawals,
     },
+    consensus_inputs::added_shared_inputs_at_latest,
     transaction_simulation::{SimulationInputLoader, simulate_transaction},
 };
 use sui_execution::Executor;
@@ -148,7 +149,7 @@ impl EpochState {
     )> {
         let tx_digest = *transaction.digest();
         let tx_data = &transaction.data().intent_message().value;
-        let input_object_kinds = tx_data.input_objects()?;
+        let mut input_object_kinds = tx_data.input_objects()?;
         let receiving_object_refs = tx_data.receiving_objects();
 
         sui_transaction_checks::deny::check_transaction_for_signing(
@@ -159,6 +160,17 @@ impl EpochState {
             deny_config,
             &store,
         )?;
+
+        input_object_kinds.extend(
+            added_shared_inputs_at_latest(
+                &self.protocol_config,
+                self.epoch_start_state.epoch(),
+                tx_data,
+                |id| store.backing_store().get_object(id),
+            )
+            .into_iter()
+            .map(InputObjectKind::from),
+        );
 
         let (input_objects, receiving_objects) = store.read_objects_for_synchronous_execution(
             &tx_digest,

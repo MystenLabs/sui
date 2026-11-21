@@ -34,6 +34,7 @@ use sui_types::{
     transaction_executor::{SimulateTransactionResult, TransactionChecks},
 };
 
+use crate::consensus_inputs::added_shared_inputs_at_latest;
 use crate::{
     accumulators::{
         funds_read::AccountFundsRead,
@@ -98,7 +99,14 @@ pub fn simulate_transaction(
     // Compute input/receiving object kinds before mock gas injection so the mock
     // gas reference is not included in input_object_kinds (it is added to
     // input_objects directly after object loading).
-    let input_object_kinds = transaction.input_objects()?;
+    let mut input_object_kinds = transaction.input_objects()?;
+    input_object_kinds.extend(
+        added_shared_inputs_at_latest(protocol_config, execution_epoch_id, &transaction, |id| {
+            backing_store.get_object(id)
+        })
+        .into_iter()
+        .map(InputObjectKind::from),
+    );
     let receiving_object_refs = transaction.receiving_objects();
 
     // Inject mock gas coin before validity_check so that on protocol versions

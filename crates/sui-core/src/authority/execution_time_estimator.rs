@@ -32,8 +32,8 @@ use sui_types::{
     execution::{ExecutionTimeObservationKey, ExecutionTiming},
     messages_consensus::{AuthorityIndex, ConsensusTransaction, ExecutionTimeObservation},
     transaction::{
-        Command, ProgrammableTransaction, StoredExecutionTimeObservations, TransactionData,
-        TransactionDataAPI, TransactionKind,
+        Command, ProgrammableTransaction, SharedInputObject, StoredExecutionTimeObservations,
+        TransactionData, TransactionDataAPI, TransactionKind,
     },
 };
 use tokio::{sync::mpsc, time::Instant};
@@ -244,9 +244,14 @@ impl ExecutionTimeObserver {
                     Some(object_debts) = rx_object_debts.recv() => {
                         observer.update_indebted_objects(object_debts);
                     }
-                    Some((tx, timings, total_duration, gas_price)) = rx_local_execution_time.recv() => {
-                        observer
-                            .record_local_observations(&tx, &timings, total_duration, gas_price);
+                    Some((tx, shared_input_objects, timings, total_duration, gas_price)) = rx_local_execution_time.recv() => {
+                        observer.record_local_observations(
+                            &tx,
+                            &shared_input_objects,
+                            &timings,
+                            total_duration,
+                            gas_price,
+                        );
                     }
                     else => { break }
                 }
@@ -305,6 +310,7 @@ impl ExecutionTimeObserver {
     fn record_local_observations(
         &mut self,
         tx: &ProgrammableTransaction,
+        shared_input_objects: &[SharedInputObject],
         timings: &[ExecutionTiming],
         total_duration: Duration,
         gas_price: u64,
@@ -321,18 +327,26 @@ impl ExecutionTimeObserver {
             let (generated_timings, generated_duration) = self.generate_test_timings(tx, timings);
             self.record_local_observations_timing(
                 tx,
+                shared_input_objects,
                 &generated_timings,
                 generated_duration,
                 gas_price,
             )
         } else {
-            self.record_local_observations_timing(tx, timings, total_duration, gas_price)
+            self.record_local_observations_timing(
+                tx,
+                shared_input_objects,
+                timings,
+                total_duration,
+                gas_price,
+            )
         }
     }
 
     fn record_local_observations_timing(
         &mut self,
         tx: &ProgrammableTransaction,
+        shared_input_objects: &[SharedInputObject],
         timings: &[ExecutionTiming],
         total_duration: Duration,
         gas_price: u64,
@@ -356,8 +370,8 @@ impl ExecutionTimeObserver {
 
         // Update the accumulated excess execution time for shared object
         // used for exclusive access in this transaction, and determine the max overage.
-        let max_excess_per_object_execution_time = tx
-            .shared_input_objects()
+        let max_excess_per_object_execution_time = shared_input_objects
+            .iter()
             .filter_map(|obj| obj.is_accessed_exclusively().then_some(obj.id))
             .map(|id| {
                 // Mark if any object used in the tx is indebted.
@@ -994,7 +1008,13 @@ mod tests {
         // Record an observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(100))];
         let total_duration = Duration::from_millis(110);
-        observer.record_local_observations(&ptb, &timings, total_duration, 1);
+        observer.record_local_observations(
+            &ptb,
+            &ptb.shared_input_objects().collect::<Vec<_>>(),
+            &timings,
+            total_duration,
+            1,
+        );
 
         let key = ExecutionTimeObservationKey::MoveEntryPoint {
             package,
@@ -1015,7 +1035,13 @@ mod tests {
         // Record another observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(110))];
         let total_duration = Duration::from_millis(120);
-        observer.record_local_observations(&ptb, &timings, total_duration, 1);
+        observer.record_local_observations(
+            &ptb,
+            &ptb.shared_input_objects().collect::<Vec<_>>(),
+            &timings,
+            total_duration,
+            1,
+        );
 
         // Check that moving average was updated
         let local_obs = observer.local_observations.get(&key).unwrap();
@@ -1030,7 +1056,13 @@ mod tests {
         // Record another observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(120))];
         let total_duration = Duration::from_millis(130);
-        observer.record_local_observations(&ptb, &timings, total_duration, 1);
+        observer.record_local_observations(
+            &ptb,
+            &ptb.shared_input_objects().collect::<Vec<_>>(),
+            &timings,
+            total_duration,
+            1,
+        );
 
         // Check that moving average was updated
         let local_obs = observer.local_observations.get(&key).unwrap();
@@ -1056,7 +1088,13 @@ mod tests {
         // Record last observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(120))];
         let total_duration = Duration::from_millis(160);
-        observer.record_local_observations(&ptb, &timings, total_duration, 1);
+        observer.record_local_observations(
+            &ptb,
+            &ptb.shared_input_objects().collect::<Vec<_>>(),
+            &timings,
+            total_duration,
+            1,
+        );
 
         // Verify that moving average is the same and a new observation was shared, as
         // enough time has now elapsed
@@ -1129,7 +1167,13 @@ mod tests {
         // Record an observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(100))];
         let total_duration = Duration::from_millis(110);
-        observer.record_local_observations(&ptb, &timings, total_duration, 1);
+        observer.record_local_observations(
+            &ptb,
+            &ptb.shared_input_objects().collect::<Vec<_>>(),
+            &timings,
+            total_duration,
+            1,
+        );
 
         let key = ExecutionTimeObservationKey::MoveEntryPoint {
             package,
@@ -1150,7 +1194,13 @@ mod tests {
         // Record another observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(110))];
         let total_duration = Duration::from_millis(120);
-        observer.record_local_observations(&ptb, &timings, total_duration, 2);
+        observer.record_local_observations(
+            &ptb,
+            &ptb.shared_input_objects().collect::<Vec<_>>(),
+            &timings,
+            total_duration,
+            2,
+        );
 
         // Check that weighted moving average was updated
         let local_obs = observer.local_observations.get(&key).unwrap();
@@ -1230,7 +1280,13 @@ mod tests {
             ExecutionTiming::Success(Duration::from_millis(50)),
         ];
         let total_duration = Duration::from_millis(180);
-        observer.record_local_observations(&ptb, &timings, total_duration, 1);
+        observer.record_local_observations(
+            &ptb,
+            &ptb.shared_input_objects().collect::<Vec<_>>(),
+            &timings,
+            total_duration,
+            1,
+        );
 
         // Check that both commands were recorded
         let move_key = ExecutionTimeObservationKey::MoveEntryPoint {
@@ -1331,7 +1387,13 @@ mod tests {
 
         // First observation - should not share due to low utilization
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(1))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_secs(2), 1);
+        observer.record_local_observations(
+            &ptb,
+            &ptb.shared_input_objects().collect::<Vec<_>>(),
+            &timings,
+            Duration::from_secs(2),
+            1,
+        );
         assert!(
             observer
                 .local_observations
@@ -1343,7 +1405,13 @@ mod tests {
 
         // Second observation - no time has passed, so now utilization is high; should share upward change
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(1))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_secs(2), 1);
+        observer.record_local_observations(
+            &ptb,
+            &ptb.shared_input_objects().collect::<Vec<_>>(),
+            &timings,
+            Duration::from_secs(2),
+            1,
+        );
         assert_eq!(
             observer
                 .local_observations
@@ -1358,7 +1426,13 @@ mod tests {
         // Third execution with significant upward diff and high utilization - should share again
         tokio::time::advance(Duration::from_secs(5)).await;
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(3))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_secs(5), 1);
+        observer.record_local_observations(
+            &ptb,
+            &ptb.shared_input_objects().collect::<Vec<_>>(),
+            &timings,
+            Duration::from_secs(5),
+            1,
+        );
         assert_eq!(
             observer
                 .local_observations
@@ -1374,7 +1448,13 @@ mod tests {
         // (downward changes are only shared for indebted objects, not overutilized ones)
         tokio::time::advance(Duration::from_millis(150)).await;
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(100))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_millis(500), 1);
+        observer.record_local_observations(
+            &ptb,
+            &ptb.shared_input_objects().collect::<Vec<_>>(),
+            &timings,
+            Duration::from_millis(500),
+            1,
+        );
         assert_eq!(
             observer
                 .local_observations
@@ -1389,7 +1469,13 @@ mod tests {
         // Fifth execution after utilization drops - should not share upward diff since not overutilized
         tokio::time::advance(Duration::from_secs(60)).await;
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(11))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_secs(11), 1);
+        observer.record_local_observations(
+            &ptb,
+            &ptb.shared_input_objects().collect::<Vec<_>>(),
+            &timings,
+            Duration::from_secs(11),
+            1,
+        );
         assert_eq!(
             observer
                 .local_observations
@@ -1487,8 +1573,20 @@ mod tests {
 
         // First observation: neither object is overutilized yet, so the aggregate metric is
         // untouched, but the tracked object is already reported in the tracked metric.
-        observer.record_local_observations(&tracked_ptb, &timings, Duration::from_secs(2), 1);
-        observer.record_local_observations(&untracked_ptb, &timings, Duration::from_secs(2), 1);
+        observer.record_local_observations(
+            &tracked_ptb,
+            &tracked_ptb.shared_input_objects().collect::<Vec<_>>(),
+            &timings,
+            Duration::from_secs(2),
+            1,
+        );
+        observer.record_local_observations(
+            &untracked_ptb,
+            &untracked_ptb.shared_input_objects().collect::<Vec<_>>(),
+            &timings,
+            Duration::from_secs(2),
+            1,
+        );
         assert_eq!(
             tracked_metric
                 .with_label_values(&[tracked_id.to_string().as_str(), tracked_name])
@@ -1499,8 +1597,20 @@ mod tests {
 
         // Second observation with no time elapsed: both objects are now overutilized and
         // both land in the aggregate bucket. Only the tracked object is in the tracked metric.
-        observer.record_local_observations(&tracked_ptb, &timings, Duration::from_secs(2), 1);
-        observer.record_local_observations(&untracked_ptb, &timings, Duration::from_secs(2), 1);
+        observer.record_local_observations(
+            &tracked_ptb,
+            &tracked_ptb.shared_input_objects().collect::<Vec<_>>(),
+            &timings,
+            Duration::from_secs(2),
+            1,
+        );
+        observer.record_local_observations(
+            &untracked_ptb,
+            &untracked_ptb.shared_input_objects().collect::<Vec<_>>(),
+            &timings,
+            Duration::from_secs(2),
+            1,
+        );
         assert_eq!(
             tracked_metric
                 .with_label_values(&[tracked_id.to_string().as_str(), tracked_name])
@@ -1588,7 +1698,13 @@ mod tests {
 
         // First observation - should not share due to low utilization
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(1))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_secs(1), 1);
+        observer.record_local_observations(
+            &ptb,
+            &ptb.shared_input_objects().collect::<Vec<_>>(),
+            &timings,
+            Duration::from_secs(1),
+            1,
+        );
         assert!(
             observer
                 .local_observations
@@ -1600,7 +1716,13 @@ mod tests {
 
         // Second observation - no time has passed, so now utilization is high; should share upward change
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(2))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_secs(2), 1);
+        observer.record_local_observations(
+            &ptb,
+            &ptb.shared_input_objects().collect::<Vec<_>>(),
+            &timings,
+            Duration::from_secs(2),
+            1,
+        );
         assert_eq!(
             observer
                 .local_observations
@@ -1622,7 +1744,13 @@ mod tests {
         // This should share because the object is indebted
         tokio::time::advance(Duration::from_secs(60)).await;
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(300))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_millis(300), 1);
+        observer.record_local_observations(
+            &ptb,
+            &ptb.shared_input_objects().collect::<Vec<_>>(),
+            &timings,
+            Duration::from_millis(300),
+            1,
+        );
 
         // Moving average should be (1s + 2s + 0.3s) / 3 = 1.1s
         // This downward change should have been shared for indebted object
