@@ -449,6 +449,7 @@ const MAINNET_USDB: &str =
 //              duplicates included, that it requires.
 // Version 145: Reject secp256r1 public keys in the SEC1 compact encoding.
 //              Create the FreezeList system object.
+//              Enable coin regulation.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -5145,6 +5146,7 @@ impl ProtocolConfig {
                 145 => {
                     cfg.feature_flags.secp256r1_strict_public_keys = true;
                     cfg.feature_flags.create_freeze_list = true;
+                    cfg.feature_flags.enable_coin_regulation = true;
                 }
                 // Use this template when making changes:
                 //

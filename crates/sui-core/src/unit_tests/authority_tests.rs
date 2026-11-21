@@ -2827,7 +2827,6 @@ async fn test_freeze_list_input_requires_feature() {
         let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
         let gas = Object::with_owner_for_testing(sender);
         let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
-        config.set_create_freeze_list_for_testing(true);
         config.set_enable_coin_regulation_for_testing(enabled);
         let authority = TestAuthorityBuilder::new()
             .with_starting_objects(std::slice::from_ref(&gas))
