@@ -15,6 +15,7 @@ use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::SUI_CLOCK_OBJECT_ID;
 use sui_types::SUI_CLOCK_OBJECT_SHARED_VERSION;
 use sui_types::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
+use sui_types::SUI_FREEZE_LIST_OBJECT_ID;
 use sui_types::base_types::ConsensusObjectSequenceKey;
 use sui_types::base_types::ConsensusObjectVersion;
 use sui_types::base_types::ObjectID;
@@ -47,9 +48,9 @@ pub struct AssignedVersions {
     /// deterministically during consensus sequencing, so that every validator reads the same
     /// version of the object.
     ///
-    /// Today this holds the accumulator root version, the Clock version and, when forwarding
-    /// addresses are enabled, the forwarding address registry version, each as of the point in the
-    /// consensus commit at which this transaction is sequenced.
+    /// Today this holds the accumulator root version, the Clock version, and, when enabled, the
+    /// forwarding address registry and freeze list versions, each as of the point in the consensus
+    /// commit at which this transaction is sequenced.
     pub system_object_versions: SystemObjectVersions,
 }
 
@@ -669,6 +670,12 @@ fn implicitly_read_system_objects(
         ));
     }
     objects.push((SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION));
+    if epoch_store.protocol_config().enable_coin_regulation()
+        && let Some(initial_shared_version) =
+            epoch_start_config.freeze_list_obj_initial_shared_version()
+    {
+        objects.push((SUI_FREEZE_LIST_OBJECT_ID, initial_shared_version));
+    }
     objects
 }
 
@@ -711,8 +718,11 @@ mod tests {
         CertificateProof, ExecutableTransaction, VerifiedExecutableTransaction,
     };
 
-    use sui_types::object::Object;
-    use sui_types::transaction::{ObjectArg, SenderSignedData, VerifiedTransaction};
+    use sui_types::object::{OBJECT_START_VERSION, Object};
+    use sui_types::transaction::{
+        InputObjectKind, InputObjects, ObjectArg, ObjectReadResult, SenderSignedData,
+        VerifiedTransaction,
+    };
 
     use sui_types::gas_coin::GAS;
     use sui_types::transaction::FundsWithdrawalArg;
@@ -743,6 +753,8 @@ mod tests {
             // Only a consensus commit prologue advances the Clock, and these tests sequence
             // none, so the Clock stays at its genesis version.
             (SUI_CLOCK_OBJECT_ID, Some(SUI_CLOCK_OBJECT_SHARED_VERSION)),
+            // These tests never write the FreezeList, so it stays at its genesis version.
+            (SUI_FREEZE_LIST_OBJECT_ID, Some(OBJECT_START_VERSION)),
         ]
         .into_iter()
         .filter_map(|(id, version)| Some((id, at_start_version(version?))))
@@ -1122,6 +1134,222 @@ mod tests {
         );
     }
 
+    async fn authority_with_freeze_list(enable_coin_regulation: bool) -> Arc<AuthorityState> {
+        let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+        config.set_enable_coin_regulation_for_testing(enable_coin_regulation);
+        TestAuthorityBuilder::new()
+            .with_protocol_config(config)
+            .build()
+            .await
+    }
+
+    #[tokio::test]
+    async fn test_freeze_list_not_implicitly_read_without_coin_regulation() {
+        let authority = authority_with_freeze_list(false).await;
+        let epoch_store = authority.epoch_store_for_testing();
+        assert!(
+            epoch_store
+                .epoch_start_config()
+                .freeze_list_obj_initial_shared_version()
+                .is_some()
+        );
+        let certs = [generate_shared_objs_tx_with_gas_version(&[], 3)];
+        let assignables = certs
+            .iter()
+            .map(Schedulable::Transaction)
+            .collect::<Vec<_>>();
+        let ConsensusSharedObjVerAssignment {
+            assigned_versions, ..
+        } = SharedObjVerManager::assign_versions_from_consensus(
+            &epoch_store,
+            authority.get_object_cache_reader().as_ref(),
+            assignables.iter(),
+            &BTreeMap::new(),
+        )
+        .unwrap();
+        assert_eq!(
+            assigned_versions.0[0]
+                .1
+                .system_object_versions
+                .get(&SUI_FREEZE_LIST_OBJECT_ID),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn test_freeze_list_version_follows_consensus_order() {
+        let authority = authority_with_freeze_list(true).await;
+        let epoch_store = authority.epoch_store_for_testing();
+        let freeze_list_initial_version = epoch_store
+            .epoch_start_config()
+            .freeze_list_obj_initial_shared_version()
+            .unwrap();
+        let freeze_list_key = (SUI_FREEZE_LIST_OBJECT_ID, freeze_list_initial_version);
+        let certs = [
+            generate_shared_objs_tx_with_gas_version(&[], 3),
+            generate_shared_objs_tx_with_gas_version(
+                &[(SUI_FREEZE_LIST_OBJECT_ID, freeze_list_initial_version, true)],
+                5,
+            ),
+            generate_shared_objs_tx_with_gas_version(&[], 1),
+        ];
+        let assignables = certs
+            .iter()
+            .map(Schedulable::Transaction)
+            .collect::<Vec<_>>();
+        let ConsensusSharedObjVerAssignment {
+            shared_input_next_versions,
+            assigned_versions,
+        } = SharedObjVerManager::assign_versions_from_consensus(
+            &epoch_store,
+            authority.get_object_cache_reader().as_ref(),
+            assignables.iter(),
+            &BTreeMap::new(),
+        )
+        .unwrap();
+        let freeze_list_version = |version| ConsensusObjectVersion {
+            initial_shared_version: freeze_list_initial_version,
+            version,
+        };
+        // The mutation is sequenced second, so only the last transaction reads the freeze list
+        // at its post-mutation version.
+        assert_eq!(
+            assigned_versions
+                .0
+                .iter()
+                .map(|(_, versions)| {
+                    (
+                        versions.shared_object_versions.clone(),
+                        versions
+                            .system_object_versions
+                            .get(&SUI_FREEZE_LIST_OBJECT_ID)
+                            .unwrap(),
+                    )
+                })
+                .collect::<Vec<_>>(),
+            vec![
+                (vec![], freeze_list_version(freeze_list_initial_version)),
+                (
+                    vec![(freeze_list_key, freeze_list_initial_version)],
+                    freeze_list_version(freeze_list_initial_version),
+                ),
+                (vec![], freeze_list_version(SequenceNumber::from_u64(6))),
+            ]
+        );
+        assert_eq!(
+            shared_input_next_versions.get(&freeze_list_key),
+            Some(&SequenceNumber::from_u64(6))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_freeze_list_version_from_effects() {
+        let authority = authority_with_freeze_list(true).await;
+        let epoch_store = authority.epoch_store_for_testing();
+        let freeze_list_initial_version = epoch_store
+            .epoch_start_config()
+            .freeze_list_obj_initial_shared_version()
+            .unwrap();
+        let freeze_list_version = SequenceNumber::from_u64(4);
+        let certs = [
+            generate_shared_objs_tx_with_gas_version(&[], 3),
+            generate_shared_objs_tx_with_gas_version(
+                &[(
+                    SUI_FREEZE_LIST_OBJECT_ID,
+                    freeze_list_initial_version,
+                    false,
+                )],
+                5,
+            ),
+        ];
+        let effects = certs
+            .iter()
+            .map(|cert| {
+                TestEffectsBuilder::new(cert.data())
+                    .with_shared_input_versions(BTreeMap::from([(
+                        SUI_FREEZE_LIST_OBJECT_ID,
+                        freeze_list_version,
+                    )]))
+                    .build()
+            })
+            .collect::<Vec<_>>();
+        let assigned_versions = SharedObjVerManager::assign_versions_from_effects(
+            certs
+                .iter()
+                .zip_debug_eq(effects.iter())
+                .map(|(cert, effect)| (cert, effect, None))
+                .collect::<Vec<_>>()
+                .as_slice(),
+            &epoch_store,
+            authority.get_object_cache_reader().as_ref(),
+        );
+        let system_object_versions = SystemObjectVersions::from_map(BTreeMap::from([(
+            SUI_FREEZE_LIST_OBJECT_ID,
+            ConsensusObjectVersion {
+                initial_shared_version: freeze_list_initial_version,
+                version: freeze_list_version,
+            },
+        )]));
+        assert_eq!(
+            assigned_versions.0,
+            vec![
+                (
+                    certs[0].key(),
+                    AssignedVersions::new(vec![], system_object_versions.clone())
+                ),
+                (
+                    certs[1].key(),
+                    AssignedVersions::new(
+                        vec![(
+                            (SUI_FREEZE_LIST_OBJECT_ID, freeze_list_initial_version),
+                            freeze_list_version
+                        )],
+                        system_object_versions
+                    )
+                ),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_freeze_list_version_for_simulation() {
+        let authority = authority_with_freeze_list(true).await;
+        let declared = authority.get_object(&SUI_FREEZE_LIST_OBJECT_ID).unwrap();
+        let initial_shared_version = declared.owner().start_version().unwrap();
+        let mut latest = declared.clone();
+        latest
+            .data
+            .try_as_move_mut()
+            .unwrap()
+            .increment_version_to(declared.version().next());
+        authority
+            .insert_objects_unsafe_for_testing_only(std::slice::from_ref(&latest))
+            .await
+            .unwrap();
+        let pinned_version = |inputs| {
+            SystemObjectVersions::from_inputs_or_latest_in_store(
+                &InputObjects::new(inputs),
+                authority.get_object_store().as_ref(),
+            )
+            .get(&SUI_FREEZE_LIST_OBJECT_ID)
+            .unwrap()
+            .version
+        };
+        assert_eq!(pinned_version(vec![]), latest.version());
+        // A declared input pins the version it was read at, not the latest.
+        assert_eq!(
+            pinned_version(vec![ObjectReadResult::new(
+                InputObjectKind::SharedMoveObject {
+                    id: SUI_FREEZE_LIST_OBJECT_ID,
+                    initial_shared_version,
+                    mutability: SharedObjectMutability::Immutable,
+                },
+                declared.clone().into(),
+            )]),
+            declared.version()
+        );
+    }
+
     #[tokio::test]
     async fn test_assign_versions_from_consensus_with_randomness() {
         let authority = TestAuthorityBuilder::new().build().await;
@@ -1340,6 +1568,7 @@ mod tests {
         shared_input_next_versions
             .remove(&(SUI_ACCUMULATOR_ROOT_OBJECT_ID, SequenceNumber::from_u64(1)));
         shared_input_next_versions.remove(&(SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION));
+        shared_input_next_versions.remove(&(SUI_FREEZE_LIST_OBJECT_ID, OBJECT_START_VERSION));
         assert_eq!(
             shared_input_next_versions,
             HashMap::from([
@@ -1686,6 +1915,10 @@ mod tests {
                         (SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION),
                         SUI_CLOCK_OBJECT_SHARED_VERSION
                     ),
+                    (
+                        (SUI_FREEZE_LIST_OBJECT_ID, OBJECT_START_VERSION),
+                        OBJECT_START_VERSION
+                    ),
                 ]),
             }
         );
@@ -1775,6 +2008,10 @@ mod tests {
                         (SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION),
                         SUI_CLOCK_OBJECT_SHARED_VERSION
                     ),
+                    (
+                        (SUI_FREEZE_LIST_OBJECT_ID, OBJECT_START_VERSION),
+                        OBJECT_START_VERSION
+                    ),
                 ]),
             }
         );
@@ -1832,6 +2069,10 @@ mod tests {
                     (
                         (SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION),
                         SUI_CLOCK_OBJECT_SHARED_VERSION
+                    ),
+                    (
+                        (SUI_FREEZE_LIST_OBJECT_ID, OBJECT_START_VERSION),
+                        OBJECT_START_VERSION
                     ),
                 ]),
             }
