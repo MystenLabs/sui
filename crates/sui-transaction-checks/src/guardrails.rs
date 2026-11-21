@@ -62,9 +62,11 @@ pub fn check_guardrails_for_signing(
         else {
             continue;
         };
-        // Execution counts only coins with a single owner, and fails a transaction that
-        // takes a party coin. Refusing it here saves the sender the gas.
-        if sender_policy.is_some()
+        // Execution counts only coins with a single owner, and fails a transaction bound by the
+        // policy that takes a party coin. Refusing it here saves the sender the gas.
+        if sender_policy
+            .as_ref()
+            .is_some_and(|policy| !policy.exempts(tx_data.gas_owner()))
             && matches!(object.owner(), Owner::Party { .. })
             && object.is_coin()
         {

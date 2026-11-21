@@ -336,18 +336,25 @@ pub struct ConsensusSharedObjVerAssignment {
 }
 
 impl SharedObjVerManager {
+    /// `sequenced_inputs` holds the shared inputs the caller already computed for some
+    /// transactions, by digest. The shared inputs of the others are computed here.
     pub fn assign_versions_from_consensus<'a, T>(
         epoch_store: &AuthorityPerEpochStore,
         cache_reader: &dyn ObjectCacheRead,
         assignables: impl Iterator<Item = &'a Schedulable<T>> + Clone,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
+        mut sequenced_inputs: BTreeMap<TransactionDigest, Vec<SharedInputObject>>,
     ) -> SuiResult<ConsensusSharedObjVerAssignment>
     where
         T: AsTx + 'a,
     {
         let shared_inputs: Vec<Vec<SharedInputObject>> = assignables
             .clone()
-            .map(|a| a.shared_input_objects(epoch_store, cache_reader))
+            .map(|a| {
+                a.as_tx()
+                    .and_then(|tx| sequenced_inputs.remove(tx.digest()))
+                    .unwrap_or_else(|| a.shared_input_objects(epoch_store, cache_reader))
+            })
             .collect();
         let mut shared_input_next_versions = get_or_init_versions(
             shared_inputs.iter().flatten().cloned(),
@@ -429,8 +436,8 @@ impl SharedObjVerManager {
                     if v.is_none() {
                         debug_assert!(
                             IMPLICITLY_READ_SYSTEM_OBJECTS.contains(id),
-                            "accessed consensus object is neither a declared input nor a known implicitly read system object: \
-                             accessed={accessed_versions:?} declared={initial_version_map:?}"
+                            "accessed consensus object is neither a shared input nor a known implicitly read system object: \
+                             accessed={accessed_versions:?} shared_inputs={initial_version_map:?}"
                         );
                     }
                     v
@@ -785,6 +792,7 @@ mod tests {
             authority.get_object_cache_reader().as_ref(),
             assignables.iter(),
             &BTreeMap::new(),
+            BTreeMap::new(),
         )
         .unwrap();
         let clock_versions = assigned_versions
@@ -844,6 +852,7 @@ mod tests {
             authority.get_object_cache_reader().as_ref(),
             assignables.iter(),
             &BTreeMap::new(),
+            BTreeMap::new(),
         )
         .unwrap();
         // Check that the shared object's next version is always initialized in the epoch store.
@@ -944,6 +953,7 @@ mod tests {
             authority.get_object_cache_reader().as_ref(),
             assignables.iter(),
             &BTreeMap::new(),
+            BTreeMap::new(),
         )
         .unwrap();
         let registry_version = |version| ConsensusObjectVersion {
@@ -1025,6 +1035,7 @@ mod tests {
             authority.get_object_cache_reader().as_ref(),
             assignables.iter(),
             &cancelled_txns,
+            BTreeMap::new(),
         )
         .unwrap();
         // The cancelled declaration carries the sentinel, while the implicit pin keeps the real
@@ -1180,6 +1191,7 @@ mod tests {
             authority.get_object_cache_reader().as_ref(),
             assignables.iter(),
             &BTreeMap::new(),
+            BTreeMap::new(),
         )
         .unwrap();
         // Check that the randomness object's next version is initialized.
@@ -1342,6 +1354,7 @@ mod tests {
             authority.get_object_cache_reader().as_ref(),
             assignables.iter(),
             &cancelled_txns,
+            BTreeMap::new(),
         )
         .unwrap();
 
@@ -1649,6 +1662,7 @@ mod tests {
                 self.authority.get_object_cache_reader().as_ref(),
                 self.assignables.iter(),
                 &BTreeMap::new(),
+                BTreeMap::new(),
             )
             .unwrap()
         }

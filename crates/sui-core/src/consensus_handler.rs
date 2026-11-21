@@ -1231,6 +1231,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             randomness_transactions_to_schedule,
             cancelled_txns,
             randomness_state_update_transaction,
+            sequenced_inputs,
         ) = self.collect_transactions_to_schedule(
             &mut state,
             &mut execution_time_estimator,
@@ -1287,6 +1288,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             schedulables,
             randomness_schedulables,
             &cancelled_txns,
+            sequenced_inputs,
             final_round,
         );
 
@@ -1446,6 +1448,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         Vec<VerifiedExecutableTransactionWithAliases>,
         BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
         Option<Schedulable<VerifiedExecutableTransactionWithAliases>>,
+        BTreeMap<TransactionDigest, Vec<SharedInputObject>>,
     ) {
         let _scope = monitored_scope("ConsensusCommitHandler::collect_transactions_to_schedule");
         let protocol_config = self.epoch_store.protocol_config();
@@ -1476,10 +1479,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             Vec::with_capacity(ordered_randomness_txns.len());
         let mut deferred_txns = BTreeMap::new();
         let mut cancelled_txns = BTreeMap::new();
+        let mut sequenced_inputs = BTreeMap::new();
 
         self.record_duplication_signal(state);
 
         for (transaction, shared_input_objects) in ordered_txns {
+            let digest = *transaction.tx().digest();
             self.handle_deferral_and_cancellation(
                 state,
                 &mut cancelled_txns,
@@ -1493,9 +1498,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 &previously_deferred_tx_digests,
                 execution_time_estimator,
             );
+            sequenced_inputs.insert(digest, shared_input_objects);
         }
 
         for (transaction, shared_input_objects) in ordered_randomness_txns {
+            let digest = *transaction.tx().digest();
             if state.dkg_failed {
                 debug!(
                     "Canceling randomness-using transaction {:?} because DKG failed",
@@ -1506,6 +1513,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     CancelConsensusCertificateReason::DkgFailed,
                 );
                 randomness_transactions_to_schedule.push(transaction);
+                sequenced_inputs.insert(digest, shared_input_objects);
                 continue;
             }
             self.handle_deferral_and_cancellation(
@@ -1521,6 +1529,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 &previously_deferred_tx_digests,
                 execution_time_estimator,
             );
+            sequenced_inputs.insert(digest, shared_input_objects);
         }
 
         let mut total_deferred_txns = 0;
@@ -1654,6 +1663,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             randomness_transactions_to_schedule,
             cancelled_txns,
             randomness_state_update_transaction,
+            sequenced_inputs,
         )
     }
 
@@ -1665,6 +1675,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         schedulables: Vec<Schedulable<VerifiedExecutableTransactionWithAliases>>,
         randomness_schedulables: Vec<Schedulable<VerifiedExecutableTransactionWithAliases>>,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
+        sequenced_inputs: BTreeMap<TransactionDigest, Vec<SharedInputObject>>,
         final_round: bool,
     ) -> CheckpointHeight {
         let _scope = monitored_scope("ConsensusCommitHandler::create_pending_checkpoints");
@@ -1731,6 +1742,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 schedulables_for_version_assignment,
                 randomness_schedulables_for_version_assignment,
                 cancelled_txns,
+                sequenced_inputs,
                 &mut state.output,
             )
             .expect("failed to assign shared object versions");

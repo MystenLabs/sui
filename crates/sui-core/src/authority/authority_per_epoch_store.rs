@@ -2337,6 +2337,7 @@ impl AuthorityPerEpochStore {
             cache_reader,
             assignables,
             &BTreeMap::new(),
+            BTreeMap::new(),
         )?
         .assigned_versions)
     }
@@ -3202,6 +3203,7 @@ impl AuthorityPerEpochStore {
         non_randomness_transactions: impl Iterator<Item = &'a Schedulable<T>> + Clone,
         randomness_transactions: impl Iterator<Item = &'a Schedulable<T>> + Clone,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
+        sequenced_inputs: BTreeMap<TransactionDigest, Vec<SharedInputObject>>,
         output: &mut ConsensusCommitOutput,
     ) -> SuiResult<AssignedTxAndVersions>
     where
@@ -3217,6 +3219,7 @@ impl AuthorityPerEpochStore {
             cache_reader,
             all_certs,
             cancelled_txns,
+            sequenced_inputs,
         )?;
         debug!(
             "Assigned versions from consensus processing: {:?}",
@@ -3261,6 +3264,7 @@ impl AuthorityPerEpochStore {
             transactions.iter(),
             std::iter::empty(),
             &BTreeMap::new(),
+            BTreeMap::new(),
             &mut output,
         )?;
         let mut batch = self.db_batch();

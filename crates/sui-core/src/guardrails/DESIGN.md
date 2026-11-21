@@ -460,9 +460,9 @@ transactions and one new rule in the transaction model for it.
 ## Implementation notes
 
 - Implementation note: `sui_core::consensus_inputs` owns which shared objects a transaction takes.
-  The consensus handler computes each transaction's shared inputs once per commit for congestion
-  control, version assignment computes them again, and the overload check at submission and the gas
-  price suggestion compute their own. Each computation is one object cache read, a hit or a
+  The consensus handler computes each transaction's shared inputs once per commit and passes them
+  to congestion control and version assignment. The overload check at submission and the gas price
+  suggestion compute their own. Each computation is one object cache read, a hit or a
   negative hit.
 - Implementation note: after version assignment, and in effects, a consensus object a transaction
   does not declare is a mutable input, outside the implicitly read system objects. Only a
@@ -470,7 +470,8 @@ transactions and one new rule in the transaction model for it.
 - Implementation note: the execution scheduler's barrier dependencies for non-exclusive writes read
   only declared inputs. No dependency is missed, because only the owner declares a policy and only
   as a mutable input, so nothing takes a non-exclusive write on it.
-- Implementation note: backtest does not add the policy input yet.
+- Implementation note: backtest and the single node benchmark do not add the policy input yet, so
+  they run a policy-bound transaction without its policy.
 - Implementation note: the signing checks are one function,
   `sui_transaction_checks::guardrails::check_guardrails_for_signing`. Validators call it at signing,
   and simulation with checks enabled and simulacrum call it before they execute.

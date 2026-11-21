@@ -177,7 +177,16 @@ pub fn simulate_transaction(
             validity_check_context.reference_gas_price,
         )?
     } else {
-        let checked_input_objects = check_transaction_input(
+        // Before the input checks, which see the added policy input and would refuse a gasless
+        // transaction for having a shared input instead of for its sender's policy.
+        check_guardrails_for_signing(
+            protocol_config,
+            execution_epoch_id,
+            &transaction,
+            &input_objects,
+            |id| backing_store.get_object(id),
+        )?;
+        check_transaction_input(
             protocol_config,
             validity_check_context.reference_gas_price,
             &transaction,
@@ -185,15 +194,7 @@ pub fn simulate_transaction(
             &receiving_objects,
             bytecode_verifier_metrics,
             verifier_signing_config,
-        )?;
-        check_guardrails_for_signing(
-            protocol_config,
-            execution_epoch_id,
-            &transaction,
-            checked_input_objects.inner(),
-            |id| backing_store.get_object(id),
-        )?;
-        checked_input_objects
+        )?
     };
 
     let (mut kind, signer, gas_data) = transaction.execution_parts();
