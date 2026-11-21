@@ -194,10 +194,17 @@ mutated shared object carries its version but not its initial shared version, an
 from the store. By the first transaction of the activation epoch every node holds the object.
 
 The cost is that an account's transactions serialize on its policy object, one at a time, and that
-each of them rewrites the object. For the accounts we target that is not a limitation. Congestion
-control counts the implicit input like a declared one, in the deferral decision, in the per object
-cost and in the debts carried between commits. Without that, anyone could enable a policy on an
-account of their own and use it as a shared object that no budget bounds.
+each of them rewrites the object. For the accounts we target that is not a limitation.
+
+Everything that reads a transaction's shared inputs sees the policy like a declared input. Before
+version assignment one function computes the inputs, the declared ones plus the policy, and
+version assignment, congestion control (the deferral decision, the per object cost and the debts
+carried between commits), the overload tracker and the gas price suggestion all take them from it.
+After version assignment the rule is that every consensus object a transaction was assigned or, in
+effects, accessed without declaring it is a mutable input, so the execution scheduler, input
+loading, the execution time estimator, the checkpoint executor and replay need no guardrails
+knowledge. Without congestion control counting it, anyone could enable a policy on an account of
+their own and use it as a shared object that no budget bounds.
 
 Only the sender's policy is taken. The two other ways one account's value can move in a transaction
 another account sends are refused at signing instead (see Signing checks), so this stays one policy
@@ -215,7 +222,9 @@ This also means any Sui account can be a guardian, since sponsorship goes throug
 signature verifier: passkey, zkLogin, a plain key, or a multisig combining several of them, which is
 how you would compose a stronger second factor. The guardian pays gas for what it approves, and its
 gas coins are exposed to the PTB like any sponsor's, so a guardian wallet should review what it
-signs.
+signs. A guardian can have an active policy of its own. It then approves only transactions that do
+not use the gas coin as an argument (see Signing checks), which approvals of the owner's
+transactions do not need.
 
 An exempt transaction is not counted: whatever leaves the account with the guardian's approval does
 not touch the budget. The policy object is still an input of the transaction and bumps its version,
@@ -307,8 +316,7 @@ show up as outflow.
 
 ## Signing checks
 
-Validators refuse to sign these. All of them depend only on whether a policy is active this epoch,
-so every validator decides the same.
+Validators refuse to sign these. Simulation runs them too, and dev-inspect does not.
 
 ```rust
 // Nobody but its owner declares a policy, and only as a mutable input. Every transaction of the
@@ -318,18 +326,31 @@ for input in tx.shared_input_objects() where input is a Policy {
 }
 // A gasless transaction may not write an object, and the check records the spend in the policy.
 ensure!(!(tx.is_gasless() && has_active_policy(tx.sender())));
-// A transaction can spend its gas coins, so paying someone else's gas would move the gas owner's
-// SUI past its policy.
-ensure!(tx.gas_owner() == tx.sender() || !has_active_policy(tx.gas_owner()));
-// Likewise for a withdrawal from another account under an allowance.
+// A transaction reaches its gas owner's SUI beyond the gas it pays only through the gas coin
+// argument. A gas owner with a policy loses at most the gas budget of a transaction that does not
+// use it.
+ensure!(tx.gas_owner() == tx.sender() || !tx.uses_gas_coin() || !has_active_policy(tx.gas_owner()));
+// No allowance withdrawal from an account with a policy.
 for funder in allowance_funders(tx) { ensure!(!has_active_policy(funder)); }
 ```
 
 The last two are what makes "only the sender's policy" enough. A stolen key can sign as the gas
 owner of the attacker's transaction, and that transaction can take SUI straight out of the gas coin.
 It can also grant an allowance that the attacker then withdraws from. Both move the account's value
-in a transaction the account did not send, so an account with an active policy cannot be used in
-either role.
+in a transaction the account did not send. So an account with an active policy can pay the gas of
+another account's transaction only if the transaction leaves the gas coin alone, and cannot fund an
+allowance.
+
+A third way exists and is out of scope: the issuer of a regulated coin can seize it from a frozen
+address (`WithdrawFrom::FrozenAddress`). The policy bounds the account's key, and seizure does not
+use it.
+
+The checks on the gas owner, gasless transactions and allowances depend only on whether a policy is
+active this epoch, which does not change within the epoch, so every validator decides the same. The
+check on declared policies depends on whether a declared object is a policy, which changes when a
+policy is created. A policy created in the current epoch is not active yet, so a validator that
+signs before it sees the policy only lets another account contend on a policy that no transaction
+of its owner depends on yet.
 
 ## Effects, replay, dry-run
 
@@ -338,10 +359,10 @@ rule for everything that derives inputs from a transaction:
 
 - The checkpoint executor and crash recovery take the policy's version from effects and its initial
   shared version from the store, which the activation delay guarantees is there.
-- Replay injects the policy input when effects show it.
-- Dry-run and dev-inspect inject it from the latest state, so the check runs there too and a wallet
-  can show the user what would happen. A guardian sponsored dry-run is exempt just like the real
-  thing.
+- Replay takes the policy as an input when effects show it.
+- Dry-run, dev-inspect and simulacrum add it from the latest state, so the check runs there too
+  and a wallet can show the user what would happen. A guardian sponsored dry-run is exempt just
+  like the real thing.
 - Indexers and SDKs that compute "objects touched" from the transaction body need to learn the
   rule; ones that read effects are unaffected.
 
@@ -361,8 +382,8 @@ Each of these can be added later without changing the policy object or how a tra
   accounts. Until then the guardian sponsors those transfers.
 - **Gas in the budget.** It needs the spend written on the failure path too, after the transaction's
   writes are dropped, next to the gas coin handling.
-- **The account as gas owner or allowance funder.** Refused today. Supporting it means taking more
-  than one policy per transaction.
+- **The account as the gas owner of a transaction that uses the gas coin, or as an allowance
+  funder.** Refused today. Supporting it means taking more than one policy per transaction.
 - **Gasless transactions.** Refused today. Supporting them means letting a gasless transaction
   write the policy and deciding who pays for that write.
 
