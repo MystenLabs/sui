@@ -1,0 +1,31 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[WC09002]: unused variable
+  ┌─ tests/move_2024/matching/invalid_return_literal_match.move:7:13
+  │
+7 │         let s = S { a: 1 };
+  │             ^ Unused local variable 's'. Consider removing or prefixing with an underscore: '_s'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[EC06001]: unused value without 'drop'
+   ┌─ tests/move_2024/matching/invalid_return_literal_match.move:8:19
+   │  
+ 3 │       public struct S { a: u64 }
+   │                     - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·  
+ 7 │           let s = S { a: 1 };
+   │               -   ---------- The type '0x42::m::S' does not have the ability 'drop'
+   │               │    
+   │               The local variable 's' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
+ 8 │           match (x) {
+   │ ╭───────────────────^
+ 9 │ │             1 => 10,
+10 │ │             _ => 20,
+11 │ │         }
+   │ ╰─────────^ Invalid return

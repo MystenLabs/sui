@@ -1,0 +1,33 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+module 0x42::m
+  fun literal
+5:16-17         Assign                     x
+5:16-17           Copy                     x
+5:19-9:10       Assign                     { 1 => 10, 2 => 20, _ => 30, }
+5:19-9:10         BorrowLocal              { 1 => 10, 2 => 20, _ => 30, }
+5:19-9:10       IfElse                     { 1 => 10, 2 => 20, _ => 30, }
+6:13-14           BinopExp                 1
+5:19-9:10           Dereference            { 1 => 10, 2 => 20, _ => 30, }
+5:19-9:10             Copy                 { 1 => 10, 2 => 20, _ => 30, }
+6:13-14             Value                  1
+6:18-20           Assign                   10
+6:18-20             Value                  10
+5:19-9:10         IfElse                   { 1 => 10, 2 => 20, _ => 30, }
+7:13-14             BinopExp               2
+5:19-9:10             Dereference          { 1 => 10, 2 => 20, _ => 30, }
+5:19-9:10               Copy               { 1 => 10, 2 => 20, _ => 30, }
+7:13-14               Value                2
+7:18-20             Assign                 20
+7:18-20               Value                20
+8:18-20             Assign                 30
+8:18-20               Value                30
+5:19-9:10         Assign                   { 1 => 10, 2 => 20, _ => 30, }
+5:19-9:10           Move                   { 1 => 10, 2 => 20, _ => 30, }
+5:19-9:10       Return                     { 1 => 10, 2 => 20, _ => 30, }
+5:19-9:10         Move                     { 1 => 10, 2 => 20, _ => 30, }
