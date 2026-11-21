@@ -54,11 +54,15 @@ events. No layout walks, no ownership chains.
 
 Things the policy does not bound in this version:
 
-- Gas. A stolen key can burn the account's SUI on gas. The attacker gets nothing out of it, so we
-  accept it for now.
+- Gas. A stolen key can make the account pay the storage fee of objects it creates for the
+  attacker, as the sender or as the gas owner. The attacker then deletes the objects and gets the
+  storage rebate, which is 99.99% of the fee. One transaction can move about 38 SUI this way, and
+  nothing bounds how many run per epoch, so the account's SUI is not protected in this version.
+  Other coin types are, since a rebate pays only SUI. The next version counts the gas the account
+  pays against its SUI limit, and the flag does not leave devnet before it does.
 - Value that is not in a coin or the address balance: staked SUI, balances inside your own objects,
   NFTs. A stolen key can unstake and send the SUI away in one transaction, and the policy does not
-  see it, because the account's coins did not decrease. This is the biggest gap of this version.
+  see it, because the account's coins did not decrease.
 - Total loss over many epochs. The limit resets every epoch, so you still need to notice at some
   point.
 
