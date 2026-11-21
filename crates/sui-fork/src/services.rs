@@ -44,6 +44,7 @@ use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
 use sui_indexer_alt_framework::metrics::IngestionMetrics;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::Processor;
+use sui_rpc_api::subscription::IndexedCheckpointFn;
 use sui_rpc_api::subscription::SubscriptionTip;
 use sui_rpc_store::CommitterLayer;
 use sui_rpc_store::Indexer;
@@ -65,7 +66,6 @@ use sui_types::digests::ChainIdentifier;
 use sui_types::digests::CheckpointDigest;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::storage::ReadStore;
 
 use crate::ingestion::SimulacrumIngestion;
 use crate::local_store::LocalStore;
@@ -363,15 +363,27 @@ impl ServiceManager {
             .context("failed to read checkpoint_broadcast watermark")?
             .map(|watermark| watermark.checkpoint_hi_inclusive)
             .unwrap_or(self.metadata.forked_at_checkpoint);
-        let local_store = self.local_store();
-        let checkpoint =
-            ReadStore::get_checkpoint_by_sequence_number(local_store.reader(), tip_checkpoint)
-                .with_context(|| {
-                    format!(
-                        "missing checkpoint {tip_checkpoint} in local store for subscription tip"
-                    )
-                })?;
+        let checkpoint = self
+            .schema
+            .get_checkpoint_summary(tip_checkpoint)
+            .with_context(|| {
+                format!("failed to read checkpoint {tip_checkpoint} summary for subscription tip")
+            })?
+            .with_context(|| {
+                format!("missing checkpoint {tip_checkpoint} in local store for subscription tip")
+            })?;
         Ok(SubscriptionTip::from_summary(checkpoint.data()))
+    }
+
+    /// Return a callback reading the highest checkpoint every fork indexer pipeline has committed,
+    /// for [`sui_rpc_api::subscription::SubscriptionService::build`]'s index gate.
+    pub(crate) fn indexed_checkpoint_fn(&self) -> IndexedCheckpointFn {
+        let db = self.db.clone();
+        Arc::new(move || {
+            Self::min_pipeline_watermark(&db, FORK_INDEXER_PIPELINES)
+                .ok()
+                .flatten()
+        })
     }
 
     /// Resolve when the embedded indexer stops, with `Ok(())` if all its tasks completed
@@ -419,10 +431,16 @@ impl ServiceManager {
         if self.indexer_pipelines.is_empty() {
             return Ok(None);
         }
+        Self::min_pipeline_watermark(&self.db, &self.indexer_pipelines)
+    }
 
-        let framework = FrameworkSchema::new(self.db.clone());
+    fn min_pipeline_watermark(
+        db: &Db,
+        pipelines: &[&str],
+    ) -> anyhow::Result<Option<CheckpointSequenceNumber>> {
+        let framework = FrameworkSchema::new(db.clone());
         let mut indexed: Option<CheckpointSequenceNumber> = None;
-        for pipeline in &self.indexer_pipelines {
+        for pipeline in pipelines {
             let Some(watermark) = framework
                 .watermarks
                 .get(&PipelineTaskKey::new(*pipeline))
@@ -685,22 +703,10 @@ mod tests {
             }
         );
 
-        // Clean resume where broadcast caught up to the local tip (12).
-        let mut batch = services.db.batch();
-        batch
-            .put(
-                &framework.watermarks,
-                &PipelineTaskKey::new(CheckpointBroadcast::NAME),
-                &sui_consistent_store::Watermark::for_checkpoint(12),
-            )
-            .unwrap();
-        batch.commit().unwrap();
-        assert_eq!(
-            services.initial_subscription_tip().unwrap(),
-            SubscriptionTip {
-                checkpoint: 12,
-                network_total_transactions: 112,
-            }
-        );
+        // Index gate reads the minimum watermark across FORK_INDEXER_PIPELINES.
+        let indexed = services.indexed_checkpoint_fn();
+        assert_eq!(indexed(), None);
+        services.set_indexed_checkpoint_for_testing(11).unwrap();
+        assert_eq!(indexed(), Some(11));
     }
 }

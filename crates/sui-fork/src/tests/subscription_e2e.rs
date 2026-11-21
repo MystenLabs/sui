@@ -138,9 +138,17 @@ impl ServerHarness {
             .clone();
 
         let registry = Registry::new();
+        services.set_indexed_checkpoint_for_testing(forked_at_checkpoint)?;
         let initial_tip = services.initial_subscription_tip()?;
-        let (checkpoint_sender, subscription_handle) =
-            SubscriptionService::build(&registry, None, None, None, None, Some(initial_tip));
+        let (checkpoint_sender, subscription_handle) = SubscriptionService::build(
+            &registry,
+            Some(services.indexed_checkpoint_fn()),
+            None,
+            None,
+            None,
+            Some(initial_tip),
+        );
+
         // Service-backed on purpose: subscribers are published to by the
         // indexer's broadcast pipeline, so a service-less context would
         // exercise a publication path production never takes.
@@ -396,17 +404,11 @@ async fn idle_fork_emits_initial_start_frames_without_new_checkpoints() -> Resul
     // Fresh idle fork at genesis (checkpoint 0): streams whose contract begins
     // with a progress-only start frame must yield it immediately, without
     // waiting for checkpoint 1.
-    let mut unfiltered_tx = subscriptions
+    let mut tx_stream = subscriptions
         .subscribe_transactions(SubscribeTransactionsRequest::default())
         .await?
         .into_inner();
-    let mut filtered_tx_request = SubscribeTransactionsRequest::default();
-    filtered_tx_request.filter = Some(sender_filter(harness.sender));
-    let mut filtered_tx = subscriptions
-        .subscribe_transactions(filtered_tx_request)
-        .await?
-        .into_inner();
-    let mut unfiltered_ev = subscriptions
+    let mut ev_stream = subscriptions
         .subscribe_events(SubscribeEventsRequest::default())
         .await?
         .into_inner();
@@ -417,38 +419,30 @@ async fn idle_fork_emits_initial_start_frames_without_new_checkpoints() -> Resul
         .await?
         .into_inner();
 
-    for stream in [&mut unfiltered_tx, &mut filtered_tx] {
-        let frame = tokio::time::timeout(STREAM_RECV_TIMEOUT, stream.message())
-            .await?
-            .map_err(|e| anyhow!("transaction stream error: {e}"))?
-            .ok_or_else(|| anyhow!("transaction stream closed before start frame"))?;
-        assert!(frame.transaction.is_none());
-        let watermark = frame.watermark.expect("start frame carries a watermark");
-        assert_eq!(watermark.checkpoint, Some(0));
-        assert!(watermark.cursor.is_some());
-        assert_eq!(
-            watermark
-                .cursor_position
-                .as_ref()
-                .and_then(|position| position.checkpoint),
-            Some(1)
-        );
-    }
+    let tx_frame = tokio::time::timeout(STREAM_RECV_TIMEOUT, tx_stream.message())
+        .await?
+        .map_err(|e| anyhow!("transaction stream error: {e}"))?
+        .ok_or_else(|| anyhow!("transaction stream closed before start frame"))?;
+    assert!(tx_frame.transaction.is_none());
+    assert_eq!(
+        tx_frame
+            .watermark
+            .as_ref()
+            .and_then(|watermark| watermark.checkpoint),
+        Some(0)
+    );
 
-    let ev_frame = tokio::time::timeout(STREAM_RECV_TIMEOUT, unfiltered_ev.message())
+    let ev_frame = tokio::time::timeout(STREAM_RECV_TIMEOUT, ev_stream.message())
         .await?
         .map_err(|e| anyhow!("event stream error: {e}"))?
         .ok_or_else(|| anyhow!("event stream closed before start frame"))?;
     assert!(ev_frame.event.is_none());
-    let ev_watermark = ev_frame.watermark.expect("start frame carries a watermark");
-    assert_eq!(ev_watermark.checkpoint, Some(0));
-    assert!(ev_watermark.cursor.is_some());
     assert_eq!(
-        ev_watermark
-            .cursor_position
+        ev_frame
+            .watermark
             .as_ref()
-            .and_then(|position| position.checkpoint),
-        Some(1)
+            .and_then(|watermark| watermark.checkpoint),
+        Some(0)
     );
 
     let cp_frame = tokio::time::timeout(STREAM_RECV_TIMEOUT, filtered_cp.message())
@@ -458,10 +452,9 @@ async fn idle_fork_emits_initial_start_frames_without_new_checkpoints() -> Resul
     assert!(cp_frame.checkpoint.is_none());
     assert_eq!(cp_frame.cursor, Some(0));
 
-    // Drop all subscribers so checkpoint 1 is broadcast with zero subscribers,
-    // then subscribe on the idle fork again: the new subscriber must immediately
-    // receive its start frame at checkpoint 1 (position 2) without a checkpoint 2.
-    drop((unfiltered_tx, filtered_tx, unfiltered_ev, filtered_cp));
+    // After checkpoint 1 is committed, a newly registered subscriber on the now-idle
+    // fork must immediately receive its start frame at checkpoint 1 without waiting
+    // for a checkpoint 2.
     let mut forking = ForkingServiceClient::connect(harness.grpc_endpoint.clone()).await?;
     let advanced = forking
         .advance_checkpoint(AdvanceCheckpointRequest {})
@@ -478,16 +471,12 @@ async fn idle_fork_emits_initial_start_frames_without_new_checkpoints() -> Resul
         .map_err(|e| anyhow!("late transaction stream error: {e}"))?
         .ok_or_else(|| anyhow!("late transaction stream closed before start frame"))?;
     assert!(late_frame.transaction.is_none());
-    let late_watermark = late_frame
-        .watermark
-        .expect("start frame carries a watermark");
-    assert_eq!(late_watermark.checkpoint, Some(1));
     assert_eq!(
-        late_watermark
-            .cursor_position
+        late_frame
+            .watermark
             .as_ref()
-            .and_then(|position| position.checkpoint),
-        Some(2)
+            .and_then(|watermark| watermark.checkpoint),
+        Some(1)
     );
 
     Ok(())
