@@ -262,6 +262,7 @@ impl SubscriptionMatcher {
         spec: SubscriptionSpec,
         sender: mpsc::Sender<SubscriptionUpdate>,
         guard: SubscriptionLifecycleGuard,
+        needs_start_frame: bool,
     ) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
@@ -287,11 +288,6 @@ impl SubscriptionMatcher {
                 terms.push(compile_term(term));
             }
         }
-
-        let needs_start_frame = match spec.kind {
-            SubscriptionKind::Checkpoints => spec.query.is_some(),
-            SubscriptionKind::Transactions | SubscriptionKind::Events => true,
-        };
 
         self.subs.insert(
             id,
@@ -731,7 +727,9 @@ mod tests {
             .try_reserve()
             .expect("test subscription requires subscriber capacity");
         let guard = SubscriptionLifecycleGuard::new(kind, filtered, reservation, metrics);
-        matcher.insert(SubscriptionSpec { kind, query }, sender, guard);
+        let spec = SubscriptionSpec { kind, query };
+        let needs_start_frame = spec.needs_start_frame();
+        matcher.insert(spec, sender, guard, needs_start_frame);
         receiver
     }
 
@@ -1188,6 +1186,7 @@ mod tests {
             },
             sender,
             guard,
+            true,
         );
         assert_eq!(counters.reserved(), 1);
 

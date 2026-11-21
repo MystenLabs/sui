@@ -17,15 +17,34 @@ use rand::rngs::OsRng;
 use simulacrum::Simulacrum;
 use simulacrum::SimulatorStore;
 use simulacrum::store::in_mem_store::KeyStore;
+use sui_rpc_api::Client as RpcClient;
 use sui_rpc_api::RpcService;
 use sui_rpc_api::ServerVersion;
+use sui_rpc_api::proto::sui::rpc::v2::SenderFilter;
 use sui_rpc_api::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
+use sui_rpc_api::proto::sui::rpc::v2::SubscribeEventsRequest;
+use sui_rpc_api::proto::sui::rpc::v2::SubscribeTransactionsRequest;
+use sui_rpc_api::proto::sui::rpc::v2::TransactionFilter;
+use sui_rpc_api::proto::sui::rpc::v2::TransactionLiteral;
+use sui_rpc_api::proto::sui::rpc::v2::TransactionTerm;
 use sui_rpc_api::proto::sui::rpc::v2::subscription_service_client::SubscriptionServiceClient;
+use sui_rpc_api::proto::sui::rpc::v2::transaction_literal::Predicate;
 use sui_rpc_api::subscription::SubscriptionService;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::ObjectRef;
+use sui_types::base_types::SuiAddress;
+use sui_types::crypto::AccountKeyPair;
+use sui_types::crypto::KeypairTraits;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::object::Object;
+use sui_types::object::Owner;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::storage::RpcStateReader;
+use sui_types::transaction::GasData;
+use sui_types::transaction::Transaction;
+use sui_types::transaction::TransactionData;
+use sui_types::transaction::TransactionKind;
 
 use crate::AdvanceCheckpointRequest;
 use crate::AdvanceClockRequest;
@@ -44,11 +63,16 @@ use crate::store::ForkStore;
 struct ServerHarness {
     server_task: tokio::task::JoinHandle<()>,
     grpc_endpoint: String,
+    sender: SuiAddress,
+    sender_key: AccountKeyPair,
+    gas_object: Object,
+    reference_gas_price: u64,
     // Held to keep the RPC store alive for the lifetime of the server.
     // Held to keep the metadata and RPC store directory alive for the server lifetime.
     _temp: tempfile::TempDir,
-    // Held so remote object probes keep resolving to "not found".
-    _gql_server: wiremock::MockServer,
+    // Held so remote object probes keep resolving to "not found"; tests that
+    // exercise GetServiceInfo or GetTransaction mount additional mocks here.
+    gql_server: wiremock::MockServer,
 }
 
 impl ServerHarness {
@@ -96,11 +120,27 @@ impl ServerHarness {
             store.clone(),
             rng,
         );
+        let reference_gas_price = sim.reference_gas_price();
+        let (sender, sender_key) = {
+            let (addr, key) = sim
+                .keystore()
+                .accounts()
+                .next()
+                .expect("at least one account");
+            (*addr, key.copy())
+        };
+        let gas_object = config
+            .genesis
+            .objects()
+            .iter()
+            .find(|obj| obj.owner == Owner::AddressOwner(sender) && obj.is_gas_coin())
+            .expect("sender should have a gas coin in genesis")
+            .clone();
 
         let registry = Registry::new();
+        let initial_tip = services.initial_subscription_tip()?;
         let (checkpoint_sender, subscription_handle) =
-            SubscriptionService::build(&registry, None, None, None, None);
-
+            SubscriptionService::build(&registry, None, None, None, None, Some(initial_tip));
         // Service-backed on purpose: subscribers are published to by the
         // indexer's broadcast pipeline, so a service-less context would
         // exercise a publication path production never takes.
@@ -140,13 +180,36 @@ impl ServerHarness {
                 return Ok(Self {
                     server_task,
                     grpc_endpoint,
+                    sender,
+                    sender_key,
+                    gas_object,
+                    reference_gas_price,
                     _temp: temp,
-                    _gql_server: gql_server,
+                    gql_server,
                 });
             }
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
         Err(anyhow!("timed out waiting for gRPC server to bind"))
+    }
+
+    fn build_transfer_tx(&self, gas_ref: ObjectRef, amount: u64) -> Transaction {
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.transfer_sui(SuiAddress::random_for_testing_only(), Some(amount));
+            builder.finish()
+        };
+        let tx_data = TransactionData::new_with_gas_data(
+            TransactionKind::ProgrammableTransaction(pt),
+            self.sender,
+            GasData {
+                payment: vec![gas_ref],
+                owner: self.sender,
+                price: self.reference_gas_price,
+                budget: 100_000_000,
+            },
+        );
+        Transaction::from_data_and_signer(tx_data, vec![&self.sender_key])
     }
 }
 
@@ -308,6 +371,173 @@ async fn advance_clock_creates_and_streams_checkpoint() -> Result<()> {
         checkpoint_sequence_number
     );
     assert_eq!(status.timestamp_ms, clock.timestamp_ms);
+
+    Ok(())
+}
+
+fn sender_filter(address: SuiAddress) -> TransactionFilter {
+    let mut sender = SenderFilter::default();
+    sender.address = Some(address.to_string());
+    let mut literal = TransactionLiteral::default();
+    literal.predicate = Some(Predicate::Sender(sender));
+    let mut term = TransactionTerm::default();
+    term.literals = vec![literal];
+    let mut filter = TransactionFilter::default();
+    filter.terms = vec![term];
+    filter
+}
+
+#[tokio::test]
+async fn idle_fork_emits_initial_start_frames_without_new_checkpoints() -> Result<()> {
+    let harness = ServerHarness::start().await?;
+    let mut subscriptions =
+        SubscriptionServiceClient::connect(harness.grpc_endpoint.clone()).await?;
+
+    // Fresh idle fork at genesis (checkpoint 0): streams whose contract begins
+    // with a progress-only start frame must yield it immediately, without
+    // waiting for checkpoint 1.
+    let mut unfiltered_tx = subscriptions
+        .subscribe_transactions(SubscribeTransactionsRequest::default())
+        .await?
+        .into_inner();
+    let mut filtered_tx_request = SubscribeTransactionsRequest::default();
+    filtered_tx_request.filter = Some(sender_filter(harness.sender));
+    let mut filtered_tx = subscriptions
+        .subscribe_transactions(filtered_tx_request)
+        .await?
+        .into_inner();
+    let mut unfiltered_ev = subscriptions
+        .subscribe_events(SubscribeEventsRequest::default())
+        .await?
+        .into_inner();
+    let mut filtered_cp_request = SubscribeCheckpointsRequest::default();
+    filtered_cp_request.filter = Some(sender_filter(harness.sender));
+    let mut filtered_cp = subscriptions
+        .subscribe_checkpoints(filtered_cp_request)
+        .await?
+        .into_inner();
+
+    for stream in [&mut unfiltered_tx, &mut filtered_tx] {
+        let frame = tokio::time::timeout(STREAM_RECV_TIMEOUT, stream.message())
+            .await?
+            .map_err(|e| anyhow!("transaction stream error: {e}"))?
+            .ok_or_else(|| anyhow!("transaction stream closed before start frame"))?;
+        assert!(frame.transaction.is_none());
+        let watermark = frame.watermark.expect("start frame carries a watermark");
+        assert_eq!(watermark.checkpoint, Some(0));
+        assert!(watermark.cursor.is_some());
+        assert_eq!(
+            watermark
+                .cursor_position
+                .as_ref()
+                .and_then(|position| position.checkpoint),
+            Some(1)
+        );
+    }
+
+    let ev_frame = tokio::time::timeout(STREAM_RECV_TIMEOUT, unfiltered_ev.message())
+        .await?
+        .map_err(|e| anyhow!("event stream error: {e}"))?
+        .ok_or_else(|| anyhow!("event stream closed before start frame"))?;
+    assert!(ev_frame.event.is_none());
+    let ev_watermark = ev_frame.watermark.expect("start frame carries a watermark");
+    assert_eq!(ev_watermark.checkpoint, Some(0));
+    assert!(ev_watermark.cursor.is_some());
+    assert_eq!(
+        ev_watermark
+            .cursor_position
+            .as_ref()
+            .and_then(|position| position.checkpoint),
+        Some(1)
+    );
+
+    let cp_frame = tokio::time::timeout(STREAM_RECV_TIMEOUT, filtered_cp.message())
+        .await?
+        .map_err(|e| anyhow!("checkpoint stream error: {e}"))?
+        .ok_or_else(|| anyhow!("checkpoint stream closed before start frame"))?;
+    assert!(cp_frame.checkpoint.is_none());
+    assert_eq!(cp_frame.cursor, Some(0));
+
+    // Drop all subscribers so checkpoint 1 is broadcast with zero subscribers,
+    // then subscribe on the idle fork again: the new subscriber must immediately
+    // receive its start frame at checkpoint 1 (position 2) without a checkpoint 2.
+    drop((unfiltered_tx, filtered_tx, unfiltered_ev, filtered_cp));
+    let mut forking = ForkingServiceClient::connect(harness.grpc_endpoint.clone()).await?;
+    let advanced = forking
+        .advance_checkpoint(AdvanceCheckpointRequest {})
+        .await?
+        .into_inner();
+    assert_eq!(advanced.checkpoint_sequence_number, 1);
+
+    let mut late_tx = subscriptions
+        .subscribe_transactions(SubscribeTransactionsRequest::default())
+        .await?
+        .into_inner();
+    let late_frame = tokio::time::timeout(STREAM_RECV_TIMEOUT, late_tx.message())
+        .await?
+        .map_err(|e| anyhow!("late transaction stream error: {e}"))?
+        .ok_or_else(|| anyhow!("late transaction stream closed before start frame"))?;
+    assert!(late_frame.transaction.is_none());
+    let late_watermark = late_frame
+        .watermark
+        .expect("start frame carries a watermark");
+    assert_eq!(late_watermark.checkpoint, Some(1));
+    assert_eq!(
+        late_watermark
+            .cursor_position
+            .as_ref()
+            .and_then(|position| position.checkpoint),
+        Some(2)
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn idle_fork_execute_transaction_and_wait_for_checkpoint_succeeds() -> Result<()> {
+    use wiremock::Mock;
+    use wiremock::ResponseTemplate;
+    use wiremock::matchers::body_string_contains;
+    use wiremock::matchers::method;
+
+    let harness = ServerHarness::start().await?;
+    Mock::given(method("POST"))
+        .and(body_string_contains("availableRange"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": {
+                "serviceConfig": {
+                    "availableRange": {
+                        "first": { "sequenceNumber": 0 }
+                    }
+                }
+            }
+        })))
+        .mount(&harness.gql_server)
+        .await;
+    Mock::given(method("POST"))
+        .and(body_string_contains("transaction(digest"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": { "transaction": null }
+        })))
+        .mount(&harness.gql_server)
+        .await;
+
+    let client = RpcClient::new(&harness.grpc_endpoint)?;
+    let mut gas_ref = harness.gas_object.compute_object_reference();
+    for i in 1..=5 {
+        let tx = harness.build_transfer_tx(gas_ref, 1_000);
+        let expected_digest = *tx.digest();
+        let executed = tokio::time::timeout(
+            STREAM_RECV_TIMEOUT,
+            client.execute_transaction_and_wait_for_checkpoint(&tx),
+        )
+        .await
+        .map_err(|_| {
+            anyhow!("execute_transaction_and_wait_for_checkpoint timed out on tx {i}")
+        })??;
+        assert_eq!(executed.transaction.digest(), expected_digest);
+        gas_ref = executed.effects.gas_object().unwrap().0;
+    }
 
     Ok(())
 }
