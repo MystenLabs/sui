@@ -189,6 +189,13 @@ impl EpochState {
             &self.bytecode_verifier_metrics,
             verifier_signing_config,
         )?;
+        sui_transaction_checks::guardrails::check_guardrails_for_signing(
+            &self.protocol_config,
+            self.epoch_start_state.epoch(),
+            tx_data,
+            checked_input_objects.inner(),
+            |id| store.backing_store().get_object(id),
+        )?;
 
         let transaction_data = transaction.data().transaction_data();
         let (kind, signer, gas_data) = transaction_data.execution_parts();

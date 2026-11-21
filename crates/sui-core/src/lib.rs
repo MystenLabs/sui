@@ -29,7 +29,6 @@ pub mod execution_scheduler;
 mod fallback_fetch;
 pub mod gasless_rate_limiter;
 pub mod global_state_hasher;
-pub mod guardrails;
 pub mod metrics;
 pub mod mock_checkpoint_builder;
 pub mod mock_consensus;

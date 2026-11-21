@@ -1192,7 +1192,13 @@ impl AuthorityState {
             epoch_store,
         )?;
 
-        self.handle_guardrails_checks(tx_data, epoch_store)?;
+        sui_transaction_checks::guardrails::check_guardrails_for_signing(
+            epoch_store.protocol_config(),
+            epoch_store.epoch(),
+            tx_data,
+            checked_input_objects.inner(),
+            |id| self.get_object_cache_reader().get_object(id),
+        )?;
 
         Ok(checked_input_objects)
     }
@@ -2376,10 +2382,6 @@ impl AuthorityState {
                 error: "simulate with checks disabled is not allowed on this node".to_string(),
             }
             .into());
-        }
-
-        if checks.enabled() {
-            self.handle_guardrails_checks(&transaction, &epoch_store)?;
         }
 
         let transaction_deny_config = self

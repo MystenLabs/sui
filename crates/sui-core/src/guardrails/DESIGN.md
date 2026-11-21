@@ -471,6 +471,14 @@ transactions and one new rule in the transaction model for it.
   only declared inputs. No dependency is missed, because only the owner declares a policy and only
   as a mutable input, so nothing takes a non-exclusive write on it.
 - Implementation note: backtest does not add the policy input yet.
+- Implementation note: the signing checks are one function,
+  `sui_transaction_checks::guardrails::check_guardrails_for_signing`. Validators call it at signing,
+  and simulation with checks enabled and simulacrum call it before they execute.
+- Implementation note: `SenderSignedData::is_consensus_tx` looks only at declared shared inputs,
+  since it has no access to state. A transaction with only owned inputs from an account with an
+  active policy goes through consensus on the policy, but submission and the latency metrics
+  treat it as single-writer, and the direct sequencing mode of the mock consensus in unit tests
+  does not sequence it.
 - Implementation note: the registry is created at genesis only. A network that started without it
   needs an end-of-epoch creation transaction, which is a follow-up.
 - Implementation note: the signing checks for gasless transactions, withdrawals from other

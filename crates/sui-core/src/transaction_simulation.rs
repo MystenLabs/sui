@@ -11,7 +11,9 @@ use sui_config::{
     transaction_deny_config::TransactionDenyConfig, verifier_signing_config::VerifierSigningConfig,
 };
 use sui_execution::Executor;
-use sui_transaction_checks::{check_dev_inspect_input, check_transaction_input};
+use sui_transaction_checks::{
+    check_dev_inspect_input, check_transaction_input, guardrails::check_guardrails_for_signing,
+};
 use sui_types::{
     base_types::{EpochId, ObjectID, ObjectRef, SystemObjectVersions},
     coin_reservation::{CoinReservationResolverTrait, ParsedDigest},
@@ -175,7 +177,7 @@ pub fn simulate_transaction(
             validity_check_context.reference_gas_price,
         )?
     } else {
-        check_transaction_input(
+        let checked_input_objects = check_transaction_input(
             protocol_config,
             validity_check_context.reference_gas_price,
             &transaction,
@@ -183,7 +185,15 @@ pub fn simulate_transaction(
             &receiving_objects,
             bytecode_verifier_metrics,
             verifier_signing_config,
-        )?
+        )?;
+        check_guardrails_for_signing(
+            protocol_config,
+            execution_epoch_id,
+            &transaction,
+            checked_input_objects.inner(),
+            |id| backing_store.get_object(id),
+        )?;
+        checked_input_objects
     };
 
     let (mut kind, signer, gas_data) = transaction.execution_parts();
