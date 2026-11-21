@@ -24,8 +24,12 @@ balance must stay under that coin type's limit. A coin type without a limit cann
 
 "The account's coins and address balance" means exactly two things:
 
-- `Coin<T>` objects owned by the address, and
+- `Coin<T>` objects owned by the address alone, either as an address owned or as a consensus
+  address owned object, and
 - the address balance of `T`.
+
+A coin with several party owners has no single account to count it against, so a transaction
+from an account with an active policy cannot take one as an input.
 
 What a transaction takes out is the net decrease of the two together:
 
@@ -282,6 +286,7 @@ fn check_guardrails(tx) -> Result<(), ExecutionError> {
     let Some(policy) = input_policy(tx.sender) else { return Ok(()) };   // consensus added it only if active
     if !policy.is_active(epoch) || tx.gas_owner == policy.guardian { return Ok(()) }
     ensure!(policy_is_mutable_input, GuardrailsViolation { kind: PolicyNotWritable });
+    ensure!(no_party_coin_input, GuardrailsViolation { kind: PartyCoin });
 
     for (ty, amount) in sender_outflow(tx.sender) {                       // the formula in The rule
         let spent = if policy.spent_epoch == epoch { policy.spent[ty] } else { 0 };
@@ -299,6 +304,8 @@ enum GuardrailsViolationKind {
     BudgetExhausted { coin_type: TypeTag },
     /// The transaction declares the policy object without write access.
     PolicyNotWritable,
+    /// The transaction takes a coin with party owners, which the rule does not count.
+    PartyCoin,
 }
 ```
 
@@ -326,29 +333,35 @@ for input in tx.shared_input_objects() where input is a Policy {
 }
 // A gasless transaction may not write an object, and the check records the spend in the policy.
 ensure!(!(tx.is_gasless() && has_active_policy(tx.sender())));
-// A transaction reaches its gas owner's SUI beyond the gas it pays only through the gas coin
-// argument. A gas owner with a policy loses at most the gas budget of a transaction that does not
-// use it.
+// Execution fails it too, since a coin can become party owned after signing. Refusing it here
+// saves the sender the gas.
+ensure!(!(has_active_policy(tx.sender()) && tx.shared_inputs().any(is_party_owned_coin)));
+// Apart from a withdrawal, a transaction reaches its gas owner's SUI beyond the gas it pays only
+// through the gas coin argument. A gas owner with a policy loses at most the gas budget of a
+// transaction that uses neither.
 ensure!(tx.gas_owner() == tx.sender() || !tx.uses_gas_coin() || !has_active_policy(tx.gas_owner()));
-// No allowance withdrawal from an account with a policy.
-for funder in allowance_funders(tx) { ensure!(!has_active_policy(funder)); }
+// No withdrawal from another account with a policy, as the sponsor or under an allowance.
+for account in tx.withdrawals().filter(|w| !w.is_seizure()).map(|w| w.account()).filter(|a| a != tx.sender()) {
+    ensure!(!has_active_policy(account));
+}
 ```
 
 The last two are what makes "only the sender's policy" enough. A stolen key can sign as the gas
 owner of the attacker's transaction, and that transaction can take SUI straight out of the gas coin.
-It can also grant an allowance that the attacker then withdraws from. Both move the account's value
-in a transaction the account did not send. So an account with an active policy can pay the gas of
-another account's transaction only if the transaction leaves the gas coin alone, and cannot fund an
-allowance.
+It can also grant an allowance that the attacker then withdraws from, or name itself as the sponsor
+of a withdrawal. All of these move the account's value in a transaction the account did not send.
+So an account with an active policy can pay the gas of another account's transaction only if the
+transaction leaves the gas coin alone, and no transaction of another account can withdraw from it.
 
 A third way exists and is out of scope: the issuer of a regulated coin can seize it from a frozen
 address (`WithdrawFrom::FrozenAddress`). The policy bounds the account's key, and seizure does not
 use it.
 
-The checks on the gas owner, gasless transactions and allowances depend only on whether a policy is
+The checks on gasless transactions, the gas owner and withdrawals depend only on whether a policy is
 active this epoch, which does not change within the epoch, so every validator decides the same. The
-check on declared policies depends on whether a declared object is a policy, which changes when a
-policy is created. A policy created in the current epoch is not active yet, so a validator that
+check on party coins depends on the latest owner of an input, and execution repeats it. The check on
+declared policies depends on whether a declared object is a policy, which changes when a policy is
+created. A policy created in the current epoch is not active yet, so a validator that
 signs before it sees the policy only lets another account contend on a policy that no transaction
 of its owner depends on yet.
 
@@ -382,8 +395,11 @@ Each of these can be added later without changing the policy object or how a tra
   accounts. Until then the guardian sponsors those transfers.
 - **Gas in the budget.** It needs the spend written on the failure path too, after the transaction's
   writes are dropped, next to the gas coin handling.
-- **The account as the gas owner of a transaction that uses the gas coin, or as an allowance
-  funder.** Refused today. Supporting it means taking more than one policy per transaction.
+- **The account as the gas owner of a transaction that uses the gas coin, or as the source of
+  another account's withdrawal.** Refused today. Supporting it means taking more than one policy
+  per transaction.
+- **Coins with party owners.** Refused today. Counting them needs a rule for which owner a coin
+  shared by several accounts counts against.
 - **Gasless transactions.** Refused today. Supporting them means letting a gasless transaction
   write the policy and deciding who pays for that write.
 
