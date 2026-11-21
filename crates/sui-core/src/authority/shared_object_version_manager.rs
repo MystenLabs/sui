@@ -7,6 +7,7 @@ use mysten_common::debug_fatal;
 use crate::authority::AuthorityPerEpochStore;
 use crate::authority::authority_per_epoch_store::CancelConsensusCertificateReason;
 use crate::execution_cache::ObjectCacheRead;
+use crate::guardrails::{implicit_policy_key, policy_input_from_effects};
 use either::Either;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -25,6 +26,7 @@ use sui_types::crypto::RandomnessRound;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::executable_transaction::VerifiedExecutableTransactionWithAliases;
+use sui_types::guardrails::implicit_shared_input;
 use sui_types::storage::{
     ObjectKey, transaction_non_shared_input_object_keys, transaction_receiving_object_keys,
 };
@@ -341,15 +343,26 @@ impl SharedObjVerManager {
     where
         T: AsTx + 'a,
     {
+        let guardrails_inputs: Vec<Option<ConsensusObjectSequenceKey>> = assignables
+            .clone()
+            .map(|a| implicit_policy_key(epoch_store, cache_reader, a.as_tx()?.transaction_data()))
+            .collect();
         let mut shared_input_next_versions = get_or_init_versions(
             assignables
                 .clone()
-                .flat_map(|a| a.shared_input_objects(epoch_store)),
+                .flat_map(|a| a.shared_input_objects(epoch_store))
+                .chain(
+                    guardrails_inputs
+                        .iter()
+                        .flatten()
+                        .copied()
+                        .map(implicit_shared_input),
+                ),
             epoch_store,
             cache_reader,
         )?;
         let mut assigned_versions = Vec::new();
-        for assignable in assignables {
+        for (assignable, guardrails_input) in assignables.zip_debug_eq(guardrails_inputs) {
             assert!(
                 !matches!(assignable, Schedulable::AccumulatorSettlement(_, _))
                     || epoch_store.accumulators_enabled(),
@@ -359,6 +372,7 @@ impl SharedObjVerManager {
             let cert_assigned_versions = Self::assign_versions_for_certificate(
                 epoch_store,
                 assignable,
+                guardrails_input,
                 &mut shared_input_next_versions,
                 cancelled_txns,
             );
@@ -388,20 +402,41 @@ impl SharedObjVerManager {
         // of a consensus object in an epoch by reading the current version from the object store.
         // This must be done before we mutate it the first time, otherwise we would be initializing
         // it with the wrong version.
+        let guardrails_inputs: Vec<Option<ConsensusObjectSequenceKey>> = certs_and_effects
+            .iter()
+            .map(|(cert, effects, _)| {
+                policy_input_from_effects(
+                    epoch_store,
+                    cache_reader,
+                    cert.transaction_data(),
+                    effects,
+                )
+            })
+            .collect();
         let _ = get_or_init_versions(
-            certs_and_effects.iter().flat_map(|(cert, _, _)| {
-                cert.transaction_data().shared_input_objects().into_iter()
-            }),
+            certs_and_effects
+                .iter()
+                .flat_map(|(cert, _, _)| cert.transaction_data().shared_input_objects().into_iter())
+                .chain(
+                    guardrails_inputs
+                        .iter()
+                        .flatten()
+                        .copied()
+                        .map(implicit_shared_input),
+                ),
             epoch_store,
             cache_reader,
         );
         let mut assigned_versions = Vec::new();
-        for (cert, effects, accumulator_version) in certs_and_effects {
+        for ((cert, effects, accumulator_version), guardrails_input) in
+            certs_and_effects.iter().zip_debug_eq(guardrails_inputs)
+        {
             let initial_version_map: BTreeMap<_, _> = cert
                 .transaction_data()
                 .shared_input_objects()
                 .into_iter()
                 .map(|input| input.into_id_and_version())
+                .chain(guardrails_input)
                 .collect();
             // Implicitly read system objects retrieve their accessed versions from this map.
             let accessed_versions: BTreeMap<ObjectID, SequenceNumber> = effects
@@ -496,10 +531,14 @@ impl SharedObjVerManager {
     pub fn assign_versions_for_certificate(
         epoch_store: &AuthorityPerEpochStore,
         assignable: &Schedulable<impl AsTx>,
+        guardrails_input: Option<ConsensusObjectSequenceKey>,
         shared_input_next_versions: &mut HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
     ) -> AssignedVersions {
-        let shared_input_objects: Vec<_> = assignable.shared_input_objects(epoch_store).collect();
+        let shared_input_objects: Vec<_> = assignable
+            .shared_input_objects(epoch_store)
+            .chain(guardrails_input.map(implicit_shared_input))
+            .collect();
 
         let system_object_versions = SystemObjectVersions::from_map(
             implicitly_read_system_objects(epoch_store)

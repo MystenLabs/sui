@@ -381,6 +381,9 @@ pub enum UserInputError {
 
     #[error("Validator {proposer} is not an allowed proposer of this transaction")]
     ProposerNotAllowed { proposer: u32 },
+
+    #[error("Transaction cannot pass the guardrails policy of {account}: {reason}")]
+    GuardrailsViolation { account: SuiAddress, reason: String },
 }
 
 #[derive(

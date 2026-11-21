@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::guardrails::assigned_policy_input;
 use crate::{
     accumulators::funds_read::AccountFundsRead,
     authority::{
@@ -212,9 +213,15 @@ impl ExecutionScheduler {
         let digests = [*tx_digest];
 
         let tx_data = cert.transaction_data();
-        let input_object_kinds = tx_data
+        let mut input_object_kinds = tx_data
             .input_objects()
             .expect("input_objects() cannot fail");
+        if epoch_store.protocol_config().enable_guardrails() {
+            input_object_kinds.extend(assigned_policy_input(
+                tx_data,
+                &execution_env.assigned_versions,
+            ));
+        }
         let mut input_object_keys: Vec<_> = epoch_store
             .get_input_object_keys(
                 &cert.key(),

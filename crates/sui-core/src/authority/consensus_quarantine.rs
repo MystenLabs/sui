@@ -7,6 +7,8 @@ use crate::authority::authority_per_epoch_store::{
 use crate::authority::transaction_deferral::DeferralKey;
 use crate::checkpoints::BuilderCheckpointSummary;
 use crate::epoch::randomness::SINGLETON_KEY;
+use crate::execution_cache::ObjectCacheRead;
+use crate::guardrails::implicit_policy_key;
 use dashmap::DashMap;
 use fastcrypto_threshold::{dkg_v1, nodes::PartyId};
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
@@ -931,6 +933,7 @@ impl ConsensusOutputQuarantine {
     pub(crate) fn load_initial_object_debts(
         &self,
         epoch_store: &AuthorityPerEpochStore,
+        cache_reader: &dyn ObjectCacheRead,
         current_round: Round,
         for_randomness: bool,
         transactions: &[VerifiedExecutableTransactionWithAliases],
@@ -957,7 +960,14 @@ impl ConsensusOutputQuarantine {
         };
         let mut shared_input_object_ids: Vec<_> = transactions
             .iter()
-            .flat_map(|tx| tx.tx().shared_input_objects().map(|obj| obj.id))
+            .flat_map(|tx| {
+                let guardrails_key =
+                    implicit_policy_key(epoch_store, cache_reader, tx.tx().transaction_data());
+                tx.tx()
+                    .shared_input_objects()
+                    .map(|obj| obj.id)
+                    .chain(guardrails_key.map(|(id, _)| id))
+            })
             .collect();
         shared_input_object_ids.sort();
         shared_input_object_ids.dedup();

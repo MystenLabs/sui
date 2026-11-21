@@ -64,6 +64,7 @@ pub mod gas_coin;
 pub mod gas_model;
 pub mod global_state_hash;
 pub mod governance;
+pub mod guardrails;
 pub mod id;
 pub mod in_memory_storage;
 pub mod inner_temporary_store;
@@ -146,6 +147,7 @@ built_in_ids! {
     SUI_ACCUMULATOR_ROOT_ADDRESS / SUI_ACCUMULATOR_ROOT_OBJECT_ID = 0xacc;
     SUI_ADDRESS_ALIAS_STATE_ADDRESS / SUI_ADDRESS_ALIAS_STATE_OBJECT_ID = 0xa;
     SUI_FORWARDING_ADDRESS_REGISTRY_ADDRESS / SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID = 0xfa;
+    SUI_GUARDRAILS_REGISTRY_ADDRESS / SUI_GUARDRAILS_REGISTRY_OBJECT_ID = 0xab;
 }
 
 pub const SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;

@@ -491,6 +491,7 @@ impl<'a> ObjectRuntime<'a> {
             SUI_DISPLAY_REGISTRY_OBJECT_ID,
             SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
             SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+            sui_types::SUI_GUARDRAILS_REGISTRY_OBJECT_ID,
         ]
         .contains(&id);
         let transfer_result = if self.state.new_ids.contains(&id) {

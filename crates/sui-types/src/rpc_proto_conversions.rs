@@ -1449,6 +1449,8 @@ impl From<crate::execution_status::ExecutionErrorKind> for ExecutionError {
                 message.set_object_id(id.to_canonical_string(true));
                 ExecutionErrorKind::NonExclusiveWriteInputObjectModified
             }
+            // TODO(guardrails): the proto has no kind for this yet.
+            E::GuardrailsViolation { .. } => ExecutionErrorKind::Unknown,
             // TODO: map to a dedicated kind once the sui-rpc proto has one. The description
             // still carries the error text.
             E::TransactionExpired => ExecutionErrorKind::Unknown,

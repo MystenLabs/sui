@@ -18,6 +18,7 @@ use crate::execution_cache::writeback_cache::WritebackCache;
 use crate::execution_scheduler::ExecutionScheduler;
 use crate::execution_scheduler::funds_withdraw_scheduler::FundsSettlement;
 use crate::gasless_rate_limiter::ConsensusGaslessCounter;
+use crate::guardrails::assigned_policy_input;
 use crate::traffic_controller::TrafficController;
 use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use crate::transaction_deny_config_manager::TransactionDenyConfigManager;
@@ -1189,6 +1190,8 @@ impl AuthorityState {
             epoch_store,
         )?;
 
+        self.handle_guardrails_checks(transaction.data(), epoch_store)?;
+
         Ok(checked_input_objects)
     }
 
@@ -1715,11 +1718,18 @@ impl AuthorityState {
             .metrics
             .execution_load_input_objects_latency
             .start_timer();
-        let input_objects = &certificate.data().transaction_data().input_objects()?;
+        let tx_data = certificate.data().transaction_data();
+        let mut input_objects = tx_data.input_objects()?;
+        if epoch_store.protocol_config().enable_guardrails() {
+            input_objects.extend(assigned_policy_input(
+                tx_data,
+                assigned_shared_object_versions,
+            ));
+        }
         self.input_loader.read_objects_for_execution(
             &certificate.key(),
             tx_lock,
-            input_objects,
+            &input_objects,
             assigned_shared_object_versions,
             epoch_store.epoch(),
         )

@@ -55,6 +55,9 @@ use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, TypeTag, is_system_package};
 pub(crate) mod invariants;
 use invariants::InvariantChecker;
 
+mod guardrails;
+use guardrails::GuardrailsTx;
+
 /// Declared allowance ids per `(funder, funds type)` key.
 type AllowanceIds = BTreeMap<(SuiAddress, TypeTag), Vec<ObjectID>>;
 
@@ -147,6 +150,9 @@ pub struct TemporaryStore<'backing> {
     loaded_system_objects: RefCell<BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>>,
 
     unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
+
+    /// Set for user transactions when guardrails are enabled.
+    guardrails: Option<GuardrailsTx>,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -165,7 +171,13 @@ impl<'backing> TemporaryStore<'backing> {
         unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
     ) -> Self {
         let post_execution_check_inputs = PostExecutionCheckInputs::new(transaction);
-        Self::new_with_input_objects(
+        let guardrails = if protocol_config.enable_guardrails() {
+            let (transaction_kind, gas_data, transaction_signer) = transaction;
+            GuardrailsTx::new(transaction_kind, gas_data, transaction_signer)
+        } else {
+            None
+        };
+        let mut store = Self::new_with_input_objects(
             store,
             input_objects,
             receiving_objects,
@@ -175,7 +187,9 @@ impl<'backing> TemporaryStore<'backing> {
             system_object_versions,
             post_execution_check_inputs,
             unsettled_object_funds,
-        )
+        );
+        store.guardrails = guardrails;
+        store
     }
 
     pub(crate) fn new_for_genesis_state_update(
@@ -255,6 +269,7 @@ impl<'backing> TemporaryStore<'backing> {
             system_object_versions,
             loaded_system_objects: RefCell::new(BTreeMap::new()),
             unsettled_object_funds,
+            guardrails: None,
         }
     }
 
@@ -737,6 +752,7 @@ impl<'backing> TemporaryStore<'backing> {
             // Execution outcomes can be discarded.
             execution_results: _,
             invariants: _,
+            guardrails: _,
         } = self;
         let mut bump_only = Self {
             store,
@@ -758,6 +774,7 @@ impl<'backing> TemporaryStore<'backing> {
             unsettled_object_funds,
             execution_results: ExecutionResultsV2::default(),
             invariants: InvariantChecker::default(),
+            guardrails: None,
         };
         // The only writes a BumpOnly exit records: bump the versions of the mutable inputs it locked.
         bump_only.ensure_active_inputs_mutated();
