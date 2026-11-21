@@ -40,7 +40,17 @@ components should model crashes at every persistence point.
 
 ## Status
 
+## Run order
+
+1. `sui-auth-1`: components 19 and 20. Guidance: `specula/sui-auth-guidance.md`.
+2. Components 8, 9, 10 (checkpoint building, checkpoint execution, state sync).
+3. Components 11, 12, 13 (reconfiguration, randomness, protocol upgrade voting).
+4. Components 1, 2 (consensus core and sync).
+5. Remaining medium-priority components.
+
+## Status
+
 - [x] List major components
-- [ ] Choose run order and scope per run
-- [ ] Write guidance file for the first run
-- [ ] Start the first run
+- [x] Choose run order
+- [x] Write guidance file for `sui-auth-1`
+- [ ] Start `sui-auth-1`
