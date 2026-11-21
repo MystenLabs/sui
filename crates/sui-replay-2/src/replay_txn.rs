@@ -23,17 +23,17 @@ use sui_data_store::{
     EpochStore, ObjectKey, ObjectStore, ReadDataStore, TransactionStore, VersionQuery,
 };
 use sui_types::TypeTag;
+use sui_types::consensus_inputs::{added_input, added_input_ids_in_effects};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,
     effects::{
         InputConsensusObject, TransactionEffects, TransactionEffectsAPI, UnchangedConsensusKind,
-        undeclared_consensus_inputs,
     },
     object::Object,
     transaction::{
-        CallArg, Command, GasData, InputObjects, ObjectArg, SharedObjectMutability,
-        TransactionData, TransactionDataAPI, TransactionKind,
+        CallArg, Command, GasData, InputObjects, ObjectArg, TransactionData, TransactionDataAPI,
+        TransactionKind,
     },
 };
 use sui_types::{
@@ -360,7 +360,7 @@ impl ReplayTransaction {
         ))?;
         // Consensus may add mutable shared inputs the transaction does not declare. The effects
         // show them, and the object cache holds every object the effects show.
-        for id in undeclared_consensus_inputs(&self.txn_data, &self.effects) {
+        for id in added_input_ids_in_effects(&self.txn_data, &self.effects) {
             let initial_shared_version = self
                 .object_cache
                 .get(&id)
@@ -369,11 +369,7 @@ impl ReplayTransaction {
                 .ok_or_else(|| {
                     anyhow::anyhow!("consensus object {id} added to {} is missing", self.digest)
                 })?;
-            input_objects_kind.push(InputObjectKind::SharedMoveObject {
-                id,
-                initial_shared_version,
-                mutability: SharedObjectMutability::Mutable,
-            });
+            input_objects_kind.push(added_input(id, initial_shared_version).into());
         }
         for kind in input_objects_kind.iter() {
             match kind {

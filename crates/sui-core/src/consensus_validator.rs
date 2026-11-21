@@ -310,6 +310,7 @@ impl SuiTxValidator {
         epoch_store.check_timestamp_expiration_for_vote(inner_tx.data().transaction_data())?;
 
         self.authority_state.check_system_overload(
+            epoch_store,
             inner_tx.data(),
             self.authority_state.check_system_overload_at_signing(),
         )?;

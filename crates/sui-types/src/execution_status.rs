@@ -318,6 +318,8 @@ pub enum GuardrailsViolationKind {
     BudgetExhausted { coin_type: Box<TypeTag> },
     #[error("the transaction declares the policy object without write access")]
     PolicyNotWritable,
+    #[error("the transaction takes a party owned coin, which the policy does not count")]
+    PartyCoin,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash)]

@@ -42,6 +42,7 @@ pub mod coin_reservation;
 pub mod collection_types;
 pub mod committee;
 pub mod config;
+pub mod consensus_inputs;
 pub mod crypto;
 pub mod deny_list_v1;
 pub mod deny_list_v2;

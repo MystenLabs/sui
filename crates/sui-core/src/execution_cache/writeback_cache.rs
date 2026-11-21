@@ -76,8 +76,9 @@ use sui_types::base_types::{
     VerifiedExecutionData,
 };
 use sui_types::bridge::{Bridge, get_bridge};
+use sui_types::consensus_inputs::added_input_ids_in_effects;
 use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
-use sui_types::effects::{TransactionEffects, TransactionEvents, undeclared_consensus_inputs};
+use sui_types::effects::{TransactionEffects, TransactionEvents};
 #[cfg(test)]
 use sui_types::error::SuiError;
 use sui_types::error::{SuiErrorKind, SuiResult, UserInputError};
@@ -1384,7 +1385,7 @@ impl WritebackCache {
             let outputs = r.value();
             let tx_data = outputs.transaction.transaction_data();
             if !tx_data.shared_input_objects().is_empty()
-                || !undeclared_consensus_inputs(tx_data, &outputs.effects).is_empty()
+                || !added_input_ids_in_effects(tx_data, &outputs.effects).is_empty()
             {
                 debug_fatal!("transaction must be single writer");
             }

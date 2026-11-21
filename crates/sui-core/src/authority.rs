@@ -1389,6 +1389,7 @@ impl AuthorityState {
 
     pub(crate) fn check_system_overload(
         &self,
+        epoch_store: &AuthorityPerEpochStore,
         tx_data: &SenderSignedData,
         do_authority_overload_check: bool,
     ) -> SuiResult {
@@ -1398,7 +1399,7 @@ impl AuthorityState {
             })?;
         }
         let shared_input_objects = sequenced_shared_inputs(
-            &self.load_epoch_store_one_call_per_task(),
+            epoch_store,
             self.get_object_cache_reader().as_ref(),
             tx_data.transaction_data(),
         );

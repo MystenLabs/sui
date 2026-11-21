@@ -16,7 +16,8 @@
 use sui_types::{
     base_types::SuiAddress,
     error::{SuiResult, UserInputError},
-    guardrails::{Policy, allowance_funders, policy_object_id, sender_policy_id},
+    guardrails::{Policy, other_withdrawal_accounts, policy_object_id, sender_policy_id},
+    object::Owner,
     transaction::{SharedObjectMutability, TransactionData, TransactionDataAPI, TransactionKind},
 };
 
@@ -51,14 +52,26 @@ impl AuthorityState {
                 .filter(|policy| policy.is_active(epoch))
         };
 
-        // Only its owner may declare a policy, and only with write access: every transaction of
-        // the owner depends on the object, so nobody else gets to contend on it, and a read-only
-        // declaration would keep execution from recording the spend.
+        let sender_policy = active_policy(sender);
         for input in tx_data.shared_input_objects() {
-            let Some(policy) = cache
-                .get_object(&input.id)
-                .and_then(|object| Policy::from_object(&object))
-            else {
+            let Some(object) = cache.get_object(&input.id) else {
+                continue;
+            };
+            // Execution counts only coins with a single owner, and fails a transaction that
+            // takes a party coin. Refusing it here saves the sender the gas.
+            if sender_policy.is_some()
+                && matches!(object.owner(), Owner::Party { .. })
+                && object.is_coin()
+            {
+                return violation(
+                    sender,
+                    "an account with an active policy cannot use a party owned coin",
+                );
+            }
+            // Only its owner may declare a policy, and only with write access: every transaction
+            // of the owner depends on the object, so nobody else gets to contend on it, and a
+            // read-only declaration would keep execution from recording the spend.
+            let Some(policy) = Policy::from_object(&object) else {
                 continue;
             };
             if policy.owner != sender {
@@ -74,16 +87,17 @@ impl AuthorityState {
 
         // A gasless transaction may not write an object, and execution records the spend in
         // the policy, so the transaction could only fail.
-        if tx_data.is_gasless_transaction() && active_policy(sender).is_some() {
+        if tx_data.is_gasless_transaction() && sender_policy.is_some() {
             return violation(
                 sender,
                 "an account with an active policy cannot send gasless transactions",
             );
         }
 
-        // Execution checks the sender's policy only. A transaction reaches the funds of its gas
-        // owner beyond the gas it pays only through `Argument::GasCoin`, so a gas owner with a
-        // policy can lose at most the gas budget of a transaction that does not use it.
+        // Execution checks the sender's policy only. Apart from a withdrawal, checked below, a
+        // transaction reaches the funds of its gas owner beyond the gas it pays only through
+        // `Argument::GasCoin`, so a gas owner with a policy can lose at most the gas budget of a
+        // transaction that uses neither.
         let gas_owner = tx_data.gas_owner();
         if gas_owner != sender
             && let TransactionKind::ProgrammableTransaction(ptb) = tx_data.kind()
@@ -100,12 +114,12 @@ impl AuthorityState {
             );
         }
 
-        // Likewise for a withdrawal from another account under an allowance.
-        for funder in allowance_funders(tx_data.kind(), sender) {
-            if active_policy(funder).is_some() {
+        // Likewise for a withdrawal from another account, as its sponsor or under an allowance.
+        for account in other_withdrawal_accounts(tx_data) {
+            if active_policy(account).is_some() {
                 return violation(
-                    funder,
-                    "an account with an active policy cannot fund an allowance withdrawal",
+                    account,
+                    "a transaction cannot withdraw from another account that has an active policy",
                 );
             }
         }

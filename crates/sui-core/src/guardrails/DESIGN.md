@@ -469,5 +469,10 @@ transactions and one new rule in the transaction model for it.
 - Implementation note: backtest does not add the policy input yet.
 - Implementation note: the registry is created at genesis only. A network that started without it
   needs an end-of-epoch creation transaction, which is a follow-up.
-- Implementation note: the signing checks for gasless transactions and allowance funders have no
-  test yet.
+- Implementation note: the signing checks for gasless transactions, withdrawals from other
+  accounts and party coins, and the `PartyCoin` execution check, have no test yet. Validity
+  checks reject sponsor withdrawals today, and no test path creates a coin with several party
+  owners yet.
+- Implementation note: a consensus object that effects show was added to a transaction but that
+  the store does not hold is fatal during checkpoint execution, since running the transaction
+  without it would produce other effects than the certified ones.
