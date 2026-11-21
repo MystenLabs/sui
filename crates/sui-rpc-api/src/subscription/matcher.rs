@@ -222,9 +222,8 @@ struct Subscriber {
     guard: SubscriptionLifecycleGuard,
     /// Checkpoints processed since this subscriber last received any frame.
     checkpoints_since_frame: u32,
-    /// Whether this subscriber still needs its initial progress frame. Enabled
-    /// for every transaction and event subscriber and filtered checkpoint
-    /// subscribers.
+    /// Whether this subscriber's initial progress frame is still pending: set
+    /// when the subscription requires one and none was emitted at registration.
     needs_start_frame: bool,
     /// Anchor keys this subscriber registered (one per term), for O(terms)
     /// removal.
