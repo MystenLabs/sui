@@ -242,7 +242,7 @@ impl AuthorityPerpetualTables {
         use typed_store::tidehunter_util::{
             Bytes, Decision, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
             default_cells_per_mutex, default_max_dirty_keys, default_mutex_count,
-            default_value_cache_size,
+            default_value_cache_size, promote_objects,
         };
         let mutexes = default_mutex_count() * 2;
         let transaction_mutexes = mutexes * 4;
@@ -279,6 +279,9 @@ impl AuthorityPerpetualTables {
             .with_value_cache_size(2 * value_cache_size);
         if matches!(db_options_override, Some(options) if options.enable_objects_compactor) {
             objects_config = objects_config.with_compactor(Box::new(objects_compactor));
+        }
+        if promote_objects() {
+            objects_config = objects_config.with_promote_during_relocation(true);
         }
 
         let configs = vec![
