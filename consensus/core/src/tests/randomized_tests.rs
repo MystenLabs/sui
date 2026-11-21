@@ -9,7 +9,10 @@ use crate::{
     block::Slot,
     commit::DEFAULT_WAVE_LENGTH,
     commit_test_fixture::{CommitTestFixture, RandomDag, assert_commit_sequences_match},
-    test_dag::{RandomDagEquivocationConfig, create_random_dag},
+    test_dag::{
+        RandomDagEquivocationConfig, RandomDagTransactionConfig, create_random_dag,
+        create_random_dag_with_transactions,
+    },
 };
 
 const NUM_RUNS: u32 = 100;
@@ -221,6 +224,72 @@ async fn test_randomized_dag_with_equivocations() {
                          equivocations_per_authority={equivocations_per_authority}"
                     );
                 }
+            }
+        }
+    }
+}
+
+/// Randomized delivery must not make honest authorities finalize different sets of
+/// rejected transactions. Blocks carry transactions and random reject votes, so commits
+/// go through direct, quorum and indirect finalization in the CommitFinalizer.
+#[tokio::test]
+async fn test_randomized_dag_with_rejected_transactions() {
+    let num_authorities = 7;
+    let num_rounds = 100;
+    let transaction_config = RandomDagTransactionConfig {
+        num_transactions: 4,
+        rejected_transactions_pct: 30,
+    };
+    for include_leader_percentage in [100u64, 50] {
+        for equivocations_per_authority in [0usize, 1] {
+            let equivocation_config = RandomDagEquivocationConfig {
+                equivocation_rate: 100,
+                max_equivocators: usize::MAX,
+                equivocations_per_authority,
+            };
+            for seed in [7u64, 42, 2026] {
+                let context = CommitTestFixture::context_with_options(num_authorities, 0, Some(6));
+                let dag_builder = create_random_dag_with_transactions(
+                    seed,
+                    include_leader_percentage,
+                    num_rounds,
+                    context.clone(),
+                    equivocation_config,
+                    transaction_config,
+                );
+                let all_blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
+                let dag = RandomDag::from_blocks(context.clone(), all_blocks);
+                let mut delivery_rng = StdRng::seed_from_u64(seed);
+                let mut commit_sequences = vec![];
+
+                for _ in 0..EQUIVOCATION_DELIVERY_PERMUTATIONS {
+                    let mut fixture = CommitTestFixture::new(context.clone());
+                    let mut finalized_commits = vec![];
+                    let mut last_decided = Slot::new_for_test(0, 0);
+
+                    for block in dag.random_iter(&mut delivery_rng, MAX_STEP) {
+                        fixture.try_accept_blocks(vec![block]);
+                        let (finalized, new_last_decided) = fixture.try_commit(last_decided).await;
+                        finalized_commits.extend(finalized);
+                        last_decided = new_last_decided;
+                    }
+
+                    assert!(fixture.has_no_suspended_blocks());
+                    commit_sequences.push(finalized_commits);
+                }
+
+                let commits = assert_commit_sequences_match(commit_sequences);
+                let rejected_transactions = commits
+                    .iter()
+                    .flat_map(|commit| commit.rejected_transactions_by_block.values())
+                    .map(|transactions| transactions.len())
+                    .sum::<usize>();
+                assert!(
+                    rejected_transactions > 0,
+                    "no transaction was rejected for seed={seed} \
+                     include_leader_percentage={include_leader_percentage} \
+                     equivocations_per_authority={equivocations_per_authority}"
+                );
             }
         }
     }
