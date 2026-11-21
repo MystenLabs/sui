@@ -91,6 +91,14 @@ impl TemporaryStore<'_> {
                 GuardrailsViolationKind::PolicyNotWritable,
             ));
         }
+        // The outflow counts coins with a single owner only.
+        if self
+            .input_objects
+            .values()
+            .any(|object| matches!(object.owner, Owner::Party { .. }) && object.is_coin())
+        {
+            return Err(violation(sender, GuardrailsViolationKind::PartyCoin));
+        }
         let outflow = self.sender_outflow(sender);
         if outflow.is_empty() {
             return Ok(());

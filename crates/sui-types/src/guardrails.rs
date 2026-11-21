@@ -23,12 +23,12 @@ use crate::{
     base_types::{ObjectID, SuiAddress},
     collection_types::{Entry, VecMap},
     committee::EpochId,
+    consensus_inputs::added_input,
     derived_object::derive_object_id,
     id::UID,
     object::Object,
     transaction::{
-        SharedInputObject, SharedObjectMutability, TransactionData, TransactionDataAPI,
-        TransactionKind, WithdrawFrom,
+        SharedInputObject, TransactionData, TransactionDataAPI, TransactionKind, WithdrawFrom,
     },
 };
 use sui_protocol_config::ProtocolConfig;
@@ -174,11 +174,7 @@ pub fn implicit_policy_input(
     if !Policy::from_object(&object)?.is_active(epoch) {
         return None;
     }
-    Some(SharedInputObject {
-        id,
-        initial_shared_version: object.owner().start_version()?,
-        mutability: SharedObjectMutability::Mutable,
-    })
+    Some(added_input(id, object.owner().start_version()?))
 }
 
 /// The policy that binds a transaction: its sender's. `None` for anything but a user
@@ -187,13 +183,17 @@ pub fn sender_policy_id(kind: &TransactionKind, sender: SuiAddress) -> Option<Ob
     matches!(kind, TransactionKind::ProgrammableTransaction(_)).then(|| policy_object_id(sender))
 }
 
-/// The accounts other than `sender` whose address balance the transaction withdraws from under
-/// an allowance.
-pub fn allowance_funders(kind: &TransactionKind, sender: SuiAddress) -> BTreeSet<SuiAddress> {
-    kind.get_funds_withdrawals()
-        .filter_map(|withdrawal| match &withdrawal.withdraw_from {
-            WithdrawFrom::SenderAllowance { funder, .. } if *funder != sender => Some(*funder),
-            _ => None,
+/// The accounts other than the sender whose address balance `tx_data` withdraws from with the
+/// authority of a key: a sponsor or an allowance funder. A seizure from a frozen address uses the
+/// authority of the coin's issuer instead.
+pub fn other_withdrawal_accounts(tx_data: &TransactionData) -> BTreeSet<SuiAddress> {
+    tx_data
+        .kind()
+        .get_funds_withdrawals()
+        .filter(|withdrawal| {
+            !matches!(withdrawal.withdraw_from, WithdrawFrom::FrozenAddress { .. })
         })
+        .map(|withdrawal| withdrawal.owner_for_withdrawal(tx_data))
+        .filter(|account| *account != tx_data.sender())
         .collect()
 }

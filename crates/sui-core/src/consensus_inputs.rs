@@ -9,19 +9,17 @@
 //! assigned objects the transaction does not declare, and in effects they are the accessed
 //! consensus objects it does not declare.
 
-use mysten_common::debug_fatal;
+use mysten_common::fatal;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::ObjectID,
     committee::EpochId,
-    effects::{TransactionEffects, undeclared_consensus_inputs},
+    consensus_inputs::{added_input, added_input_ids_in_effects},
+    effects::TransactionEffects,
     error::SuiResult,
     guardrails::implicit_policy_input,
     object::Object,
-    transaction::{
-        InputObjectKind, SharedInputObject, SharedObjectMutability, TransactionData,
-        TransactionDataAPI,
-    },
+    transaction::{InputObjectKind, SharedInputObject, TransactionData, TransactionDataAPI},
 };
 
 use crate::authority::{
@@ -68,11 +66,7 @@ fn added_shared_inputs(
     assigned_versions
         .iter()
         .filter(|((id, _), _)| declared.iter().all(|input| input.id != *id))
-        .map(|((id, initial_shared_version), _)| SharedInputObject {
-            id: *id,
-            initial_shared_version: *initial_shared_version,
-            mutability: SharedObjectMutability::Mutable,
-        })
+        .map(|((id, initial_shared_version), _)| added_input(*id, *initial_shared_version))
         .collect()
 }
 
@@ -107,21 +101,17 @@ pub(crate) fn shared_inputs_from_effects(
     effects: &TransactionEffects,
 ) -> Vec<SharedInputObject> {
     let mut inputs = tx_data.shared_input_objects();
-    for id in undeclared_consensus_inputs(tx_data, effects) {
+    for id in added_input_ids_in_effects(tx_data, effects) {
         // Effects carry no initial shared version, and the initial shared version of an object
-        // never changes, so the latest version of the object has it.
+        // never changes, so the latest version of the object has it. Without it the transaction
+        // would execute without the input and produce effects other than the certified ones.
         let Some(initial_shared_version) = cache_reader
             .get_object(&id)
             .and_then(|object| object.owner().start_version())
         else {
-            debug_fatal!("consensus object {id} added to {tx_data:?} is missing");
-            continue;
+            fatal!("consensus object {id} added to {tx_data:?} is missing");
         };
-        inputs.push(SharedInputObject {
-            id,
-            initial_shared_version,
-            mutability: SharedObjectMutability::Mutable,
-        });
+        inputs.push(added_input(id, initial_shared_version));
     }
     inputs
 }

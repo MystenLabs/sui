@@ -791,6 +791,8 @@ GuardrailsViolationKind:
               TYPENAME: TypeTag
     1:
       PolicyNotWritable: UNIT
+    2:
+      PartyCoin: UNIT
 IDOperation:
   ENUM:
     0:
