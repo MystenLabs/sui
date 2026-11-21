@@ -30,7 +30,10 @@ finds the most bugs where interleavings, crashes, and message reordering matter.
 | 16 | Pruning | `authority/authority_store_pruner.rs`, `authority/authority_per_epoch_store_pruner.rs`, `epoch/consensus_store_pruner.rs` | Medium | None |
 | 17 | JWK and authenticator state | JWK votes in `authority_per_epoch_store.rs` and `consensus_handler.rs` | Low | None |
 | 18 | Move execution layer | `sui-execution/`, `external-crates/move` | Low | Not a good fit: the code is deterministic and single-threaded |
-| 19 | Sui bridge | `crates/sui-bridge*` | Low | Separate system; out of scope unless requested |
+| 19 | Authorization and authentication | `sui-types/src` (`signature.rs`, `signature_verification.rs`, `multisig.rs`, `zk_login_authenticator.rs`, `passkey_authenticator.rs`, `address_alias.rs`), `sui-core/src/signature_verifier.rs`, alias handling in `authority_per_epoch_store.rs` and `epoch_start_configuration.rs`, transaction voting in `consensus_validator.rs` and `consensus/core/src/transaction_vote_tracker.rs` | High | None |
+| 20 | Transaction validity invariants | `TransactionData::validity_check` in `sui-types/src/transaction.rs`, `sui-transaction-checks/`, `transaction_input_loader.rs`, `transaction_deny_config_manager.rs`, `gasless_rate_limiter.rs`, checks in `authority_server.rs` and `consensus_validator.rs` | High | None |
+
+Component 20 asks whether any validity check that safety relies on can be bypassed. Examples are a check that runs at signing but not on the consensus or checkpoint path, a check that the protocol version or epoch changes between signing and execution, and a check that a system transaction or a rewritten transaction skips.
 
 Crash recovery and restart cut across components 2, 4, 8, 9, 11, and 16. Each run for those
 components should model crashes at every persistence point.
