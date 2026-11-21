@@ -86,7 +86,10 @@ pub struct NetworkRouteMetrics {
     pub excessive_size_responses: IntCounterVec,
     /// Gauge of the number of inflight requests at any given time by route
     pub inflight_requests: IntGaugeVec,
-    /// Failed requests by route
+    /// Failed requests by route. Status is an HTTP status, `grpc_<code>` for a
+    /// non-OK gRPC status, or `unknown` for a service or response body error.
+    /// HTTP failures take precedence over gRPC status. A missing gRPC status
+    /// and a dropped response body do not count as errors on their own.
     pub errors: IntCounterVec,
 }
 

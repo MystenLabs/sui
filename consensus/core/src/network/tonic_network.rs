@@ -1379,26 +1379,76 @@ impl SizedResponse for http::response::Parts {
 
 impl MakeCallbackHandler for MetricsCallbackMaker {
     type RequestHandler = ();
-    type ResponseHandler = MetricsResponseCallback;
+    type ResponseHandler = TonicMetricsResponseCallback;
 
     fn make_handler(
         &self,
         request: &http::request::Parts,
     ) -> (Self::RequestHandler, Self::ResponseHandler) {
-        ((), self.handle_request(request))
+        (
+            (),
+            TonicMetricsResponseCallback {
+                inner: self.handle_request(request),
+                finished: false,
+            },
+        )
     }
 }
 
-impl ResponseHandler for MetricsResponseCallback {
+pub(crate) struct TonicMetricsResponseCallback {
+    inner: MetricsResponseCallback,
+    finished: bool,
+}
+
+impl TonicMetricsResponseCallback {
+    fn on_grpc_status(&mut self, headers: &http::HeaderMap) {
+        if self.finished {
+            return;
+        }
+        if let Some(status) = headers.get("grpc-status") {
+            let code = tonic::Code::from_bytes(status.as_bytes());
+            if code != tonic::Code::Ok {
+                // Parse to a code before constructing the label so arbitrary peer input
+                // cannot create an unbounded set of status labels. Invalid codes
+                // become Unknown (grpc_2).
+                self.inner.on_error_status(&format!("grpc_{}", code as i32));
+            }
+            self.finished = true;
+        }
+    }
+}
+
+impl ResponseHandler for TonicMetricsResponseCallback {
     fn on_response(&mut self, response: &http::response::Parts) {
-        MetricsResponseCallback::on_response(self, response)
+        self.inner.on_response(response);
+        if !response.status.is_success() {
+            self.finished = true;
+        } else {
+            self.on_grpc_status(&response.headers);
+        }
     }
 
     fn on_service_error<E>(&mut self, err: &E)
     where
         E: std::fmt::Display + 'static,
     {
-        MetricsResponseCallback::on_error(self, err)
+        if !self.finished {
+            self.inner.on_error(err);
+            self.finished = true;
+        }
+    }
+
+    fn on_end_of_stream(&mut self, trailers: Option<&http::HeaderMap>) {
+        if let Some(trailers) = trailers {
+            self.on_grpc_status(trailers);
+        }
+    }
+
+    fn on_body_error<E>(&mut self, err: &E)
+    where
+        E: std::fmt::Display + 'static,
+    {
+        self.on_service_error(err);
     }
 }
 
@@ -1558,6 +1608,336 @@ mod tests {
     use consensus_config::{ConsensusProtocolConfig, Parameters, local_committee_and_keys};
     use consensus_types::block::BlockDigest;
     use prometheus::Registry;
+
+    #[rstest::rstest]
+    #[case::header_error(200, Some("13"), None, false, false, Some("grpc_13"))]
+    #[case::trailer_error(200, None, Some("14"), false, false, Some("grpc_14"))]
+    #[case::header_success(200, Some("0"), None, false, false, None)]
+    #[case::trailer_success(200, None, Some("0"), false, false, None)]
+    #[case::http_error(500, None, None, false, false, Some("500 Internal Server Error"))]
+    #[case::http_and_grpc_error(
+        500,
+        Some("13"),
+        Some("14"),
+        false,
+        false,
+        Some("500 Internal Server Error")
+    )]
+    #[case::header_and_trailer_error(200, Some("13"), Some("14"), false, false, Some("grpc_13"))]
+    #[case::body_error(200, None, None, true, false, Some("unknown"))]
+    #[case::header_and_body_error(200, Some("13"), None, true, false, Some("grpc_13"))]
+    #[case::malformed_header(
+        200,
+        Some("peer supplied error text"),
+        None,
+        false,
+        false,
+        Some("grpc_2")
+    )]
+    #[case::out_of_range_trailer(200, None, Some("9999"), false, false, Some("grpc_2"))]
+    #[case::missing_status(200, None, None, false, false, None)]
+    #[case::dropped_body(200, None, Some("13"), false, true, None)]
+    #[tokio::test]
+    async fn test_grpc_error_metrics(
+        #[case] http_status: u16,
+        #[case] header_status: Option<&str>,
+        #[case] trailer_status: Option<&str>,
+        #[case] body_error: bool,
+        #[case] drop_body: bool,
+        #[case] expected_error: Option<&str>,
+    ) {
+        use http_body_util::BodyExt as _;
+        use prometheus::core::Collector as _;
+        use tower::{Layer as _, ServiceExt as _};
+
+        let context = Context::new_for_test(4).0;
+        let metrics = context.metrics.network_metrics.inbound.clone();
+        let layer = CallbackLayer::new(MetricsCallbackMaker::new(metrics.clone(), 1024));
+        let mut frames = vec![Ok(http_body::Frame::data(Bytes::from_static(b"message")))];
+        if let Some(status) = trailer_status {
+            let mut trailers = http::HeaderMap::new();
+            trailers.insert("grpc-status", status.parse().unwrap());
+            frames.push(Ok(http_body::Frame::trailers(trailers)));
+        }
+        if body_error {
+            frames.push(Err(tonic::Status::internal("response body failed")));
+        }
+        let mut response = http::Response::builder()
+            .status(http_status)
+            .header("content-type", "application/grpc")
+            .body(tonic::body::Body::new(http_body_util::StreamBody::new(
+                stream::iter(frames),
+            )))
+            .unwrap();
+        if let Some(status) = header_status {
+            response
+                .headers_mut()
+                .insert("grpc-status", status.parse().unwrap());
+        }
+        let mut response = Some(response);
+        let service = tower::service_fn(move |_request| {
+            let response = response.take().unwrap();
+            async move { Ok::<_, std::convert::Infallible>(response) }
+        });
+        let response = layer
+            .layer(service)
+            .oneshot(
+                http::Request::builder()
+                    .uri("/consensus.ConsensusService/FetchBlocks")
+                    .body(tonic::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            metrics
+                .inflight_requests
+                .with_label_values(&["FetchBlocks"])
+                .get(),
+            1
+        );
+        if drop_body {
+            drop(response);
+        } else {
+            let result = response.into_body().collect().await;
+            assert_eq!(result.is_err(), body_error);
+        }
+        assert_eq!(
+            metrics.requests.with_label_values(&["FetchBlocks"]).get(),
+            1
+        );
+        assert_eq!(
+            metrics
+                .inflight_requests
+                .with_label_values(&["FetchBlocks"])
+                .get(),
+            0
+        );
+        if let Some(status) = expected_error {
+            assert_eq!(
+                metrics
+                    .errors
+                    .with_label_values(&["FetchBlocks", status])
+                    .get(),
+                1
+            );
+        }
+        let errors: f64 = metrics
+            .errors
+            .collect()
+            .iter()
+            .flat_map(|family| family.get_metric())
+            .map(|metric| metric.get_counter().as_ref().unwrap().value())
+            .sum();
+        assert_eq!(errors, if expected_error.is_some() { 1.0 } else { 0.0 });
+    }
+
+    #[tokio::test]
+    async fn test_grpc_body_error_is_counted_once() {
+        let context = Context::new_for_test(4).0;
+        let metrics = context.metrics.network_metrics.inbound.clone();
+        let maker = MetricsCallbackMaker::new(metrics.clone(), 1024);
+        let request = http::Request::builder()
+            .uri("/consensus.ConsensusService/FetchBlocks")
+            .body(())
+            .unwrap();
+        let (_, mut handler) = maker.make_handler(&request.into_parts().0);
+        let response = http::Response::new(());
+        handler.on_response(&response.into_parts().0);
+
+        // Exercise repeated callbacks directly: normal body collection stops at
+        // its first error and would not test this guard.
+        handler.on_body_error(&std::io::Error::other("first body error"));
+        handler.on_body_error(&std::io::Error::other("second body error"));
+        let mut trailers = http::HeaderMap::new();
+        trailers.insert("grpc-status", "14".parse().unwrap());
+        handler.on_end_of_stream(Some(&trailers));
+        drop(handler);
+
+        assert_eq!(
+            metrics
+                .errors
+                .with_label_values(&["FetchBlocks", "unknown"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            metrics
+                .errors
+                .with_label_values(&["FetchBlocks", "grpc_14"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            metrics
+                .inflight_requests
+                .with_label_values(&["FetchBlocks"])
+                .get(),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn test_grpc_service_error_metrics() {
+        use tower::{Layer as _, ServiceExt as _};
+
+        let context = Context::new_for_test(4).0;
+        let metrics = context.metrics.network_metrics.inbound.clone();
+        let layer = CallbackLayer::new(MetricsCallbackMaker::new(metrics.clone(), 1024));
+        let service = tower::service_fn(|_request| async {
+            Err::<http::Response<tonic::body::Body>, _>(std::io::Error::other("service failed"))
+        });
+        let result = layer
+            .layer(service)
+            .oneshot(
+                http::Request::builder()
+                    .uri("/consensus.ConsensusService/FetchBlocks")
+                    .body(tonic::body::Body::empty())
+                    .unwrap(),
+            )
+            .await;
+        assert!(result.is_err());
+        assert_eq!(
+            metrics
+                .errors
+                .with_label_values(&["FetchBlocks", "unknown"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            metrics
+                .inflight_requests
+                .with_label_values(&["FetchBlocks"])
+                .get(),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn test_grpc_handler_error_metrics() {
+        use crate::network::test_network::TestService;
+        use parking_lot::Mutex;
+        use tower::Layer as _;
+
+        let context = Arc::new(Context::new_for_test(4).0);
+        let metrics = context.metrics.network_metrics.inbound.clone();
+        let service = Arc::new(Mutex::new(TestService::new()));
+        let server =
+            ConsensusServiceServer::new(TonicServiceProxy::new(context.clone(), service.clone()));
+        let layer = CallbackLayer::new(MetricsCallbackMaker::new(metrics.clone(), 1024));
+        let mut client = ConsensusServiceClient::new(layer.layer(server));
+
+        // Exercise Tonic's generated client, decoder, handler, and status encoder.
+        let error = client
+            .send_block(SendBlockRequest {
+                block: Bytes::new(),
+            })
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), tonic::Code::Internal);
+        assert_eq!(
+            metrics
+                .errors
+                .with_label_values(&["SendBlock", "grpc_13"])
+                .get(),
+            1
+        );
+
+        let mut request = Request::new(SendBlockRequest {
+            block: Bytes::new(),
+        });
+        request.extensions_mut().insert(PeerInfo {
+            authority_index: context.committee.to_authority_index(0).unwrap(),
+        });
+        client.send_block(request).await.unwrap();
+        assert_eq!(service.lock().handle_send_block.len(), 1);
+        assert_eq!(metrics.requests.with_label_values(&["SendBlock"]).get(), 2);
+        assert_eq!(
+            metrics
+                .errors
+                .with_label_values(&["SendBlock", "grpc_13"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            metrics
+                .inflight_requests
+                .with_label_values(&["SendBlock"])
+                .get(),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn test_grpc_stream_error_metrics() {
+        use tower::Layer as _;
+
+        struct FailingStream;
+
+        impl tonic::server::ServerStreamingService<SendBlockRequest> for FailingStream {
+            type Response = SendBlockResponse;
+            type ResponseStream =
+                Iter<std::vec::IntoIter<Result<SendBlockResponse, tonic::Status>>>;
+            type Future = std::future::Ready<Result<Response<Self::ResponseStream>, tonic::Status>>;
+
+            fn call(&mut self, _request: Request<SendBlockRequest>) -> Self::Future {
+                std::future::ready(Ok(Response::new(iter(vec![
+                    Ok(SendBlockResponse {}),
+                    Err(tonic::Status::unavailable("stream failed")),
+                ]))))
+            }
+        }
+
+        let context = Context::new_for_test(4).0;
+        let metrics = context.metrics.network_metrics.inbound.clone();
+        let layer = CallbackLayer::new(MetricsCallbackMaker::new(metrics.clone(), 1024));
+        let service = tower::service_fn(|request| async {
+            let codec = tonic_prost::ProstCodec::<SendBlockResponse, SendBlockRequest>::default();
+            let response = tonic::server::Grpc::new(codec)
+                .server_streaming(FailingStream, request)
+                .await;
+            Ok::<_, std::convert::Infallible>(response)
+        });
+        let mut client = tonic::client::Grpc::new(layer.layer(service));
+        let response = client
+            .server_streaming(
+                Request::new(SendBlockRequest {
+                    block: Bytes::new(),
+                }),
+                http::uri::PathAndQuery::from_static("/consensus.ConsensusService/SubscribeBlocks"),
+                tonic_prost::ProstCodec::<SendBlockRequest, SendBlockResponse>::default(),
+            )
+            .await
+            .unwrap();
+        let mut stream = response.into_inner();
+        assert!(stream.message().await.unwrap().is_some());
+        assert_eq!(
+            stream.message().await.unwrap_err().code(),
+            tonic::Code::Unavailable
+        );
+        drop(stream);
+        assert_eq!(
+            metrics
+                .errors
+                .with_label_values(&["SubscribeBlocks", "grpc_14"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            metrics
+                .requests
+                .with_label_values(&["SubscribeBlocks"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            metrics
+                .inflight_requests
+                .with_label_values(&["SubscribeBlocks"])
+                .get(),
+            0
+        );
+    }
 
     /// With slim propagation disabled the framing is the identity: the wire carries
     /// the raw SignedBlock bytes unchanged, in the same message struct as before the

@@ -59,6 +59,8 @@ sui-http.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
+http-body.workspace = true
+http-body-util.workspace = true
 rstest.workspace = true
 tempfile.workspace = true
 telemetry-subscribers.workspace = true
