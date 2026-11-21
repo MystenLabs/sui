@@ -311,7 +311,7 @@ pub enum ExecutionErrorKind {
     // please add it at the end for Rust SDK backward compatibility.
 }
 
-/// Why a transaction did not pass the guardrails policy of an account it draws on.
+/// Why a transaction did not pass the guardrails policy of its sender.
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash, Error)]
 pub enum GuardrailsViolationKind {
     #[error("the epoch budget of {coin_type} has no room for this transaction's outflow")]

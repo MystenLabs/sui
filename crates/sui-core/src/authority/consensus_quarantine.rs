@@ -7,8 +7,6 @@ use crate::authority::authority_per_epoch_store::{
 use crate::authority::transaction_deferral::DeferralKey;
 use crate::checkpoints::BuilderCheckpointSummary;
 use crate::epoch::randomness::SINGLETON_KEY;
-use crate::execution_cache::ObjectCacheRead;
-use crate::guardrails::implicit_policy_key;
 use dashmap::DashMap;
 use fastcrypto_threshold::{dkg_v1, nodes::PartyId};
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
@@ -29,6 +27,7 @@ use sui_types::executable_transaction::{
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_consensus::AuthorityIndex;
+use sui_types::transaction::SharedInputObject;
 use sui_types::{
     base_types::{ConsensusObjectSequenceKey, ObjectID},
     digests::TransactionDigest,
@@ -930,13 +929,12 @@ impl ConsensusOutputQuarantine {
             .next()
     }
 
-    pub(crate) fn load_initial_object_debts(
+    pub(crate) fn load_initial_object_debts<'a>(
         &self,
         epoch_store: &AuthorityPerEpochStore,
-        cache_reader: &dyn ObjectCacheRead,
         current_round: Round,
         for_randomness: bool,
-        transactions: &[VerifiedExecutableTransactionWithAliases],
+        shared_input_objects: impl Iterator<Item = &'a SharedInputObject>,
     ) -> impl IntoIterator<Item = (ObjectID, u64)> {
         let protocol_config = epoch_store.protocol_config();
         let tables = epoch_store.tables();
@@ -958,17 +956,7 @@ impl ConsensusOutputQuarantine {
                 default_per_commit_budget,
             )
         };
-        let mut shared_input_object_ids: Vec<_> = transactions
-            .iter()
-            .flat_map(|tx| {
-                let guardrails_key =
-                    implicit_policy_key(epoch_store, cache_reader, tx.tx().transaction_data());
-                tx.tx()
-                    .shared_input_objects()
-                    .map(|obj| obj.id)
-                    .chain(guardrails_key.map(|(id, _)| id))
-            })
-            .collect();
+        let mut shared_input_object_ids: Vec<_> = shared_input_objects.map(|obj| obj.id).collect();
         shared_input_object_ids.sort();
         shared_input_object_ids.dedup();
 

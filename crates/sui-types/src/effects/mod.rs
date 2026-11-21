@@ -371,6 +371,27 @@ impl InputConsensusObject {
     }
 }
 
+/// The consensus objects `effects` show `tx_data` took that it does not declare and that are
+/// not implicitly read system objects. These are the shared inputs consensus added to the
+/// transaction, and consensus adds only mutable ones.
+pub fn undeclared_consensus_inputs(
+    tx_data: &crate::transaction::TransactionData,
+    effects: &TransactionEffects,
+) -> Vec<ObjectID> {
+    use crate::transaction::TransactionDataAPI;
+    let declared: BTreeSet<ObjectID> = tx_data
+        .shared_input_objects()
+        .iter()
+        .map(|input| input.id)
+        .collect();
+    effects
+        .accessed_consensus_objects()
+        .iter()
+        .map(|object| object.id_and_version().0)
+        .filter(|id| !declared.contains(id) && !crate::IMPLICITLY_READ_SYSTEM_OBJECTS.contains(id))
+        .collect()
+}
+
 #[enum_dispatch]
 pub trait TransactionEffectsAPI {
     fn status(&self) -> &ExecutionStatus;

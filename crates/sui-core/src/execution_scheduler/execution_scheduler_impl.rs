@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::guardrails::assigned_policy_input;
+use crate::consensus_inputs::{assigned_shared_inputs, input_objects_for_execution};
 use crate::{
     accumulators::funds_read::AccountFundsRead,
     authority::{
@@ -36,8 +36,8 @@ use sui_types::{
     executable_transaction::VerifiedExecutableTransaction,
     storage::InputKey,
     transaction::{
-        SenderSignedData, SharedInputObject, SharedObjectMutability, TransactionData,
-        TransactionDataAPI, TransactionKey,
+        SharedInputObject, SharedObjectMutability, TransactionData, TransactionDataAPI,
+        TransactionKey,
     },
 };
 use tokio::sync::mpsc::UnboundedSender;
@@ -103,19 +103,28 @@ pub struct ExecutionScheduler {
 
 struct PendingGuard<'a> {
     scheduler: &'a ExecutionScheduler,
-    cert: &'a VerifiedExecutableTransaction,
+    tx_digest: TransactionDigest,
+    shared_input_objects: Vec<SharedInputObject>,
 }
 
 impl<'a> PendingGuard<'a> {
-    pub fn new(scheduler: &'a ExecutionScheduler, cert: &'a VerifiedExecutableTransaction) -> Self {
+    pub fn new(
+        scheduler: &'a ExecutionScheduler,
+        tx_digest: TransactionDigest,
+        shared_input_objects: Vec<SharedInputObject>,
+    ) -> Self {
         scheduler
             .metrics
             .transaction_manager_num_pending_certificates
             .inc();
         scheduler
             .overload_tracker
-            .add_pending_certificate(cert.data());
-        Self { scheduler, cert }
+            .add_pending_certificate(tx_digest, &shared_input_objects);
+        Self {
+            scheduler,
+            tx_digest,
+            shared_input_objects,
+        }
     }
 }
 
@@ -127,7 +136,7 @@ impl Drop for PendingGuard<'_> {
             .dec();
         self.scheduler
             .overload_tracker
-            .remove_pending_certificate(self.cert.data());
+            .remove_pending_certificate(&self.tx_digest, &self.shared_input_objects);
     }
 }
 
@@ -213,15 +222,9 @@ impl ExecutionScheduler {
         let digests = [*tx_digest];
 
         let tx_data = cert.transaction_data();
-        let mut input_object_kinds = tx_data
-            .input_objects()
-            .expect("input_objects() cannot fail");
-        if epoch_store.protocol_config().enable_guardrails() {
-            input_object_kinds.extend(assigned_policy_input(
-                tx_data,
-                &execution_env.assigned_versions,
-            ));
-        }
+        let input_object_kinds =
+            input_objects_for_execution(tx_data, &execution_env.assigned_versions)
+                .expect("input_objects() cannot fail");
         let mut input_object_keys: Vec<_> = epoch_store
             .get_input_object_keys(
                 &cert.key(),
@@ -297,7 +300,11 @@ impl ExecutionScheduler {
             return;
         }
 
-        let _pending_guard = PendingGuard::new(&self, &cert);
+        let _pending_guard = PendingGuard::new(
+            &self,
+            *tx_digest,
+            assigned_shared_inputs(tx_data, &execution_env.assigned_versions),
+        );
         self.metrics
             .transaction_manager_num_enqueued_certificates
             .with_label_values(&["pending"])
@@ -716,11 +723,14 @@ impl ExecutionScheduler {
     pub fn check_execution_overload(
         &self,
         overload_config: &AuthorityOverloadConfig,
-        tx_data: &SenderSignedData,
+        shared_input_objects: &[SharedInputObject],
     ) -> SuiResult {
         let inflight_queue_len = self.num_pending_certificates();
-        self.overload_tracker
-            .check_execution_overload(overload_config, tx_data, inflight_queue_len)
+        self.overload_tracker.check_execution_overload(
+            overload_config,
+            shared_input_objects,
+            inflight_queue_len,
+        )
     }
 
     pub fn num_pending_certificates(&self) -> usize {

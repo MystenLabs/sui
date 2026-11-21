@@ -77,7 +77,7 @@ use sui_types::base_types::{
 };
 use sui_types::bridge::{Bridge, get_bridge};
 use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
-use sui_types::effects::{TransactionEffects, TransactionEvents};
+use sui_types::effects::{TransactionEffects, TransactionEvents, undeclared_consensus_inputs};
 #[cfg(test)]
 use sui_types::error::SuiError;
 use sui_types::error::{SuiErrorKind, SuiResult, UserInputError};
@@ -1382,11 +1382,9 @@ impl WritebackCache {
         // as all transaction execution is paused.
         for r in self.dirty.pending_transaction_writes.iter() {
             let outputs = r.value();
-            if !outputs
-                .transaction
-                .transaction_data()
-                .shared_input_objects()
-                .is_empty()
+            let tx_data = outputs.transaction.transaction_data();
+            if !tx_data.shared_input_objects().is_empty()
+                || !undeclared_consensus_inputs(tx_data, &outputs.effects).is_empty()
             {
                 debug_fatal!("transaction must be single writer");
             }
