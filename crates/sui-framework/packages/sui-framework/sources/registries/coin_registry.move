@@ -13,6 +13,8 @@ use std::type_name::{Self, TypeName};
 use sui::bag::{Self, Bag};
 use sui::balance::{Supply, Balance};
 use sui::coin::{Self, TreasuryCap, DenyCapV2, CoinMetadata, RegulatedCoinMetadata, Coin};
+use sui::coin_regulation::{Self, ComplianceCap, FreezeList};
+use sui::deny_list::DenyList;
 use sui::derived_object;
 use sui::dynamic_field as df;
 use sui::transfer::Receiving;
@@ -59,6 +61,9 @@ const ENotOneTimeWitness: vector<u8> = b"Type is expected to be OTW";
 const EBorrowLegacyMetadata: vector<u8> = b"Cannot borrow legacy metadata for migrated currency";
 #[error(code = 15)]
 const EDuplicateBorrow: vector<u8> = b"Attempt to return duplicate borrowed CoinMetadata";
+#[error(code = 16)]
+const EUnregulatedCurrency: vector<u8> =
+    b"An unregulated Currency cannot migrate to a ComplianceCap";
 
 /// Incremental identifier for regulated coin versions in the deny list.
 /// We start from `0` in the new system, which aligns with the state of `DenyCapV2`.
@@ -109,7 +114,7 @@ public struct Currency<phantom T> has key {
     /// Note: We're using `Option` because `SupplyState` does not have drop,
     /// meaning we cannot swap out its value at a later state.
     supply: Option<SupplyState<T>>,
-    /// Regulatory status of the coin (regulated with deny cap or unknown)
+    /// Regulatory status of the coin (regulated with a deny cap or `ComplianceCap`, or unknown)
     regulated: RegulatedState,
     /// ID of the treasury cap for this coin type, if registered.
     treasury_cap_id: Option<ID>,
@@ -133,11 +138,12 @@ public enum SupplyState<phantom T> has store {
 }
 
 /// Regulated state of a coin type.
-/// - Regulated: `DenyCap` exists or a `RegulatedCoinMetadata` used to mark currency as regulated;
+/// - Regulated: `DenyCap` or `ComplianceCap` exists or a `RegulatedCoinMetadata` used to mark
+///   currency as regulated;
 /// - Unregulated: the currency was created without deny list;
 /// - Unknown: the regulatory status is unknown.
 public enum RegulatedState has copy, drop, store {
-    /// Coin is regulated with a deny cap for address restrictions.
+    /// Coin is regulated with a deny cap or `ComplianceCap` for address restrictions.
     /// `allow_global_pause` is `None` if the information is unknown (has not been migrated from `DenyCapV2`).
     Regulated { cap: ID, allow_global_pause: Option<bool>, variant: u8 },
     /// The coin has been created without deny list.
@@ -260,6 +266,7 @@ public fun claim_metadata_cap<T>(
 /// `Regulated`.
 ///
 /// This action is irreversible.
+#[deprecated(note = b"Use `make_compliance_regulated` instead")]
 public fun make_regulated<T>(
     init: &mut CurrencyInitializer<T>,
     allow_global_pause: bool,
@@ -275,6 +282,25 @@ public fun make_regulated<T>(
         };
 
     deny_cap
+}
+
+/// Make the currency regulated by `coin_regulation` on init and return its `ComplianceCap`.
+/// Aborts if the currency is already regulated or coin regulation is not enabled.
+public fun make_compliance_regulated<T>(
+    init: &mut CurrencyInitializer<T>,
+    allow_global_pause: bool,
+    ctx: &mut TxContext,
+): ComplianceCap<T> {
+    assert!(init.currency.regulated == RegulatedState::Unregulated, EDenyCapAlreadyCreated);
+    let cap = coin_regulation::new_compliance_cap<T>(allow_global_pause, ctx);
+    init.currency.regulated =
+        RegulatedState::Regulated {
+            cap: object::id(&cap),
+            allow_global_pause: option::some(allow_global_pause),
+            variant: REGULATED_COIN_VERSION,
+        };
+
+    cap
 }
 
 public use fun make_supply_fixed_init as CurrencyInitializer.make_supply_fixed;
@@ -492,6 +518,41 @@ public fun migrate_regulated_state_by_cap<T>(currency: &mut Currency<T>, cap: &D
         };
 }
 
+/// Replace `cap` with a `ComplianceCap` with the same ID and record it as the regulated state,
+/// aborting if the `Currency` is `Unregulated`.
+/// WARNING: the legacy deny list is ignored for `T` from then on, and a denied address left out of
+/// `frozen_addresses` becomes unrestricted unless it is frozen in the same transaction. About 500
+/// addresses fit in one call; an issuer with more should pause `T` first.
+public fun migrate_to_compliance_cap<T>(
+    currency: &mut Currency<T>,
+    freeze_list: &mut FreezeList,
+    deny_list: &mut DenyList,
+    cap: DenyCapV2<T>,
+    frozen_addresses: vector<address>,
+    ctx: &mut TxContext,
+): ComplianceCap<T> {
+    let cap_id = object::id(&cap);
+    let variant = match (currency.regulated) {
+        RegulatedState::Unknown => REGULATED_COIN_VERSION,
+        RegulatedState::Regulated { variant, .. } => variant,
+        RegulatedState::Unregulated => abort EUnregulatedCurrency,
+    };
+    let cap = coin_regulation::migrate_from_deny_list(
+        freeze_list,
+        deny_list,
+        cap,
+        frozen_addresses,
+        ctx,
+    );
+    currency.regulated =
+        RegulatedState::Regulated {
+            cap: cap_id,
+            allow_global_pause: option::some(cap.allow_global_pause()),
+            variant,
+        };
+    cap
+}
+
 // === Borrowing of legacy CoinMetadata ===
 
 /// Borrow the legacy `CoinMetadata` from a new `Currency`. To preserve the `ID`
@@ -592,7 +653,7 @@ public fun treasury_cap_id<T>(currency: &Currency<T>): Option<ID> {
     currency.treasury_cap_id
 }
 
-/// Get the deny cap ID for this coin type, if it's a regulated coin.
+/// Get the deny cap or `ComplianceCap` ID for this coin type, if it's a regulated coin.
 /// Returns `None` if:
 /// - The `Currency` is not regulated;
 /// - The `Currency` is migrated from legacy, and its regulated state has not been set;
@@ -760,6 +821,19 @@ public fun finalize_unwrap_for_testing<T>(
     ctx: &mut TxContext,
 ): (Currency<T>, MetadataCap<T>) {
     finalize_impl!(builder, ctx)
+}
+
+#[test_only]
+/// The cap ID, `allow_global_pause`, and variant recorded for a regulated `currency`.
+public fun regulated_state_for_testing<T>(currency: &Currency<T>): (ID, Option<bool>, u8) {
+    match (currency.regulated) {
+        RegulatedState::Regulated { cap, allow_global_pause, variant } => (
+            cap,
+            allow_global_pause,
+            variant,
+        ),
+        _ => abort EInvariantViolation,
+    }
 }
 
 #[test_only]

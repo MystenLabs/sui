@@ -12,6 +12,7 @@ use sui::deny_list;
 public struct REGULATED_COIN has drop {}
 
 /// Register the regulated currency using new CoinRegistry API
+#[allow(deprecated_usage)]
 fun init(otw: REGULATED_COIN, ctx: &mut TxContext) {
     // Create the currency
     let (mut currency_init, treasury_cap) = coin_registry::new_currency_with_otw<REGULATED_COIN>(

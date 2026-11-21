@@ -1981,6 +1981,15 @@ new_treasury_cap
 allow_global_pause
 	public(package) fun
 	0x2::coin
+destroy_deny_cap_v2
+	public(package) fun
+	0x2::coin
+deny_list_v2_mark_migrated
+	public(package) fun
+	0x2::coin
+unmigrated_deny_list_v2_key
+	fun
+	0x2::coin
 new_coin_metadata
 	public(package) fun
 	0x2::coin
@@ -2047,6 +2056,9 @@ claim_metadata_cap
 make_regulated
 	public fun
 	0x2::coin_registry
+make_compliance_regulated
+	public fun
+	0x2::coin_registry
 make_supply_fixed_init
 	public fun
 	0x2::coin_registry
@@ -2102,6 +2114,9 @@ migrate_regulated_state_by_metadata
 	public fun
 	0x2::coin_registry
 migrate_regulated_state_by_cap
+	public fun
+	0x2::coin_registry
+migrate_to_compliance_cap
 	public fun
 	0x2::coin_registry
 borrow_legacy_metadata
@@ -2167,7 +2182,106 @@ create
 FreezeList
 	public struct
 	0x2::coin_regulation
+ComplianceCap
+	public struct
+	0x2::coin_regulation
+SeizeAuth
+	public struct
+	0x2::coin_regulation
+CoinTypeKey
+	public struct
+	0x2::coin_regulation
+CoinTypeState
+	public struct
+	0x2::coin_regulation
+FrozenAddressKey
+	public struct
+	0x2::coin_regulation
+FrozenAddressState
+	public struct
+	0x2::coin_regulation
+AddressFrozen
+	public struct
+	0x2::coin_regulation
+AddressUnfrozen
+	public struct
+	0x2::coin_regulation
+AddressPermanentlyFrozen
+	public struct
+	0x2::coin_regulation
+SeizeAuthIssued
+	public struct
+	0x2::coin_regulation
+SeizeAuthDestroyed
+	public struct
+	0x2::coin_regulation
+CoinTypePaused
+	public struct
+	0x2::coin_regulation
+CoinTypeUnpaused
+	public struct
+	0x2::coin_regulation
+DenyCapMigrated
+	public struct
+	0x2::coin_regulation
+freeze_address
+	public fun
+	0x2::coin_regulation
+unfreeze_address
+	public fun
+	0x2::coin_regulation
+permanently_freeze_address
+	public fun
+	0x2::coin_regulation
+issue_seize_auth
+	public fun
+	0x2::coin_regulation
+destroy_seize_auth
+	public fun
+	0x2::coin_regulation
+transfer_seize_auth
+	public fun
+	0x2::coin_regulation
+enable_global_pause
+	public fun
+	0x2::coin_regulation
+disable_global_pause
+	public fun
+	0x2::coin_regulation
+is_frozen
+	public fun
+	0x2::coin_regulation
+is_permanently_frozen
+	public fun
+	0x2::coin_regulation
+is_global_pause
+	public fun
+	0x2::coin_regulation
+seize_auths
+	public fun
+	0x2::coin_regulation
+allow_global_pause
+	public fun
+	0x2::coin_regulation
+frozen_address
+	public fun
+	0x2::coin_regulation
+frozen_epoch
+	public fun
+	0x2::coin_regulation
+new_compliance_cap
+	public(package) fun
+	0x2::coin_regulation
+migrate_from_deny_list
+	public(package) fun
+	0x2::coin_regulation
 create
+	fun
+	0x2::coin_regulation
+add_frozen_address
+	fun
+	0x2::coin_regulation
+coin_type_state_mut_or_add
 	fun
 	0x2::coin_regulation
 Config
@@ -2227,6 +2341,9 @@ AddressKey
 GlobalPauseKey
 	public struct
 	0x2::deny_list
+MigratedKey
+	public struct
+	0x2::deny_list
 PerTypeConfigCreated
 	public struct
 	0x2::deny_list
@@ -2255,6 +2372,12 @@ v2_is_global_pause_enabled_current_epoch
 	public(package) fun
 	0x2::deny_list
 v2_is_global_pause_enabled_next_epoch
+	public(package) fun
+	0x2::deny_list
+v2_mark_migrated
+	public(package) fun
+	0x2::deny_list
+v2_is_migrated
 	public(package) fun
 	0x2::deny_list
 migrate_v1_to_v2
