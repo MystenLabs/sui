@@ -39,6 +39,7 @@ borrow.json
 clock.json
 coin.json
 coin_registry.json
+coin_regulation.json
 config.json
 deny_list.json
 derived_object.json
@@ -599,6 +600,11 @@ vector.json
       {
         "module_name": "coin_registry",
         "datatype_name": "MetadataCapState",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_regulation",
+        "datatype_name": "FreezeList",
         "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
       },
       {

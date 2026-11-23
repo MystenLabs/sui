@@ -58,6 +58,9 @@ const SUI_ADDRESS_ALIAS_STATE_ID: address = @0xa;
 /// The hardcoded ID for the singleton ForwardingAddressRegistry object.
 const SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID: address = @0xfa;
 
+/// The hardcoded ID for the singleton FreezeList object.
+const SUI_FREEZE_LIST_OBJECT_ID: address = @0xcf;
+
 /// Sender is not @0x0 the system address.
 const ENotSystemAddress: u64 = 0;
 
@@ -207,6 +210,14 @@ public(package) fun address_alias_state(): UID {
 public(package) fun forwarding_address_registry(): UID {
     UID {
         id: ID { bytes: SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID },
+    }
+}
+
+/// Create the `UID` for the singleton `FreezeList` object.
+/// This should only be called once from `coin_regulation`.
+public(package) fun freeze_list(): UID {
+    UID {
+        id: ID { bytes: SUI_FREEZE_LIST_OBJECT_ID },
     }
 }
 

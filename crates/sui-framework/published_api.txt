@@ -2164,6 +2164,12 @@ to_legacy_metadata
 create
 	fun
 	0x2::coin_registry
+FreezeList
+	public struct
+	0x2::coin_regulation
+create
+	fun
+	0x2::coin_regulation
 Config
 	public struct
 	0x2::config
@@ -3125,6 +3131,9 @@ address_alias_state
 	public(package) fun
 	0x2::object
 forwarding_address_registry
+	public(package) fun
+	0x2::object
+freeze_list
 	public(package) fun
 	0x2::object
 uid_as_inner
