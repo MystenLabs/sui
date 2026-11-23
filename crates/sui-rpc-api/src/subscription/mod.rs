@@ -165,8 +165,47 @@ pub struct SubscriptionSpec {
     pub query: Option<BitmapQuery>,
 }
 
-/// Updates delivered to a subscriber while processing checkpoints. An initial
-/// progress frame may precede a matched frame for the entry checkpoint.
+impl SubscriptionSpec {
+    /// Whether this subscription begins with a progress-only start frame
+    /// establishing its entry boundary: every transaction and event
+    /// subscription, plus filtered checkpoint subscriptions. Unfiltered
+    /// checkpoint subscriptions emit only checkpoint payloads.
+    pub(crate) fn needs_start_frame(&self) -> bool {
+        match self.kind {
+            SubscriptionKind::Checkpoints => self.query.is_some(),
+            SubscriptionKind::Transactions | SubscriptionKind::Events => true,
+        }
+    }
+}
+
+/// The last checkpoint the subscription service has already moved past.
+///
+/// When supplied as `initial_tip` to [`SubscriptionService::build`], the first
+/// checkpoint published on the broadcast stream must be `checkpoint + 1` with
+/// transaction lower bound equal to `network_total_transactions`. Knowing this
+/// boundary up front lets the service emit a subscriber's initial progress
+/// frame on registration without waiting for the next checkpoint. When an
+/// `indexed_checkpoint` gate is also configured and has not yet committed
+/// `checkpoint`, the initial tip is withheld so subscribers do not observe a
+/// watermark for an unindexed checkpoint.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SubscriptionTip {
+    pub checkpoint: u64,
+    pub network_total_transactions: u64,
+}
+
+impl SubscriptionTip {
+    pub fn from_summary(summary: &CheckpointSummary) -> Self {
+        Self {
+            checkpoint: summary.sequence_number,
+            network_total_transactions: summary.network_total_transactions,
+        }
+    }
+}
+
+/// Updates delivered to a subscriber. An initial progress frame is emitted at
+/// registration when the service already knows its checkpoint tip, or before
+/// the first live checkpoint otherwise.
 pub enum SubscriptionUpdate {
     Matched(MatchedCheckpoint),
     /// An initial tick identifies the safe position immediately before
@@ -478,6 +517,7 @@ enum ShardMsg {
         spec: SubscriptionSpec,
         sender: mpsc::Sender<SubscriptionUpdate>,
         guard: SubscriptionLifecycleGuard,
+        needs_start_frame: bool,
     },
     /// Drop every subscriber on this shard with the supplied bounded reason.
     Clear(SubscriptionTerminationReason),
@@ -508,8 +548,9 @@ impl SubscriptionShard {
                 spec,
                 sender,
                 guard,
+                needs_start_frame,
             } => {
-                self.matcher.insert(spec, sender, guard);
+                self.matcher.insert(spec, sender, guard, needs_start_frame);
             }
             ShardMsg::Checkpoint(checkpoint, keys) => {
                 self.matcher
@@ -556,6 +597,10 @@ pub struct SubscriptionService {
     // behavior used with the legacy synchronously-committed index.
     indexed_checkpoint: Option<IndexedCheckpointFn>,
 
+    /// Latest checkpoint already moved past (seeded at startup, or set once a
+    /// checkpoint clears the index gate). Cleared on broadcast lag until the
+    /// next checkpoint re-establishes sequence continuity.
+    last_checkpoint: Option<SubscriptionTip>,
     metrics: SubscriptionMetrics,
 }
 
@@ -572,6 +617,7 @@ impl SubscriptionService {
         watermark_interval: Option<u32>,
         max_subscribers: Option<usize>,
         shards: Option<u32>,
+        initial_tip: Option<SubscriptionTip>,
     ) -> (
         broadcast::Sender<Arc<Checkpoint>>,
         SubscriptionServiceHandle,
@@ -584,6 +630,7 @@ impl SubscriptionService {
             watermark_interval,
             max_subscribers,
             shards,
+            initial_tip,
         );
         (checkpoint_sender, handle)
     }
@@ -613,6 +660,7 @@ impl SubscriptionService {
             watermark_interval,
             max_subscribers,
             shards,
+            None,
         );
         (checkpoint_sender, handle)
     }
@@ -624,6 +672,7 @@ impl SubscriptionService {
         watermark_interval: Option<u32>,
         max_subscribers: Option<usize>,
         shards: Option<u32>,
+        initial_tip: Option<SubscriptionTip>,
     ) -> SubscriptionServiceHandle {
         let metrics = SubscriptionMetrics::new(registry);
         let max_subscribers = max_subscribers.unwrap_or(DEFAULT_MAX_SUBSCRIBERS);
@@ -653,6 +702,12 @@ impl SubscriptionService {
             shard_senders.push(sender);
         }
 
+        let last_checkpoint = initial_tip.filter(|tip| {
+            indexed_checkpoint
+                .as_ref()
+                .is_none_or(|indexed| indexed().is_some_and(|hi| hi >= tip.checkpoint))
+        });
+
         tokio::spawn(
             Self {
                 checkpoint_mailbox,
@@ -661,6 +716,7 @@ impl SubscriptionService {
                 next_shard: 0,
                 counters,
                 indexed_checkpoint,
+                last_checkpoint,
                 metrics,
             }
             .start(),
@@ -768,27 +824,27 @@ impl SubscriptionService {
     }
 
     async fn handle_checkpoint(&mut self, checkpoint: SubscriptionCheckpoint) {
-        let sequence_number = checkpoint.summary().sequence_number;
+        let summary = checkpoint.summary();
+        let sequence_number = summary.sequence_number;
+        let tip = SubscriptionTip::from_summary(summary);
 
-        // Check that we recieved checkpoints in-order. The broadcast stream
+        // Check that we received checkpoints in-order. The broadcast stream
         // preserves send order, and any gap surfaces separately as `Lagged`
         // (see `handle_lag`), so reaching here out-of-order indicates a
         // publisher bug. A locally built stream may also skip ahead (see
         // `build_for_locally_built_checkpoints`), and runs on a validator,
         // which must not abort over a streaming bug: any break in it drops
         // the subscribers instead of panicking.
-        {
-            let last_sequence_number = self.metrics.last_recieved_checkpoint.get();
-            let expected_sequence_number = last_sequence_number + 1;
-
-            if last_sequence_number != 0 && expected_sequence_number != sequence_number as i64 {
+        if let Some(last) = self.last_checkpoint {
+            let expected_sequence_number = last.checkpoint + 1;
+            if expected_sequence_number != sequence_number {
                 match checkpoint {
                     SubscriptionCheckpoint::LocallyBuilt(_) => {
                         warn!(
                             expected = expected_sequence_number,
                             received = sequence_number,
                             "locally built checkpoint stream broke sequence; \
-                             dropping all in-progress subscriptions"
+                         dropping all in-progress subscriptions"
                         );
                         self.clear_subscribers(SubscriptionTerminationReason::SourceGap)
                             .await;
@@ -799,17 +855,22 @@ impl SubscriptionService {
                     ),
                 }
             }
-
-            // Update the metric marking the latest checkpoint we've seen
-            self.metrics
-                .last_recieved_checkpoint
-                .set(sequence_number as i64);
         }
+
+        // Update the metric marking the latest checkpoint we've seen
+        self.metrics
+            .last_recieved_checkpoint
+            .set(sequence_number as i64);
 
         // Hold the checkpoint back until the index has committed it, so a
         // client that observes this checkpoint can immediately read its
         // indexed state. No-op unless an index gate was configured.
         self.wait_until_indexed(sequence_number).await;
+
+        // Record the boundary once the checkpoint has cleared the index gate
+        // so subscribers admitted afterward immediately receive its start
+        // frame, even when no subscribers were active for this checkpoint.
+        self.last_checkpoint = Some(tip);
 
         // No live subscriber or admitted registration pending in a shard:
         // skip fan-out. Requests merely queued in the admission lane are not
@@ -891,6 +952,7 @@ impl SubscriptionService {
             .await;
         // The next delivered checkpoint jumps ahead by `skipped`; reset the
         // in-order tracker so it is not mistaken for an out-of-order delivery.
+        self.last_checkpoint = None;
         self.metrics.last_recieved_checkpoint.set(0);
     }
 
@@ -976,6 +1038,16 @@ impl SubscriptionService {
         }
 
         let (sender, receiver) = mpsc::channel(SUBSCRIPTION_CHANNEL_SIZE);
+        let mut needs_start_frame = request.spec.needs_start_frame();
+        if needs_start_frame && let Some(tip) = self.last_checkpoint {
+            sender
+                .try_send(SubscriptionUpdate::WatermarkTick {
+                    checkpoint: tip.checkpoint,
+                    tx_hi: tip.network_total_transactions,
+                })
+                .expect("fresh subscription channel has capacity for the initial frame");
+            needs_start_frame = false;
+        }
         if request.response_sender.send(receiver).is_err() {
             trace!("failed to register new subscriber: request was cancelled");
             return;
@@ -990,6 +1062,7 @@ impl SubscriptionService {
             spec: request.spec,
             sender,
             guard,
+            needs_start_frame,
         });
         self.next_shard = (shard + 1) % self.shards.len();
     }
@@ -1112,6 +1185,7 @@ mod tests {
             next_shard: 0,
             counters,
             indexed_checkpoint,
+            last_checkpoint: None,
             metrics,
         };
         (service, checkpoint_sender, request_sender, shards)
@@ -1372,8 +1446,14 @@ mod tests {
 
     #[tokio::test]
     async fn zero_subscriber_limit_rejects_before_ingress() {
-        let (_checkpoint_sender, handle) =
-            SubscriptionService::build(&prometheus::Registry::new(), None, None, Some(0), Some(1));
+        let (_checkpoint_sender, handle) = SubscriptionService::build(
+            &prometheus::Registry::new(),
+            None,
+            None,
+            Some(0),
+            Some(1),
+            None,
+        );
         assert!(handle.counters.try_reserve().is_none());
         assert!(handle.register_subscription(unfiltered()).await.is_none());
         assert_eq!(handle.counters.reserved(), 0);
@@ -1727,8 +1807,10 @@ mod tests {
         let metrics = service.metrics.clone();
         // A deliberately incompatible prior sequence proves lag handling resets
         // the tracker before checkpoint 2 is processed.
-        metrics.last_recieved_checkpoint.set(99);
-
+        service.last_checkpoint = Some(SubscriptionTip {
+            checkpoint: 99,
+            network_total_transactions: 0,
+        });
         assert_eq!(checkpoint_sender.send(checkpoint(1)).unwrap(), 1);
         assert_eq!(checkpoint_sender.send(checkpoint(2)).unwrap(), 1);
         let actor = tokio::spawn(service.start());
@@ -1932,8 +2014,9 @@ mod tests {
         assert!(receiver_1.recv().await.is_none());
         assert!(receiver_2.recv().await.is_some());
         assert!(receiver_2.recv().await.is_none());
-        // The tracker is reset so the next, jumped-ahead checkpoint is not
-        // mistaken for an out-of-order delivery (which would panic).
+        // Both the sequence tracker and gauge are reset so the next,
+        // jumped-ahead checkpoint is not mistaken for an out-of-order delivery.
+        assert!(service.last_checkpoint.is_none());
         assert_eq!(service.metrics.last_recieved_checkpoint.get(), 0);
         assert_eq!(
             terminations(&service.metrics, "checkpoint", "source_lag"),
@@ -2333,5 +2416,279 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![(0, 1), (0, 2), (3, 0)]
         );
+    }
+
+    #[tokio::test]
+    async fn registration_after_checkpoint_emits_eager_start_frame() {
+        let (mut service, mut shards) = test_service(2);
+
+        // Process checkpoint 1 with zero active subscribers: fan-out is skipped,
+        // yet the service must still record checkpoint 1 as the tip for later
+        // registrations.
+        let cp1 = checkpoint_with_senders(1, &[0, 1]);
+        let cp1_tx_hi = cp1.summary.data().network_total_transactions;
+        service.handle_checkpoint(cp1.into()).await;
+        assert_eq!(service.counters.total.load(Ordering::Relaxed), 0);
+
+        let mut filtered_tx = register(
+            &mut service,
+            SubscriptionSpec {
+                kind: SubscriptionKind::Transactions,
+                query: Some(sender_query(addr(0), false)),
+            },
+        )
+        .await
+        .unwrap();
+        let mut unfiltered_tx = register(
+            &mut service,
+            SubscriptionSpec {
+                kind: SubscriptionKind::Transactions,
+                query: None,
+            },
+        )
+        .await
+        .unwrap();
+        let mut filtered_ev = register(
+            &mut service,
+            SubscriptionSpec {
+                kind: SubscriptionKind::Events,
+                query: Some(event_type_query(
+                    "0x0000000000000000000000000000000000000000000000000000000000000002::coin::CoinEvent",
+                )),
+            },
+        )
+        .await
+        .unwrap();
+        let mut unfiltered_ev = register(
+            &mut service,
+            SubscriptionSpec {
+                kind: SubscriptionKind::Events,
+                query: None,
+            },
+        )
+        .await
+        .unwrap();
+        let mut filtered_cp = register(
+            &mut service,
+            SubscriptionSpec {
+                kind: SubscriptionKind::Checkpoints,
+                query: Some(sender_query(addr(0), false)),
+            },
+        )
+        .await
+        .unwrap();
+        let mut unfiltered_cp = register(&mut service, unfiltered()).await.unwrap();
+
+        // Before draining shards or sending checkpoint 2, every stream whose
+        // contract begins with a start frame already has its initial tick queued.
+        for receiver in [
+            &mut filtered_tx,
+            &mut unfiltered_tx,
+            &mut filtered_ev,
+            &mut unfiltered_ev,
+            &mut filtered_cp,
+        ] {
+            assert!(matches!(
+                receiver.try_recv().unwrap(),
+                SubscriptionUpdate::WatermarkTick {
+                    checkpoint: 1,
+                    tx_hi,
+                } if tx_hi == cp1_tx_hi
+            ));
+            assert!(receiver.try_recv().is_err());
+        }
+        assert!(
+            unfiltered_cp.try_recv().is_err(),
+            "unfiltered checkpoint subscriptions never emit progress-only frames"
+        );
+
+        // Delivering checkpoint 2 must emit matches directly without a second
+        // start tick.
+        service
+            .handle_checkpoint(checkpoint_with_senders(2, &[0]).into())
+            .await;
+        drain(&mut shards);
+
+        assert_eq!(
+            matched_transactions(filtered_tx.try_recv().unwrap()),
+            vec![0]
+        );
+        assert!(matches!(
+            unfiltered_tx.try_recv().unwrap(),
+            SubscriptionUpdate::Matched(matched)
+                if matches!(matched.matches, SubscriptionMatches::AllTransactions)
+                    && matched.checkpoint.summary().sequence_number == 2
+        ));
+        assert_eq!(matched_sequence_number(filtered_cp.try_recv().unwrap()), 2);
+        assert_eq!(
+            matched_sequence_number(unfiltered_cp.try_recv().unwrap()),
+            2
+        );
+        assert!(filtered_ev.try_recv().is_err());
+        assert!(unfiltered_ev.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "out-of-order")]
+    async fn initial_tip_at_genesis_enforces_sequence_continuity() {
+        let (mut service, _shards) = test_service(1);
+        service.last_checkpoint = Some(SubscriptionTip {
+            checkpoint: 0,
+            network_total_transactions: 3,
+        });
+        service.handle_checkpoint(checkpoint(2).into()).await;
+    }
+
+    #[tokio::test]
+    async fn waiting_for_shard_admission_uses_tip_at_completion() {
+        let (service, checkpoint_sender, request_sender, mut shards) =
+            actor_service_with(1, 25, None, 4, DEFAULT_MAX_SUBSCRIBERS);
+        for _ in 0..SHARD_MAILBOX_SIZE {
+            assert!(
+                service.shards[0]
+                    .try_send(ShardMsg::Clear(
+                        SubscriptionTerminationReason::ServiceShutdown
+                    ))
+                    .is_ok()
+            );
+        }
+
+        let (reply_sender, mut reply_receiver) = oneshot::channel();
+        assert!(
+            request_sender
+                .send(subscription_request(
+                    &service.counters,
+                    SubscriptionSpec {
+                        kind: SubscriptionKind::Transactions,
+                        query: None,
+                    },
+                    reply_sender,
+                ))
+                .is_ok()
+        );
+
+        // Poll once so the request enters WaitingForShard while last_checkpoint is None.
+        let mut actor = Box::pin(service.start());
+        assert!(futures::poll!(&mut actor).is_pending());
+
+        // Checkpoint 1 arrives while the request is waiting for shard capacity;
+        // with zero resident subscribers it updates last_checkpoint without
+        // needing a shard slot.
+        let cp1 = checkpoint_with_senders(1, &[0, 1]);
+        let cp1_tx_hi = cp1.summary.data().network_total_transactions;
+        assert_eq!(checkpoint_sender.send(cp1).unwrap(), 1);
+        assert!(futures::poll!(&mut actor).is_pending());
+
+        // Drain the pre-filled Clear messages so shard 0 has capacity for
+        // admission, checkpoint 2, and shutdown.
+        drain(&mut shards);
+        assert!(futures::poll!(&mut actor).is_pending());
+        let mut receiver = reply_receiver
+            .try_recv()
+            .expect("waiting admission did not complete after freeing shard capacity");
+
+        // The eager start frame reflects checkpoint 1 (tip at completion), not None.
+        assert!(matches!(
+            receiver.try_recv().unwrap(),
+            SubscriptionUpdate::WatermarkTick {
+                checkpoint: 1,
+                tx_hi,
+            } if tx_hi == cp1_tx_hi
+        ));
+        assert!(receiver.try_recv().is_err());
+
+        // Checkpoint 2 arrives next and is delivered without another start tick.
+        assert_eq!(
+            checkpoint_sender
+                .send(checkpoint_with_senders(2, &[0]))
+                .unwrap(),
+            1
+        );
+        drop(checkpoint_sender);
+        actor.await;
+        drain(&mut shards);
+
+        assert!(matches!(
+            receiver.try_recv().unwrap(),
+            SubscriptionUpdate::Matched(matched)
+                if matched.checkpoint.summary().sequence_number == 2
+        ));
+        assert!(receiver.recv().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn unindexed_initial_tip_defers_start_frame_until_indexed() {
+        let initial_tip = SubscriptionTip {
+            checkpoint: 5,
+            network_total_transactions: 100,
+        };
+
+        // Index lagging behind initial_tip: no eager start frame on registration.
+        let (_checkpoint_sender, handle) = SubscriptionService::build(
+            &prometheus::Registry::new(),
+            Some(Arc::new(|| Some(4))),
+            None,
+            None,
+            Some(1),
+            Some(initial_tip),
+        );
+        let mut receiver = handle
+            .register_subscription(SubscriptionSpec {
+                kind: SubscriptionKind::Transactions,
+                query: None,
+            })
+            .await
+            .unwrap();
+        assert!(receiver.try_recv().is_err());
+
+        // Index already caught up to initial_tip: eager start frame fires on registration.
+        let (_checkpoint_sender, handle) = SubscriptionService::build(
+            &prometheus::Registry::new(),
+            Some(Arc::new(|| Some(5))),
+            None,
+            None,
+            Some(1),
+            Some(initial_tip),
+        );
+        let mut receiver = handle
+            .register_subscription(SubscriptionSpec {
+                kind: SubscriptionKind::Transactions,
+                query: None,
+            })
+            .await
+            .unwrap();
+        assert!(matches!(
+            receiver.try_recv().unwrap(),
+            SubscriptionUpdate::WatermarkTick {
+                checkpoint: 5,
+                tx_hi: 100,
+            }
+        ));
+    }
+
+    #[tokio::test]
+    async fn locally_built_gap_reestablishes_eager_start_frame() {
+        let (mut service, _shards) = test_service(1);
+        service.handle_checkpoint(locally_built_checkpoint(5)).await;
+        let cp9 = locally_built_checkpoint(9);
+        let cp9_tx_hi = cp9.summary().network_total_transactions;
+        service.handle_checkpoint(cp9).await;
+
+        let mut receiver = register(
+            &mut service,
+            SubscriptionSpec {
+                kind: SubscriptionKind::Transactions,
+                query: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert!(matches!(
+            receiver.try_recv().unwrap(),
+            SubscriptionUpdate::WatermarkTick {
+                checkpoint: 9,
+                tx_hi,
+            } if tx_hi == cp9_tx_hi
+        ));
     }
 }

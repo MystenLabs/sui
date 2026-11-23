@@ -52,6 +52,7 @@ use sui_core::storage::RestReadStore;
 use sui_network::randomness;
 use sui_rpc_api::ServerVersion;
 use sui_rpc_api::subscription::SubscriptionService;
+use sui_rpc_api::subscription::SubscriptionTip;
 use sui_types::base_types::ConciseableName;
 use sui_types::crypto::RandomnessRound;
 use sui_types::digests::{
@@ -3017,6 +3018,10 @@ async fn build_http_servers(
         .as_ref()
         .and_then(|rpc| rpc.subscription_max_subscribers);
     let subscription_shards = config.rpc.as_ref().and_then(|rpc| rpc.subscription_shards);
+    let initial_subscription_tip = state
+        .get_checkpoint_store()
+        .get_highest_executed_checkpoint()?
+        .map(|checkpoint| SubscriptionTip::from_summary(checkpoint.data()));
     let (subscription_service_checkpoint_sender, subscription_service_handle) =
         SubscriptionService::build(
             prometheus_registry,
@@ -3024,6 +3029,7 @@ async fn build_http_servers(
             subscription_watermark_interval,
             subscription_max_subscribers,
             subscription_shards,
+            initial_subscription_tip,
         );
     let rpc_router = {
         // Serve the index read paths from the embedded rpc-store when it

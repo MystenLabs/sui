@@ -44,6 +44,8 @@ use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
 use sui_indexer_alt_framework::metrics::IngestionMetrics;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::Processor;
+use sui_rpc_api::subscription::IndexedCheckpointFn;
+use sui_rpc_api::subscription::SubscriptionTip;
 use sui_rpc_store::CommitterLayer;
 use sui_rpc_store::Indexer;
 use sui_rpc_store::PipelineLayer;
@@ -53,6 +55,7 @@ use sui_rpc_store::RpcStoreSchema;
 use sui_rpc_store::Store;
 use sui_rpc_store::default_rocksdb_config;
 use sui_rpc_store::indexer::balance::Balance;
+use sui_rpc_store::indexer::checkpoint_broadcast::CheckpointBroadcast;
 use sui_rpc_store::indexer::epochs::Epochs;
 use sui_rpc_store::indexer::event_bitmap::EventBitmap;
 use sui_rpc_store::indexer::object_by_owner::ObjectByOwner;
@@ -346,6 +349,43 @@ impl ServiceManager {
         )
     }
 
+    /// Return the last checkpoint `checkpoint_broadcast` has already moved past (its persisted
+    /// watermark, or the fork point before it has committed anything) as a [`SubscriptionTip`].
+    ///
+    /// The next checkpoint broadcast by the embedded indexer is `tip + 1`, so seeding
+    /// `SubscriptionService::build` with this boundary lets subscribers receive their initial
+    /// progress frame on registration even before any new checkpoint is created.
+    pub(crate) fn initial_subscription_tip(&self) -> anyhow::Result<SubscriptionTip> {
+        let framework = FrameworkSchema::new(self.db.clone());
+        let tip_checkpoint = framework
+            .watermarks
+            .get(&PipelineTaskKey::new(CheckpointBroadcast::NAME))
+            .context("failed to read checkpoint_broadcast watermark")?
+            .map(|watermark| watermark.checkpoint_hi_inclusive)
+            .unwrap_or(self.metadata.forked_at_checkpoint);
+        let checkpoint = self
+            .schema
+            .get_checkpoint_summary(tip_checkpoint)
+            .with_context(|| {
+                format!("failed to read checkpoint {tip_checkpoint} summary for subscription tip")
+            })?
+            .with_context(|| {
+                format!("missing checkpoint {tip_checkpoint} in local store for subscription tip")
+            })?;
+        Ok(SubscriptionTip::from_summary(checkpoint.data()))
+    }
+
+    /// Return a callback reading the highest checkpoint every fork indexer pipeline has committed,
+    /// for [`sui_rpc_api::subscription::SubscriptionService::build`]'s index gate.
+    pub(crate) fn indexed_checkpoint_fn(&self) -> IndexedCheckpointFn {
+        let db = self.db.clone();
+        Arc::new(move || {
+            Self::min_pipeline_watermark(&db, FORK_INDEXER_PIPELINES)
+                .ok()
+                .flatten()
+        })
+    }
+
     /// Resolve when the embedded indexer stops, with `Ok(())` if all its tasks completed
     /// (unexpected while the fork is serving), or the task error if any pipeline failed or
     /// panicked. Pends forever if the indexer was never started.
@@ -391,10 +431,16 @@ impl ServiceManager {
         if self.indexer_pipelines.is_empty() {
             return Ok(None);
         }
+        Self::min_pipeline_watermark(&self.db, &self.indexer_pipelines)
+    }
 
-        let framework = FrameworkSchema::new(self.db.clone());
+    fn min_pipeline_watermark(
+        db: &Db,
+        pipelines: &[&str],
+    ) -> anyhow::Result<Option<CheckpointSequenceNumber>> {
+        let framework = FrameworkSchema::new(db.clone());
         let mut indexed: Option<CheckpointSequenceNumber> = None;
-        for pipeline in &self.indexer_pipelines {
+        for pipeline in pipelines {
             let Some(watermark) = framework
                 .watermarks
                 .get(&PipelineTaskKey::new(*pipeline))
@@ -603,5 +649,64 @@ mod tests {
             format!("{err:#}").contains("fork metadata"),
             "unexpected error: {err:#}",
         );
+    }
+
+    #[test]
+    fn initial_subscription_tip_follows_broadcast_watermark_or_fork_point() {
+        use sui_types::messages_checkpoint::VerifiedCheckpoint;
+        use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+
+        let dir = tempfile::tempdir().unwrap();
+        let chain_identifier = get_mainnet_chain_identifier();
+        let services =
+            ServiceManager::open(dir.path(), "mainnet".to_owned(), 10, chain_identifier).unwrap();
+        let local_store = services.local_store();
+
+        for (seq, total_txs) in [(10, 100), (11, 105), (12, 112)] {
+            let checkpoint = TestCheckpointBuilder::new(seq)
+                .with_network_total_transactions(total_txs)
+                .build_checkpoint();
+            local_store
+                .save_checkpoint(
+                    &VerifiedCheckpoint::new_unchecked(checkpoint.summary),
+                    &checkpoint.contents,
+                )
+                .unwrap();
+        }
+
+        // Before checkpoint_broadcast writes any watermark, the tip is the fork point.
+        assert_eq!(
+            services.initial_subscription_tip().unwrap(),
+            SubscriptionTip {
+                checkpoint: 10,
+                network_total_transactions: 100,
+            }
+        );
+
+        // Persisted broadcast watermark behind the highest local checkpoint (crash recovery):
+        // the tip must match the broadcast watermark (11), not the unbroadcast local tip (12).
+        let framework = FrameworkSchema::new(services.db.clone());
+        let mut batch = services.db.batch();
+        batch
+            .put(
+                &framework.watermarks,
+                &PipelineTaskKey::new(CheckpointBroadcast::NAME),
+                &sui_consistent_store::Watermark::for_checkpoint(11),
+            )
+            .unwrap();
+        batch.commit().unwrap();
+        assert_eq!(
+            services.initial_subscription_tip().unwrap(),
+            SubscriptionTip {
+                checkpoint: 11,
+                network_total_transactions: 105,
+            }
+        );
+
+        // Index gate reads the minimum watermark across FORK_INDEXER_PIPELINES.
+        let indexed = services.indexed_checkpoint_fn();
+        assert_eq!(indexed(), None);
+        services.set_indexed_checkpoint_for_testing(11).unwrap();
+        assert_eq!(indexed(), Some(11));
     }
 }
