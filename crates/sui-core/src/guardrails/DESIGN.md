@@ -208,9 +208,9 @@ Everything that reads a transaction's shared inputs sees the policy like a decla
 version assignment one function computes the inputs, the declared ones plus the policy, and
 version assignment, congestion control (the deferral decision, the per object cost and the debts
 carried between commits), the overload tracker and the gas price suggestion all take them from it.
-After version assignment the rule is that every consensus object a transaction was assigned or, in
-effects, accessed without declaring it is a mutable input, so the execution scheduler, input
-loading, the execution time estimator, the checkpoint executor and replay need no guardrails
+After version assignment the rule is that every consensus object a transaction was assigned
+without declaring it is a mutable input, and in effects the sender's policy is one when the
+transaction accessed it without declaring it, so the execution scheduler, input loading, the execution time estimator, the checkpoint executor and replay need no guardrails
 knowledge. Without congestion control counting it, anyone could enable a policy on an account of
 their own and use it as a shared object that no budget bounds.
 
