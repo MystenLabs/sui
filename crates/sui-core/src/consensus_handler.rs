@@ -16,7 +16,8 @@ use consensus_types::block::TransactionIndex;
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use lru::LruCache;
 use mysten_common::{
-    assert_reachable, assert_sometimes, debug_fatal, random_util::randomize_cache_capacity_in_tests,
+    ZipDebugEqIteratorExt, assert_reachable, assert_sometimes, debug_fatal,
+    random_util::randomize_cache_capacity_in_tests,
 };
 use mysten_metrics::{
     monitored_future,
@@ -81,6 +82,7 @@ use crate::{
     },
     consensus_throughput_calculator::ConsensusThroughputCalculator,
     consensus_types::consensus_output_api::{ConsensusCommitAPI, ParsedTransaction},
+    encrypted_bundles::{self, EncryptedBundleState},
     epoch::{
         randomness::{AdvanceDkgError, DkgStatus, RandomnessManager},
         reconfiguration::ReconfigState,
@@ -184,7 +186,7 @@ impl ConsensusHandlerInitializer {
             self.state.get_transaction_cache_reader().clone(),
             self.state.metrics.clone(),
         );
-        ConsensusHandler::new(
+        let mut handler = ConsensusHandler::new(
             self.epoch_store.clone(),
             self.checkpoint_service.clone(),
             settlement_scheduler,
@@ -197,7 +199,11 @@ impl ConsensusHandlerInitializer {
             self.congestion_logger.clone(),
             self.consensus_gasless_counter.clone(),
             self.state.transaction_deny_config_manager().clone(),
-        )
+        );
+        handler
+            .encrypted_bundles
+            .set_transaction_cache(self.state.get_transaction_cache_reader().clone());
+        handler
     }
 }
 
@@ -759,6 +765,8 @@ pub struct ConsensusHandler<C> {
     transaction_deny_config_manager: Arc<TransactionDenyConfigManager>,
 
     checkpoint_queue: Mutex<CheckpointQueue>,
+
+    pub(crate) encrypted_bundles: EncryptedBundleState,
 }
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
@@ -834,6 +842,7 @@ impl<C> ConsensusHandler<C> {
         let last_built_timestamp = last_consensus_stats.last_checkpoint_flush_timestamp;
         let checkpoint_height = last_consensus_stats.height;
         let next_checkpoint_seq = last_consensus_stats.checkpoint_seq + 1;
+        let encrypted_bundles = EncryptedBundleState::new(&epoch_store);
         Self {
             epoch_store,
             last_consensus_stats,
@@ -861,6 +870,7 @@ impl<C> ConsensusHandler<C> {
                 min_checkpoint_interval_ms,
                 execution_scheduler_sender,
             )),
+            encrypted_bundles,
         }
     }
 
@@ -896,6 +906,7 @@ impl<C> ConsensusHandler<C> {
             .unwrap_or_default();
         let last_built_timestamp = last_consensus_stats.last_checkpoint_flush_timestamp;
         let checkpoint_height = last_consensus_stats.height;
+        let encrypted_bundles = EncryptedBundleState::new(&epoch_store);
         Self {
             epoch_store,
             last_consensus_stats,
@@ -923,6 +934,7 @@ impl<C> ConsensusHandler<C> {
                 min_checkpoint_interval_ms,
                 execution_scheduler_sender,
             )),
+            encrypted_bundles,
         }
     }
 }
@@ -990,6 +1002,9 @@ struct CommitHandlerState {
     // Transactions involved in same commit owned object lock contention (double-spend),
     // mapped to conflict info (gas vs non-gas breakdown).
     contested_transaction_digests: HashMap<TransactionDigest, ConflictInfo>,
+    // True when this commit accepted encrypted bundles. Their transactions are scheduled in
+    // the next commit, so the epoch must not close in this one.
+    has_pending_encrypted_bundles: bool,
 }
 
 impl CommitHandlerState {
@@ -1003,6 +1018,7 @@ impl CommitHandlerState {
             occurrence_counts: HashMap::new(),
             staggering_counts: StaggeringCommitCounts::default(),
             contested_transaction_digests: HashMap::new(),
+            has_pending_encrypted_bundles: false,
         }
     }
 
@@ -1093,6 +1109,63 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         );
     }
 
+    /// Waits for the keys of the bundles accepted in the previous commit, decrypts them and
+    /// returns the transactions that pass validation, in bundle order.
+    async fn resolve_pending_encrypted_bundles(
+        &mut self,
+    ) -> Vec<VerifiedExecutableTransactionWithAliases> {
+        if !self.encrypted_bundles.has_pending() {
+            return vec![];
+        }
+        let _scope = monitored_scope("ConsensusCommitHandler::resolve_pending_encrypted_bundles");
+        let bundles = self.encrypted_bundles.take_pending();
+        let keys = encrypted_bundles::derive_keys(&self.epoch_store, &bundles).await;
+        self.encrypted_bundles
+            .wait_for_execution(&self.epoch_store)
+            .await;
+
+        let mut transactions = Vec::new();
+        for (bundle, key) in bundles.iter().zip_debug_eq(keys) {
+            for transaction in encrypted_bundles::open_bundle(&self.epoch_store, bundle, &key) {
+                let digest = *transaction.digest();
+                let processed_key = SequencedConsensusTransactionKey::External(
+                    ConsensusTransactionKey::Certificate(digest),
+                );
+                if self.processed_cache.contains(&processed_key)
+                    || self
+                        .epoch_store
+                        .is_consensus_message_processed(&processed_key)
+                        .expect("db error")
+                {
+                    debug!("Skipping bundle transaction {digest}: already sequenced");
+                    continue;
+                }
+                match encrypted_bundles::validate_decrypted_transaction(
+                    &self.epoch_store,
+                    self.cache_reader.as_ref(),
+                    transaction,
+                ) {
+                    Ok(transaction) => {
+                        self.processed_cache.put(processed_key, 1);
+                        transactions.push(transaction);
+                    }
+                    Err(reason) => {
+                        warn!(
+                            "Dropping transaction {digest} of encrypted bundle {:?}: {reason}",
+                            bundle.id()
+                        );
+                    }
+                }
+            }
+        }
+        info!(
+            "Decrypted {} encrypted bundles into {} transactions",
+            bundles.len(),
+            transactions.len()
+        );
+        transactions
+    }
+
     #[cfg(test)]
     pub(crate) async fn handle_consensus_commit_for_test(
         &mut self,
@@ -1117,6 +1190,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         //   backpressure threshold.
         // - The highest executed checkpoint catches up to the highest certified checkpoint.
         self.backpressure_subscriber.await_no_backpressure().await;
+
+        // Transactions of bundles accepted in the previous commit are sequenced before any
+        // transaction of this commit, so this commit waits for their keys.
+        let decrypted_bundle_transactions = self.resolve_pending_encrypted_bundles().await;
 
         let epoch = self.epoch_store.epoch();
 
@@ -1162,6 +1239,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .inc();
 
         let mut state = CommitHandlerState::new(&self.epoch_store, commit_info.round);
+        for transaction in &decrypted_bundle_transactions {
+            state.output.record_consensus_message_processed(
+                SequencedConsensusTransactionKey::External(ConsensusTransactionKey::Certificate(
+                    *transaction.tx().digest(),
+                )),
+            );
+        }
 
         let FilteredConsensusOutput {
             transactions,
@@ -1202,6 +1286,17 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             encrypted_bundles,
         } = self.build_commit_handler_input(transactions);
 
+        let dkg_status = randomness_manager
+            .as_deref_mut()
+            .map(|manager| manager.dkg_status_for_commit_round(commit_info.round));
+        let accepted_bundles = encrypted_bundles::select_bundles(
+            &self.epoch_store,
+            encrypted_bundles::beacon_available(&self.epoch_store, dkg_status),
+            encrypted_bundles,
+            &user_transactions,
+        );
+        state.has_pending_encrypted_bundles = !accepted_bundles.is_empty();
+
         self.process_gasless_transactions(&commit_info, &user_transactions);
         self.process_jwks(&mut state, &commit_info, new_jwks);
         self.process_capability_notifications(capability_notifications);
@@ -1238,6 +1333,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             &commit_info,
             user_transactions,
         );
+        // Bundle transactions are not reordered or deferred: a revealed transaction that waits
+        // could be overtaken by a later transaction.
+        let transactions_to_schedule: Vec<_> = decrypted_bundle_transactions
+            .into_iter()
+            .chain(transactions_to_schedule)
+            .collect();
 
         let (should_accept_tx, lock, final_round, abandoned_deferred_txns) =
             self.handle_close_epoch(&mut state, &commit_info, end_of_publish_transactions);
@@ -1280,6 +1381,19 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     .map(Schedulable::Transaction),
             )
             .collect();
+
+        self.encrypted_bundles.record_scheduled(
+            &self.epoch_store,
+            schedulables
+                .iter()
+                .chain(randomness_schedulables.iter())
+                .map(|schedulable| schedulable.key()),
+        );
+        if self.epoch_store.protocol_config().encrypted_bundles() {
+            state
+                .output
+                .set_pending_encrypted_bundles(accepted_bundles.clone());
+        }
 
         let num_schedulables = schedulables.len();
         let checkpoint_height = self.create_pending_checkpoints(
@@ -1325,6 +1439,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .expect("randomness manager should exist if randomness round is provided")
                 .generate_randomness(epoch, randomness_round);
         }
+
+        // Key shares are released only after the commit that holds the bundles is processed.
+        if let Some(keys) = self.epoch_store.encrypted_bundle_keys() {
+            for bundle in &accepted_bundles {
+                keys.request(epoch, bundle.id_message());
+            }
+        }
+        self.encrypted_bundles.set_pending(accepted_bundles);
 
         self.epoch_store.process_notifications(notifications.iter());
 
@@ -2581,7 +2703,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let commit_has_deferred_txns = state.output.has_deferred_transactions();
         let previous_commits_have_deferred_txns = !self.epoch_store.deferred_transactions_empty();
-        let has_deferred_txns = commit_has_deferred_txns || previous_commits_have_deferred_txns;
+        let has_deferred_txns = commit_has_deferred_txns
+            || previous_commits_have_deferred_txns
+            || state.has_pending_encrypted_bundles;
 
         // The epoch closes normally only once all deferred transactions have been scheduled;
         // past the deadline it closes regardless, abandoning whatever remains.
