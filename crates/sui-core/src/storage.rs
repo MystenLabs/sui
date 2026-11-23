@@ -1189,6 +1189,23 @@ impl RpcStateReader for RpcStoreReadStore {
         Some(self)
     }
 
+    fn indexes_at_checkpoint(
+        &self,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> sui_types::storage::CheckpointIndexes {
+        self.reader.indexes_at_checkpoint(checkpoint)
+    }
+
+    fn latest_checkpoint_indexes(&self) -> sui_types::storage::CheckpointIndexes {
+        self.reader.latest_checkpoint_indexes()
+    }
+
+    fn retained_checkpoint_indexes_range(
+        &self,
+    ) -> Option<RangeInclusive<CheckpointSequenceNumber>> {
+        self.reader.retained_checkpoint_indexes_range()
+    }
+
     fn get_object_lt_or_eq_version(
         &self,
         object_id: &ObjectID,

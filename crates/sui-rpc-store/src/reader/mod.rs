@@ -180,7 +180,7 @@ impl<R: Reader> RpcStoreReader<R> {
     }
 }
 
-impl RpcStoreReader<Db> {
+impl<R: Reader> RpcStoreReader<R> {
     /// Re-project this reader against a captured [`Snapshot`].
     ///
     /// The returned [`RpcStoreReader<Snapshot>`] reads every CF

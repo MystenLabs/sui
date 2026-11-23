@@ -1248,6 +1248,23 @@ impl RpcStateReader for ForkStore {
         Some(self)
     }
 
+    fn indexes_at_checkpoint(
+        &self,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> sui_types::storage::CheckpointIndexes {
+        self.stock_reader().indexes_at_checkpoint(checkpoint)
+    }
+
+    fn latest_checkpoint_indexes(&self) -> sui_types::storage::CheckpointIndexes {
+        self.stock_reader().latest_checkpoint_indexes()
+    }
+
+    fn retained_checkpoint_indexes_range(
+        &self,
+    ) -> Option<std::ops::RangeInclusive<CheckpointSequenceNumber>> {
+        self.stock_reader().retained_checkpoint_indexes_range()
+    }
+
     /// Resolve layouts using packages from committed `sui-rpc-store` data.
     fn layout_package_store(&self) -> Box<dyn BackingPackageStore + Send + Sync + '_> {
         self.stock_reader().layout_package_store()

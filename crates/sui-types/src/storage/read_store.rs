@@ -791,6 +791,26 @@ pub trait RpcStateReader: ReadStore + super::RuntimeObjectResolver + Send + Sync
     // Get a handle to an instance of the RpcIndexes
     fn indexes(&self) -> Option<&dyn RpcIndexes>;
 
+    /// Acquire an [`RpcIndexes`] handle pinned to the end of `checkpoint`, or report why none was
+    /// acquired using the snapshot window state observed atomically with the lookup.
+    fn indexes_at_checkpoint(&self, _checkpoint: CheckpointSequenceNumber) -> CheckpointIndexes {
+        CheckpointIndexes::Disabled
+    }
+
+    /// Acquire an [`RpcIndexes`] handle pinned to the highest checkpoint snapshot currently
+    /// retained, together with that checkpoint sequence number.
+    fn latest_checkpoint_indexes(&self) -> CheckpointIndexes {
+        CheckpointIndexes::Disabled
+    }
+
+    /// Configured retained checkpoint range (`lo..=hi`) for checkpoint-pinned state reads, or
+    /// `None` if snapshotting is disabled or no snapshot has been taken yet.
+    fn retained_checkpoint_indexes_range(
+        &self,
+    ) -> Option<RangeInclusive<CheckpointSequenceNumber>> {
+        None
+    }
+
     /// The object's newest version at or below `version`, like the execution cache's
     /// `find_object_lt_or_eq_version`. `None` if the object has no version at or below
     /// `version`, or if it was deleted or wrapped at that newest version. On a store whose object
@@ -885,6 +905,24 @@ pub trait RpcStateReader: ReadStore + super::RuntimeObjectResolver + Send + Sync
     fn layout_package_store(&self) -> Box<dyn BackingPackageStore + Send + Sync + '_> {
         Box::new(self)
     }
+}
+
+/// Result of acquiring a checkpoint-pinned [`RpcIndexes`] reader from an [`RpcStateReader`].
+pub enum CheckpointIndexes {
+    /// A handle pinned to `checkpoint`.
+    Available {
+        checkpoint: CheckpointSequenceNumber,
+        indexes: Arc<dyn RpcIndexes>,
+    },
+    /// Checkpoint-pinned state reads are disabled by configuration (snapshot window is 0).
+    Disabled,
+    /// Checkpoint-pinned state reads are enabled, but no checkpoint snapshot is ready yet.
+    Empty,
+    /// No snapshot for the requested checkpoint is held on this node. `retained_range` is the
+    /// configured retained checkpoint window (`lo..=hi`).
+    Unavailable {
+        retained_range: RangeInclusive<CheckpointSequenceNumber>,
+    },
 }
 
 pub type DynamicFieldIteratorItem = Result<DynamicFieldKey, TypedStoreError>;
