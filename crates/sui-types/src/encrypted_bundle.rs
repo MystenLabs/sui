@@ -80,6 +80,35 @@ pub struct EncryptedBundle {
     pub signature: Vec<u8>,
 }
 
+/// What a validator operator submits to its node: the bundle and the signed transaction that
+/// pays the bundle fee. The node sequences both in one consensus block.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EncryptedBundleSubmission {
+    pub bundle: EncryptedBundle,
+    pub fee_tx: Transaction,
+}
+
+/// What a node reports about the beacon key, so that the operator can configure the enclave.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BeaconKeyInfo {
+    pub epoch: EpochId,
+    pub authority: AuthorityName,
+    /// Compressed G2 element (96 bytes).
+    pub beacon_public_key: Vec<u8>,
+}
+
+impl BeaconKeyInfo {
+    pub fn public_key(&self) -> Result<BeaconPublicKey, EncryptedBundleError> {
+        let bytes: [u8; 96] = self
+            .beacon_public_key
+            .as_slice()
+            .try_into()
+            .map_err(|_| EncryptedBundleError::Malformed("beacon public key"))?;
+        G2Element::from_byte_array(&bytes)
+            .map_err(|_| EncryptedBundleError::Malformed("beacon public key"))
+    }
+}
+
 /// The decrypted content of a bundle.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BundlePlaintext {

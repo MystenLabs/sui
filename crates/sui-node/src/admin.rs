@@ -11,6 +11,7 @@ use axum::{
 };
 use base64::Engine;
 use fastcrypto::encoding::{Encoding, Hex};
+use fastcrypto::serde_helpers::ToFromByteArray;
 use fastcrypto::traits::ToFromBytes;
 use humantime::parse_duration;
 use mysten_network::Multiaddr;
@@ -21,6 +22,8 @@ use std::{
     str::FromStr,
 };
 use sui_network::endpoint_manager::{AddressSource, EndpointId};
+use sui_types::encrypted_bundle::{BeaconKeyInfo, EncryptedBundleSubmission};
+use sui_types::messages_consensus::{ConsensusTransaction, EncryptedBundleMessage};
 use sui_types::{
     base_types::{AuthorityName, ConciseableName},
     crypto::{NetworkPublicKey, RandomnessPartialSignature, RandomnessRound, RandomnessSignature},
@@ -113,6 +116,10 @@ const DB_SHELL_LS: &str = "/db-shell/ls";
 const DB_SHELL_READ: &str = "/db-shell/read";
 const DB_SHELL_DELETE: &str = "/db-shell/delete";
 const BROADCAST_TX_DENY_CONFIG: &str = "/broadcast-transaction-deny-config";
+// Returns the beacon public key that encrypted bundles target, as JSON `BeaconKeyInfo`.
+const ENCRYPTED_BUNDLE_BEACON_KEY: &str = "/encrypted-bundle-beacon-key";
+// Takes a BCS-encoded `EncryptedBundleSubmission` as the request body.
+const SUBMIT_ENCRYPTED_BUNDLE: &str = "/submit-encrypted-bundle";
 const WITHDRAW_TX_DENY_CONFIG: &str = "/withdraw-transaction-deny-config";
 const TX_DENY_CONFIG: &str = "/transaction-deny-config";
 
@@ -181,6 +188,11 @@ pub async fn run_admin_server(
             post(withdraw_transaction_deny_config),
         )
         .route(TX_DENY_CONFIG, get(transaction_deny_config_dump))
+        .route(
+            ENCRYPTED_BUNDLE_BEACON_KEY,
+            get(encrypted_bundle_beacon_key),
+        )
+        .route(SUBMIT_ENCRYPTED_BUNDLE, post(submit_encrypted_bundle))
         .with_state(Arc::new(app_state));
 
     let socket_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
@@ -679,6 +691,108 @@ async fn update_endpoint(
             parsed_addresses.len(),
         ),
     )
+}
+
+async fn encrypted_bundle_beacon_key(State(state): State<Arc<AppState>>) -> (StatusCode, String) {
+    let authority_state = state.node.state();
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
+    let Some(keys) = epoch_store.encrypted_bundle_keys() else {
+        return (
+            StatusCode::PRECONDITION_FAILED,
+            "encrypted bundles are not enabled on this node\n".to_string(),
+        );
+    };
+    let Some(public_key) = keys.beacon_public_key(epoch_store.epoch()) else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "the random beacon DKG has not completed in this epoch\n".to_string(),
+        );
+    };
+    let info = BeaconKeyInfo {
+        epoch: epoch_store.epoch(),
+        authority: authority_state.name,
+        beacon_public_key: public_key.to_byte_array().to_vec(),
+    };
+    match serde_json::to_string(&info) {
+        Ok(json) => (StatusCode::OK, format!("{json}\n")),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}\n")),
+    }
+}
+
+async fn submit_encrypted_bundle(
+    State(state): State<Arc<AppState>>,
+    body: axum::body::Bytes,
+) -> (StatusCode, String) {
+    let authority_state = state.node.state();
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
+    if !epoch_store.protocol_config().encrypted_bundles() {
+        return (
+            StatusCode::PRECONDITION_FAILED,
+            "encrypted_bundles protocol flag is not enabled\n".to_string(),
+        );
+    }
+    let EncryptedBundleSubmission { bundle, fee_tx } = match bcs::from_bytes(&body) {
+        Ok(submission) => submission,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                format!("invalid submission: {e}\n"),
+            );
+        }
+    };
+    if bundle.author != authority_state.name {
+        return (
+            StatusCode::BAD_REQUEST,
+            "bundle author is not this validator\n".to_string(),
+        );
+    }
+    if bundle.epoch != epoch_store.epoch() {
+        return (
+            StatusCode::BAD_REQUEST,
+            format!(
+                "bundle epoch {} is not the current epoch {}\n",
+                bundle.epoch,
+                epoch_store.epoch()
+            ),
+        );
+    }
+    if let Err(e) = bundle.verify_signature() {
+        return (StatusCode::BAD_REQUEST, format!("{e}\n"));
+    }
+    let fee_tx = match epoch_store.verify_transaction_with_current_aliases(fee_tx) {
+        Ok(fee_tx) => fee_tx,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                format!("invalid fee transaction: {e}\n"),
+            );
+        }
+    };
+    let fee_tx_digest = *fee_tx.tx().digest();
+    let bundle_id = Hex::encode(bundle.id());
+
+    let Some(consensus_adapter) = state.node.consensus_adapter().await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "validator components not running; consensus adapter unavailable\n".to_string(),
+        );
+    };
+    let transactions = [
+        ConsensusTransaction::new_user_transaction_v2_message(&authority_state.name, fee_tx.into()),
+        ConsensusTransaction::new_encrypted_bundle(EncryptedBundleMessage {
+            bundle,
+            fee_tx_digest,
+        }),
+    ];
+    match consensus_adapter.submit_batch(&transactions, None, &epoch_store, None, None) {
+        Ok(_) => (
+            StatusCode::OK,
+            format!(
+                "submitted encrypted bundle {bundle_id} with fee transaction {fee_tx_digest}\n"
+            ),
+        ),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}\n")),
+    }
 }
 
 async fn submit_transaction_deny_config_update(
