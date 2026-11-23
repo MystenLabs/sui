@@ -2200,6 +2200,9 @@ FrozenAddressKey
 FrozenAddressState
 	public struct
 	0x2::coin_regulation
+FreezeCountKey
+	public struct
+	0x2::coin_regulation
 AddressFrozen
 	public struct
 	0x2::coin_regulation
@@ -2279,6 +2282,9 @@ create
 	fun
 	0x2::coin_regulation
 add_frozen_address
+	fun
+	0x2::coin_regulation
+count_freeze
 	fun
 	0x2::coin_regulation
 coin_type_state_mut_or_add

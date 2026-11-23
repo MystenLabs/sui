@@ -55,6 +55,10 @@ fun teardown(scenario: Scenario, list: FreezeList, cap: ComplianceCap<TEST>) {
     scenario.end();
 }
 
+fun address_n(n: u64): address {
+    sui::address::from_u256(0x1000 + (n as u256))
+}
+
 #[test]
 fun freeze_and_unfreeze() {
     let (mut scenario, mut list, mut cap) = setup(false);
@@ -120,6 +124,40 @@ fun freeze_twice_aborts() {
     list.freeze_address(&mut cap, ALICE, scenario.ctx());
     list.freeze_address(&mut cap, ALICE, scenario.ctx());
     abort
+}
+
+#[test]
+fun freeze_limit_resets_each_transaction() {
+    let (mut scenario, mut list, mut cap) = setup(false);
+    8u64.do!(|i| list.freeze_address(&mut cap, address_n(i), scenario.ctx()));
+    scenario.next_tx(ISSUER);
+    list.freeze_address(&mut cap, address_n(8), scenario.ctx());
+    assert_eq!(list.num_frozen_addresses<TEST>(), 9);
+    teardown(scenario, list, cap);
+}
+
+#[test, expected_failure(abort_code = coin_regulation::ETooManyFreezes)]
+fun freeze_over_limit_aborts() {
+    let (mut scenario, mut list, mut cap) = setup(false);
+    9u64.do!(|i| list.freeze_address(&mut cap, address_n(i), scenario.ctx()));
+    teardown(scenario, list, cap);
+}
+
+#[test, expected_failure(abort_code = coin_regulation::ETooManyFreezes)]
+fun permanently_freeze_new_address_counts_toward_limit() {
+    let (mut scenario, mut list, mut cap) = setup(false);
+    8u64.do!(|i| list.freeze_address(&mut cap, address_n(i), scenario.ctx()));
+    list.permanently_freeze_address(&mut cap, ALICE, scenario.ctx());
+    teardown(scenario, list, cap);
+}
+
+#[test]
+fun permanently_freeze_frozen_address_does_not_count() {
+    let (mut scenario, mut list, mut cap) = setup(false);
+    8u64.do!(|i| list.freeze_address(&mut cap, address_n(i), scenario.ctx()));
+    8u64.do!(|i| list.permanently_freeze_address(&mut cap, address_n(i), scenario.ctx()));
+    assert!(list.is_permanently_frozen<TEST>(address_n(0)));
+    teardown(scenario, list, cap);
 }
 
 #[test, expected_failure(abort_code = coin_regulation::ENotFrozen)]

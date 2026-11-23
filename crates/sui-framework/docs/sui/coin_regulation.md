@@ -15,6 +15,7 @@ unfrozen only in an epoch after the last <code><a href="../sui/coin_regulation.m
 -  [Struct `CoinTypeState`](#sui_coin_regulation_CoinTypeState)
 -  [Struct `FrozenAddressKey`](#sui_coin_regulation_FrozenAddressKey)
 -  [Struct `FrozenAddressState`](#sui_coin_regulation_FrozenAddressState)
+-  [Struct `FreezeCountKey`](#sui_coin_regulation_FreezeCountKey)
 -  [Struct `AddressFrozen`](#sui_coin_regulation_AddressFrozen)
 -  [Struct `AddressUnfrozen`](#sui_coin_regulation_AddressUnfrozen)
 -  [Struct `AddressPermanentlyFrozen`](#sui_coin_regulation_AddressPermanentlyFrozen)
@@ -43,6 +44,7 @@ unfrozen only in an epoch after the last <code><a href="../sui/coin_regulation.m
 -  [Function `migrate_from_deny_list`](#sui_coin_regulation_migrate_from_deny_list)
 -  [Function `create`](#sui_coin_regulation_create)
 -  [Function `add_frozen_address`](#sui_coin_regulation_add_frozen_address)
+-  [Function `count_freeze`](#sui_coin_regulation_count_freeze)
 -  [Function `coin_type_state_mut_or_add`](#sui_coin_regulation_coin_type_state_mut_or_add)
 
 
@@ -73,6 +75,7 @@ unfrozen only in an epoch after the last <code><a href="../sui/coin_regulation.m
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
 <b>use</b> <a href="../sui/party.md#sui_party">sui::party</a>;
 <b>use</b> <a href="../sui/protocol_config.md#sui_protocol_config">sui::protocol_config</a>;
+<b>use</b> <a href="../sui/scratch.md#sui_scratch">sui::scratch</a>;
 <b>use</b> <a href="../sui/table.md#sui_table">sui::table</a>;
 <b>use</b> <a href="../sui/transfer.md#sui_transfer">sui::transfer</a>;
 <b>use</b> <a href="../sui/tx_context.md#sui_tx_context">sui::tx_context</a>;
@@ -310,6 +313,28 @@ The value under <code><a href="../sui/coin_regulation.md#sui_coin_regulation_Fro
 <dd>
  The epoch of the last <code><a href="../sui/coin_regulation.md#sui_coin_regulation_destroy_seize_auth">destroy_seize_auth</a></code> for this address, if any.
 </dd>
+</dl>
+
+
+</details>
+
+<a name="sui_coin_regulation_FreezeCountKey"></a>
+
+## Struct `FreezeCountKey`
+
+Scratch key counting the addresses newly frozen in the current transaction.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_FreezeCountKey">FreezeCountKey</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
 </dl>
 
 
@@ -621,11 +646,34 @@ Event: the <code>DenyCapV2</code> for <code>T</code> was replaced by the <code><
 
 
 
+<a name="sui_coin_regulation_ETooManyFreezes"></a>
+
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_ETooManyFreezes">ETooManyFreezes</a>: vector&lt;u8&gt; = b"Too many addresses frozen in this transaction.";
+</code></pre>
+
+
+
+<a name="sui_coin_regulation_MAX_FREEZES_PER_TRANSACTION"></a>
+
+The maximum number of addresses newly frozen by <code><a href="../sui/coin_regulation.md#sui_coin_regulation_freeze_address">freeze_address</a></code> or <code><a href="../sui/coin_regulation.md#sui_coin_regulation_permanently_freeze_address">permanently_freeze_address</a></code>
+in one transaction.
+
+
+<pre><code><b>const</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_MAX_FREEZES_PER_TRANSACTION">MAX_FREEZES_PER_TRANSACTION</a>: u64 = 8;
+</code></pre>
+
+
+
 <a name="sui_coin_regulation_freeze_address"></a>
 
 ## Function `freeze_address`
 
-Freeze <code>addr</code> for <code>T</code>. Aborts if <code>addr</code> is already frozen.
+Freeze <code>addr</code> for <code>T</code>.
+Aborts if <code>addr</code> is already frozen.
+Aborts if the transaction already froze <code><a href="../sui/coin_regulation.md#sui_coin_regulation_MAX_FREEZES_PER_TRANSACTION">MAX_FREEZES_PER_TRANSACTION</a></code> addresses.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_freeze_address">freeze_address</a>&lt;T&gt;(list: &<b>mut</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_FreezeList">sui::coin_regulation::FreezeList</a>, _cap: &<b>mut</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_ComplianceCap">sui::coin_regulation::ComplianceCap</a>&lt;T&gt;, addr: <b>address</b>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -643,6 +691,7 @@ Freeze <code>addr</code> for <code>T</code>. Aborts if <code>addr</code> is alre
     addr: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ) {
+    <a href="../sui/coin_regulation.md#sui_coin_regulation_count_freeze">count_freeze</a>(ctx);
     list.<a href="../sui/coin_regulation.md#sui_coin_regulation_add_frozen_address">add_frozen_address</a>&lt;T&gt;(addr, <b>false</b>, ctx);
 }
 </code></pre>
@@ -700,6 +749,8 @@ Unfreeze <code>addr</code> for <code>T</code>. Aborts unless <code>addr</code> i
 ## Function `permanently_freeze_address`
 
 Freeze <code>addr</code> for <code>T</code> if it is not frozen, and prevent it from ever being unfrozen.
+Aborts if <code>addr</code> is newly frozen and the transaction already froze
+<code><a href="../sui/coin_regulation.md#sui_coin_regulation_MAX_FREEZES_PER_TRANSACTION">MAX_FREEZES_PER_TRANSACTION</a></code> addresses.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_permanently_freeze_address">permanently_freeze_address</a>&lt;T&gt;(list: &<b>mut</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_FreezeList">sui::coin_regulation::FreezeList</a>, _cap: &<b>mut</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_ComplianceCap">sui::coin_regulation::ComplianceCap</a>&lt;T&gt;, addr: <b>address</b>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -721,6 +772,7 @@ Freeze <code>addr</code> for <code>T</code> if it is not frozen, and prevent it 
     <b>if</b> (df::exists(&list.id, key)) {
         df::borrow_mut&lt;_, <a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressState">FrozenAddressState</a>&gt;(&<b>mut</b> list.id, key).permanent = <b>true</b>;
     } <b>else</b> {
+        <a href="../sui/coin_regulation.md#sui_coin_regulation_count_freeze">count_freeze</a>(ctx);
         list.<a href="../sui/coin_regulation.md#sui_coin_regulation_add_frozen_address">add_frozen_address</a>&lt;T&gt;(addr, <b>true</b>, ctx);
     };
     <a href="../sui/event.md#sui_event_emit">event::emit</a>(<a href="../sui/coin_regulation.md#sui_coin_regulation_AddressPermanentlyFrozen">AddressPermanentlyFrozen</a>&lt;T&gt;(addr));
@@ -1207,6 +1259,35 @@ Freeze <code>addr</code> for <code>T</code> and count it in <code>T</code>'s sta
         },
     );
     <a href="../sui/event.md#sui_event_emit">event::emit</a>(<a href="../sui/coin_regulation.md#sui_coin_regulation_AddressFrozen">AddressFrozen</a>&lt;T&gt;(addr));
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_regulation_count_freeze"></a>
+
+## Function `count_freeze`
+
+Count a newly frozen address against this transaction's limit.
+
+
+<pre><code><b>fun</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_count_freeze">count_freeze</a>(ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_count_freeze">count_freeze</a>(ctx: &<b>mut</b> TxContext) {
+    <b>let</b> count =
+        ctx.scratch_internal_remove_opt!&lt;<a href="../sui/coin_regulation.md#sui_coin_regulation_FreezeCountKey">FreezeCountKey</a>, u64&gt;(<a href="../sui/coin_regulation.md#sui_coin_regulation_FreezeCountKey">FreezeCountKey</a>())
+        .destroy_with_default(0);
+    <b>assert</b>!(count &lt; <a href="../sui/coin_regulation.md#sui_coin_regulation_MAX_FREEZES_PER_TRANSACTION">MAX_FREEZES_PER_TRANSACTION</a>, <a href="../sui/coin_regulation.md#sui_coin_regulation_ETooManyFreezes">ETooManyFreezes</a>);
+    ctx.scratch_internal_add!(<a href="../sui/coin_regulation.md#sui_coin_regulation_FreezeCountKey">FreezeCountKey</a>(), count + 1);
 }
 </code></pre>
 

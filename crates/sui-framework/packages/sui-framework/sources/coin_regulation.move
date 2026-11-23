@@ -31,6 +31,12 @@ const EUnfreezeTooEarly: vector<u8> =
     b"The address cannot be unfrozen until the epoch after its last SeizeAuth was destroyed.";
 #[error(code = 7)]
 const ECoinTypeStateExists: vector<u8> = b"The coin type already has freeze list state.";
+#[error(code = 8)]
+const ETooManyFreezes: vector<u8> = b"Too many addresses frozen in this transaction.";
+
+/// The maximum number of addresses newly frozen by `freeze_address` or `permanently_freeze_address`
+/// in one transaction.
+const MAX_FREEZES_PER_TRANSACTION: u64 = 8;
 
 /// Singleton shared object holding the freeze and pause state of regulated coins.
 public struct FreezeList has key {
@@ -82,6 +88,9 @@ public struct FrozenAddressState has store {
     unfreeze_after_epoch: Option<u64>,
 }
 
+/// Scratch key counting the addresses newly frozen in the current transaction.
+public struct FreezeCountKey() has copy, drop;
+
 /// Event: the address was frozen for `T`.
 public struct AddressFrozen<phantom T>(address) has copy, drop;
 
@@ -121,13 +130,16 @@ public struct DenyCapMigrated<phantom T> has copy, drop {
 
 // === Freezing ===
 
-/// Freeze `addr` for `T`. Aborts if `addr` is already frozen.
+/// Freeze `addr` for `T`.
+/// Aborts if `addr` is already frozen.
+/// Aborts if the transaction already froze `MAX_FREEZES_PER_TRANSACTION` addresses.
 public fun freeze_address<T>(
     list: &mut FreezeList,
     _cap: &mut ComplianceCap<T>,
     addr: address,
     ctx: &mut TxContext,
 ) {
+    count_freeze(ctx);
     list.add_frozen_address<T>(addr, false, ctx);
 }
 
@@ -156,6 +168,8 @@ public fun unfreeze_address<T>(
 }
 
 /// Freeze `addr` for `T` if it is not frozen, and prevent it from ever being unfrozen.
+/// Aborts if `addr` is newly frozen and the transaction already froze
+/// `MAX_FREEZES_PER_TRANSACTION` addresses.
 public fun permanently_freeze_address<T>(
     list: &mut FreezeList,
     _cap: &mut ComplianceCap<T>,
@@ -166,6 +180,7 @@ public fun permanently_freeze_address<T>(
     if (df::exists(&list.id, key)) {
         df::borrow_mut<_, FrozenAddressState>(&mut list.id, key).permanent = true;
     } else {
+        count_freeze(ctx);
         list.add_frozen_address<T>(addr, true, ctx);
     };
     event::emit(AddressPermanentlyFrozen<T>(addr));
@@ -344,6 +359,15 @@ fun add_frozen_address<T>(list: &mut FreezeList, addr: address, permanent: bool,
         },
     );
     event::emit(AddressFrozen<T>(addr));
+}
+
+/// Count a newly frozen address against this transaction's limit.
+fun count_freeze(ctx: &mut TxContext) {
+    let count =
+        ctx.scratch_internal_remove_opt!<FreezeCountKey, u64>(FreezeCountKey())
+        .destroy_with_default(0);
+    assert!(count < MAX_FREEZES_PER_TRANSACTION, ETooManyFreezes);
+    ctx.scratch_internal_add!(FreezeCountKey(), count + 1);
 }
 
 /// The state of `T`, added if `T` has none.
