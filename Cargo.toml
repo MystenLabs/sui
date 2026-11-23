@@ -761,6 +761,7 @@ sui-data-ingestion-core = { path = "crates/sui-data-ingestion-core" }
 sui-data-store = { path = "crates/sui-data-store" }
 sui-display = { path = "crates/sui-display" }
 sui-e2e-tests = { path = "crates/sui-e2e-tests" }
+sui-encrypted-bundle-enclave = { path = "crates/sui-encrypted-bundle-enclave" }
 sui-enum-compat-util = { path = "crates/sui-enum-compat-util" }
 sui-faucet = { path = "crates/sui-faucet" }
 sui-field-count = { path = "crates/sui-field-count" }

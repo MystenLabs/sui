@@ -14452,6 +14452,7 @@ dependencies = [
  "shared-crypto",
  "sui-config",
  "sui-core",
+ "sui-encrypted-bundle-enclave",
  "sui-framework",
  "sui-framework-snapshot",
  "sui-keys",

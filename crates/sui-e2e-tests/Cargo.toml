@@ -79,6 +79,7 @@ sui-move-build.workspace = true
 sui-swarm-config.workspace = true
 sui-swarm.workspace = true
 sui-test-transaction-builder.workspace = true
+sui-encrypted-bundle-enclave.workspace = true
 sui-config.workspace = true
 sui-sdk.workspace = true
 sui-keys.workspace = true

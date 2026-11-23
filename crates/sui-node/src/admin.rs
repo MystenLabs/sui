@@ -23,7 +23,6 @@ use std::{
 };
 use sui_network::endpoint_manager::{AddressSource, EndpointId};
 use sui_types::encrypted_bundle::{BeaconKeyInfo, EncryptedBundleSubmission};
-use sui_types::messages_consensus::{ConsensusTransaction, EncryptedBundleMessage};
 use sui_types::{
     base_types::{AuthorityName, ConciseableName},
     crypto::{NetworkPublicKey, RandomnessPartialSignature, RandomnessRound, RandomnessSignature},
@@ -731,7 +730,7 @@ async fn submit_encrypted_bundle(
             "encrypted_bundles protocol flag is not enabled\n".to_string(),
         );
     }
-    let EncryptedBundleSubmission { bundle, fee_tx } = match bcs::from_bytes(&body) {
+    let submission: EncryptedBundleSubmission = match bcs::from_bytes(&body) {
         Ok(submission) => submission,
         Err(e) => {
             return (
@@ -740,58 +739,15 @@ async fn submit_encrypted_bundle(
             );
         }
     };
-    if bundle.author != authority_state.name {
-        return (
-            StatusCode::BAD_REQUEST,
-            "bundle author is not this validator\n".to_string(),
-        );
-    }
-    if bundle.epoch != epoch_store.epoch() {
-        return (
-            StatusCode::BAD_REQUEST,
-            format!(
-                "bundle epoch {} is not the current epoch {}\n",
-                bundle.epoch,
-                epoch_store.epoch()
-            ),
-        );
-    }
-    if let Err(e) = bundle.verify_signature() {
-        return (StatusCode::BAD_REQUEST, format!("{e}\n"));
-    }
-    let fee_tx = match epoch_store.verify_transaction_with_current_aliases(fee_tx) {
-        Ok(fee_tx) => fee_tx,
-        Err(e) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                format!("invalid fee transaction: {e}\n"),
-            );
-        }
-    };
-    let fee_tx_digest = *fee_tx.tx().digest();
-    let bundle_id = Hex::encode(bundle.id());
-
-    let Some(consensus_adapter) = state.node.consensus_adapter().await else {
-        return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            "validator components not running; consensus adapter unavailable\n".to_string(),
-        );
-    };
-    let transactions = [
-        ConsensusTransaction::new_user_transaction_v2_message(&authority_state.name, fee_tx.into()),
-        ConsensusTransaction::new_encrypted_bundle(EncryptedBundleMessage {
-            bundle,
-            fee_tx_digest,
-        }),
-    ];
-    match consensus_adapter.submit_batch(&transactions, None, &epoch_store, None, None) {
-        Ok(_) => (
+    match state.node.submit_encrypted_bundle(submission).await {
+        Ok((bundle_id, fee_tx_digest)) => (
             StatusCode::OK,
             format!(
-                "submitted encrypted bundle {bundle_id} with fee transaction {fee_tx_digest}\n"
+                "submitted encrypted bundle {} with fee transaction {fee_tx_digest}\n",
+                Hex::encode(bundle_id)
             ),
         ),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}\n")),
+        Err(e) => (StatusCode::BAD_REQUEST, format!("{e}\n")),
     }
 }
 
