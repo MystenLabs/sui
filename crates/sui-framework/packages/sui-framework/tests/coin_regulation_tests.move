@@ -345,6 +345,19 @@ fun unfreeze_permanent_after_seize_auths_destroyed_aborts() {
     abort
 }
 
+#[test, expected_failure(abort_code = coin_regulation::EPermanentlyFrozen)]
+fun permanently_freeze_after_seize_auth_destroyed() {
+    let (mut scenario, mut list, mut cap) = setup(false);
+    list.freeze_address(&mut cap, ALICE, scenario.ctx());
+    let auth = list.issue_seize_auth(&mut cap, ALICE, scenario.ctx());
+    list.destroy_seize_auth(auth, scenario.ctx());
+    list.permanently_freeze_address(&mut cap, ALICE, scenario.ctx());
+    assert!(list.is_permanently_frozen<TEST>(ALICE));
+    list = next_epoch(&mut scenario, list);
+    list.unfreeze_address(&mut cap, ALICE, scenario.ctx());
+    abort
+}
+
 #[test]
 fun transfer_seize_auth() {
     let (mut scenario, mut list, mut cap) = setup(false);

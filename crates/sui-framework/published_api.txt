@@ -2227,6 +2227,9 @@ CoinTypeUnpaused
 DenyCapMigrated
 	public struct
 	0x2::coin_regulation
+UnfreezeLock
+	public enum
+	0x2::coin_regulation
 freeze_address
 	public fun
 	0x2::coin_regulation

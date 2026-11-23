@@ -14,25 +14,25 @@ use sui::event;
 use sui::vec_set::{Self, VecSet};
 
 #[error(code = 0)]
-const ENotSystemAddress: vector<u8> = b"Only the system can create the freeze list.";
+const ENotSystemAddress: vector<u8> = "Only the system can create the freeze list.";
 #[error(code = 1)]
-const EAlreadyFrozen: vector<u8> = b"The address is already frozen for this coin type.";
+const EAlreadyFrozen: vector<u8> = "The address is already frozen for this coin type.";
 #[error(code = 2)]
-const ENotFrozen: vector<u8> = b"The address is not frozen for this coin type.";
+const ENotFrozen: vector<u8> = "The address is not frozen for this coin type.";
 #[error(code = 3)]
 const ESeizeAuthsOutstanding: vector<u8> =
-    b"The address cannot be unfrozen while any SeizeAuth for it exists.";
+    "The address cannot be unfrozen while any SeizeAuth for it exists.";
 #[error(code = 4)]
-const EPermanentlyFrozen: vector<u8> = b"The address is permanently frozen for this coin type.";
+const EPermanentlyFrozen: vector<u8> = "The address is permanently frozen for this coin type.";
 #[error(code = 5)]
-const EGlobalPauseNotAllowed: vector<u8> = b"The ComplianceCap does not allow global pause.";
+const EGlobalPauseNotAllowed: vector<u8> = "The ComplianceCap does not allow global pause.";
 #[error(code = 6)]
 const EUnfreezeTooEarly: vector<u8> =
-    b"The address cannot be unfrozen until the epoch after its last SeizeAuth was destroyed.";
+    "The address cannot be unfrozen until the epoch after its last SeizeAuth was destroyed.";
 #[error(code = 7)]
-const ECoinTypeStateExists: vector<u8> = b"The coin type already has freeze list state.";
+const ECoinTypeStateExists: vector<u8> = "The coin type already has freeze list state.";
 #[error(code = 8)]
-const ETooManyFreezes: vector<u8> = b"Too many addresses frozen in this transaction.";
+const ETooManyFreezes: vector<u8> = "Too many addresses frozen in this transaction.";
 
 /// The maximum number of addresses newly frozen by `freeze_address` or `permanently_freeze_address`
 /// in one transaction.
@@ -80,12 +80,21 @@ public struct FrozenAddressKey<phantom T>(address) has copy, drop, store;
 public struct FrozenAddressState has store {
     /// The IDs of the outstanding `SeizeAuth`s for this address.
     seize_auths: VecSet<ID>,
-    /// Whether this address can never be unfrozen.
-    permanent: bool,
     /// The epoch in which this address was frozen.
     frozen_epoch: u64,
-    /// The epoch of the last `destroy_seize_auth` for this address, if any.
-    unfreeze_after_epoch: Option<u64>,
+    /// The restriction on unfreezing this address.
+    unfreeze_lock: UnfreezeLock,
+}
+
+/// A restriction on unfreezing an address, in addition to its outstanding `SeizeAuth`s.
+public enum UnfreezeLock has copy, drop, store {
+    /// No restriction.
+    None,
+    /// Unfreezing is allowed only from this epoch on, the epoch after the last
+    /// `destroy_seize_auth`.
+    UntilEpoch(u64),
+    /// The address can never be unfrozen.
+    Permanent,
 }
 
 /// Scratch key counting the addresses newly frozen in the current transaction.
@@ -140,7 +149,7 @@ public fun freeze_address<T>(
     ctx: &mut TxContext,
 ) {
     count_freeze(ctx);
-    list.add_frozen_address<T>(addr, false, ctx);
+    list.add_frozen_address<T>(addr, UnfreezeLock::None, ctx);
 }
 
 /// Unfreeze `addr` for `T`. Aborts unless `addr` is frozen, not permanently, has no outstanding
@@ -153,15 +162,16 @@ public fun unfreeze_address<T>(
 ) {
     let key = FrozenAddressKey<T>(addr);
     assert!(df::exists(&list.id, key), ENotFrozen);
-    let FrozenAddressState {
-        seize_auths,
-        permanent,
-        frozen_epoch: _,
-        unfreeze_after_epoch,
-    } = df::remove(&mut list.id, key);
+    let FrozenAddressState { seize_auths, frozen_epoch: _, unfreeze_lock } = df::remove(
+        &mut list.id,
+        key,
+    );
     assert!(seize_auths.is_empty(), ESeizeAuthsOutstanding);
-    assert!(!permanent, EPermanentlyFrozen);
-    unfreeze_after_epoch.do!(|epoch| assert!(ctx.epoch() > epoch, EUnfreezeTooEarly));
+    match (unfreeze_lock) {
+        UnfreezeLock::None => (),
+        UnfreezeLock::UntilEpoch(epoch) => assert!(ctx.epoch() >= epoch, EUnfreezeTooEarly),
+        UnfreezeLock::Permanent => abort EPermanentlyFrozen,
+    };
     let state: &mut CoinTypeState = df::borrow_mut(&mut list.id, CoinTypeKey<T>());
     state.num_frozen_addresses = state.num_frozen_addresses - 1;
     event::emit(AddressUnfrozen<T>(addr));
@@ -178,10 +188,11 @@ public fun permanently_freeze_address<T>(
 ) {
     let key = FrozenAddressKey<T>(addr);
     if (df::exists(&list.id, key)) {
-        df::borrow_mut<_, FrozenAddressState>(&mut list.id, key).permanent = true;
+        let state: &mut FrozenAddressState = df::borrow_mut(&mut list.id, key);
+        state.unfreeze_lock = UnfreezeLock::Permanent;
     } else {
         count_freeze(ctx);
-        list.add_frozen_address<T>(addr, true, ctx);
+        list.add_frozen_address<T>(addr, UnfreezeLock::Permanent, ctx);
     };
     event::emit(AddressPermanentlyFrozen<T>(addr));
 }
@@ -218,7 +229,9 @@ public fun destroy_seize_auth<T>(list: &mut FreezeList, auth: SeizeAuth<T>, ctx:
         FrozenAddressKey<T>(frozen_address),
     );
     state.seize_auths.remove(&auth_id);
-    state.unfreeze_after_epoch = option::some(ctx.epoch());
+    if (state.unfreeze_lock != UnfreezeLock::Permanent) {
+        state.unfreeze_lock = UnfreezeLock::UntilEpoch(ctx.epoch() + 1);
+    };
     id.delete();
     event::emit(SeizeAuthDestroyed<T> { id: auth_id, frozen_address });
 }
@@ -263,9 +276,9 @@ public fun is_frozen<T>(list: &FreezeList, addr: address): bool {
 
 /// Whether `addr` is permanently frozen for `T`.
 public fun is_permanently_frozen<T>(list: &FreezeList, addr: address): bool {
-    df::get_fold!(&list.id, FrozenAddressKey<T>(addr), false, |state: &FrozenAddressState| {
-        state.permanent
-    })
+    df::get_fold!(&list.id, FrozenAddressKey<T>(addr), false, |state: &FrozenAddressState|
+        state.unfreeze_lock == UnfreezeLock::Permanent
+    )
 }
 
 /// Whether `T` is globally paused.
@@ -275,9 +288,9 @@ public fun is_global_pause_enabled<T>(list: &FreezeList): bool {
 
 /// The IDs of the outstanding `SeizeAuth`s for `addr`, empty if `addr` is not frozen.
 public fun seize_auths<T>(list: &FreezeList, addr: address): vector<ID> {
-    df::get_fold!(&list.id, FrozenAddressKey<T>(addr), vector[], |state: &FrozenAddressState| {
+    df::get_fold!(&list.id, FrozenAddressKey<T>(addr), vector[], |state: &FrozenAddressState|
         *state.seize_auths.keys()
-    })
+    )
 }
 
 /// Whether `cap` may globally pause `T`.
@@ -325,7 +338,7 @@ public(package) fun migrate_from_deny_list<T>(
         if (
             coin::deny_list_v2_contains_next_epoch<T>(deny_list, addr)
                 && !list.is_frozen<T>(addr)
-        ) list.add_frozen_address<T>(addr, false, ctx)
+        ) list.add_frozen_address<T>(addr, UnfreezeLock::None, ctx)
     });
     coin::deny_list_v2_mark_migrated<T>(deny_list);
     event::emit(DenyCapMigrated<T> { cap: object::id(&cap) });
@@ -343,7 +356,12 @@ fun create(ctx: &TxContext) {
 }
 
 /// Freeze `addr` for `T` and count it in `T`'s state. Aborts if `addr` is already frozen.
-fun add_frozen_address<T>(list: &mut FreezeList, addr: address, permanent: bool, ctx: &TxContext) {
+fun add_frozen_address<T>(
+    list: &mut FreezeList,
+    addr: address,
+    unfreeze_lock: UnfreezeLock,
+    ctx: &TxContext,
+) {
     let key = FrozenAddressKey<T>(addr);
     assert!(!df::exists(&list.id, key), EAlreadyFrozen);
     let state = list.coin_type_state_mut_or_add<T>();
@@ -353,9 +371,8 @@ fun add_frozen_address<T>(list: &mut FreezeList, addr: address, permanent: bool,
         key,
         FrozenAddressState {
             seize_auths: vec_set::empty(),
-            permanent,
             frozen_epoch: ctx.epoch(),
-            unfreeze_after_epoch: option::none(),
+            unfreeze_lock,
         },
     );
     event::emit(AddressFrozen<T>(addr));

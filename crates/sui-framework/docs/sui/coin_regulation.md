@@ -24,6 +24,7 @@ unfrozen only in an epoch after the last <code><a href="../sui/coin_regulation.m
 -  [Struct `CoinTypePaused`](#sui_coin_regulation_CoinTypePaused)
 -  [Struct `CoinTypeUnpaused`](#sui_coin_regulation_CoinTypeUnpaused)
 -  [Struct `DenyCapMigrated`](#sui_coin_regulation_DenyCapMigrated)
+-  [Enum `UnfreezeLock`](#sui_coin_regulation_UnfreezeLock)
 -  [Constants](#@Constants_0)
 -  [Function `freeze_address`](#sui_coin_regulation_freeze_address)
 -  [Function `unfreeze_address`](#sui_coin_regulation_unfreeze_address)
@@ -296,22 +297,16 @@ The value under <code><a href="../sui/coin_regulation.md#sui_coin_regulation_Fro
  The IDs of the outstanding <code><a href="../sui/coin_regulation.md#sui_coin_regulation_SeizeAuth">SeizeAuth</a></code>s for this address.
 </dd>
 <dt>
-<code>permanent: bool</code>
-</dt>
-<dd>
- Whether this address can never be unfrozen.
-</dd>
-<dt>
 <code><a href="../sui/coin_regulation.md#sui_coin_regulation_frozen_epoch">frozen_epoch</a>: u64</code>
 </dt>
 <dd>
  The epoch in which this address was frozen.
 </dd>
 <dt>
-<code>unfreeze_after_epoch: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;</code>
+<code>unfreeze_lock: <a href="../sui/coin_regulation.md#sui_coin_regulation_UnfreezeLock">sui::coin_regulation::UnfreezeLock</a></code>
 </dt>
 <dd>
- The epoch of the last <code><a href="../sui/coin_regulation.md#sui_coin_regulation_destroy_seize_auth">destroy_seize_auth</a></code> for this address, if any.
+ The restriction on unfreezing this address.
 </dd>
 </dl>
 
@@ -561,6 +556,56 @@ Event: the <code>DenyCapV2</code> for <code>T</code> was replaced by the <code><
 
 </details>
 
+<a name="sui_coin_regulation_UnfreezeLock"></a>
+
+## Enum `UnfreezeLock`
+
+A restriction on unfreezing an address, in addition to its outstanding <code><a href="../sui/coin_regulation.md#sui_coin_regulation_SeizeAuth">SeizeAuth</a></code>s.
+
+
+<pre><code><b>public</b> <b>enum</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_UnfreezeLock">UnfreezeLock</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Variants</summary>
+
+
+<dl>
+<dt>
+Variant <code>None</code>
+</dt>
+<dd>
+ No restriction.
+</dd>
+<dt>
+Variant <code>UntilEpoch</code>
+</dt>
+<dd>
+ Unfreezing is allowed only from this epoch on, the epoch after the last
+ <code><a href="../sui/coin_regulation.md#sui_coin_regulation_destroy_seize_auth">destroy_seize_auth</a></code>.
+</dd>
+
+<dl>
+<dt>
+<code>0: u64</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+<dt>
+Variant <code>Permanent</code>
+</dt>
+<dd>
+ The address can never be unfrozen.
+</dd>
+</dl>
+
+
+</details>
+
 <a name="@Constants_0"></a>
 
 ## Constants
@@ -692,7 +737,7 @@ Aborts if the transaction already froze <code><a href="../sui/coin_regulation.md
     ctx: &<b>mut</b> TxContext,
 ) {
     <a href="../sui/coin_regulation.md#sui_coin_regulation_count_freeze">count_freeze</a>(ctx);
-    list.<a href="../sui/coin_regulation.md#sui_coin_regulation_add_frozen_address">add_frozen_address</a>&lt;T&gt;(addr, <b>false</b>, ctx);
+    list.<a href="../sui/coin_regulation.md#sui_coin_regulation_add_frozen_address">add_frozen_address</a>&lt;T&gt;(addr, UnfreezeLock::None, ctx);
 }
 </code></pre>
 
@@ -725,15 +770,16 @@ Unfreeze <code>addr</code> for <code>T</code>. Aborts unless <code>addr</code> i
 ) {
     <b>let</b> key = <a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressKey">FrozenAddressKey</a>&lt;T&gt;(addr);
     <b>assert</b>!(df::exists(&list.id, key), <a href="../sui/coin_regulation.md#sui_coin_regulation_ENotFrozen">ENotFrozen</a>);
-    <b>let</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressState">FrozenAddressState</a> {
-        <a href="../sui/coin_regulation.md#sui_coin_regulation_seize_auths">seize_auths</a>,
-        permanent,
-        <a href="../sui/coin_regulation.md#sui_coin_regulation_frozen_epoch">frozen_epoch</a>: _,
-        unfreeze_after_epoch,
-    } = df::remove(&<b>mut</b> list.id, key);
+    <b>let</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressState">FrozenAddressState</a> { <a href="../sui/coin_regulation.md#sui_coin_regulation_seize_auths">seize_auths</a>, <a href="../sui/coin_regulation.md#sui_coin_regulation_frozen_epoch">frozen_epoch</a>: _, unfreeze_lock } = df::remove(
+        &<b>mut</b> list.id,
+        key,
+    );
     <b>assert</b>!(<a href="../sui/coin_regulation.md#sui_coin_regulation_seize_auths">seize_auths</a>.is_empty(), <a href="../sui/coin_regulation.md#sui_coin_regulation_ESeizeAuthsOutstanding">ESeizeAuthsOutstanding</a>);
-    <b>assert</b>!(!permanent, <a href="../sui/coin_regulation.md#sui_coin_regulation_EPermanentlyFrozen">EPermanentlyFrozen</a>);
-    unfreeze_after_epoch.do!(|epoch| <b>assert</b>!(ctx.epoch() &gt; epoch, <a href="../sui/coin_regulation.md#sui_coin_regulation_EUnfreezeTooEarly">EUnfreezeTooEarly</a>));
+    match (unfreeze_lock) {
+        UnfreezeLock::None =&gt; (),
+        UnfreezeLock::UntilEpoch(epoch) =&gt; <b>assert</b>!(ctx.epoch() &gt;= epoch, <a href="../sui/coin_regulation.md#sui_coin_regulation_EUnfreezeTooEarly">EUnfreezeTooEarly</a>),
+        UnfreezeLock::Permanent =&gt; <b>abort</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_EPermanentlyFrozen">EPermanentlyFrozen</a>,
+    };
     <b>let</b> state: &<b>mut</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_CoinTypeState">CoinTypeState</a> = df::borrow_mut(&<b>mut</b> list.id, <a href="../sui/coin_regulation.md#sui_coin_regulation_CoinTypeKey">CoinTypeKey</a>&lt;T&gt;());
     state.num_frozen_addresses = state.num_frozen_addresses - 1;
     <a href="../sui/event.md#sui_event_emit">event::emit</a>(<a href="../sui/coin_regulation.md#sui_coin_regulation_AddressUnfrozen">AddressUnfrozen</a>&lt;T&gt;(addr));
@@ -770,10 +816,11 @@ Aborts if <code>addr</code> is newly frozen and the transaction already froze
 ) {
     <b>let</b> key = <a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressKey">FrozenAddressKey</a>&lt;T&gt;(addr);
     <b>if</b> (df::exists(&list.id, key)) {
-        df::borrow_mut&lt;_, <a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressState">FrozenAddressState</a>&gt;(&<b>mut</b> list.id, key).permanent = <b>true</b>;
+        <b>let</b> state: &<b>mut</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressState">FrozenAddressState</a> = df::borrow_mut(&<b>mut</b> list.id, key);
+        state.unfreeze_lock = UnfreezeLock::Permanent;
     } <b>else</b> {
         <a href="../sui/coin_regulation.md#sui_coin_regulation_count_freeze">count_freeze</a>(ctx);
-        list.<a href="../sui/coin_regulation.md#sui_coin_regulation_add_frozen_address">add_frozen_address</a>&lt;T&gt;(addr, <b>true</b>, ctx);
+        list.<a href="../sui/coin_regulation.md#sui_coin_regulation_add_frozen_address">add_frozen_address</a>&lt;T&gt;(addr, UnfreezeLock::Permanent, ctx);
     };
     <a href="../sui/event.md#sui_event_emit">event::emit</a>(<a href="../sui/coin_regulation.md#sui_coin_regulation_AddressPermanentlyFrozen">AddressPermanentlyFrozen</a>&lt;T&gt;(addr));
 }
@@ -848,7 +895,9 @@ Destroy <code>auth</code> and remove it from its address's outstanding <code><a 
         <a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressKey">FrozenAddressKey</a>&lt;T&gt;(<a href="../sui/coin_regulation.md#sui_coin_regulation_frozen_address">frozen_address</a>),
     );
     state.<a href="../sui/coin_regulation.md#sui_coin_regulation_seize_auths">seize_auths</a>.remove(&auth_id);
-    state.unfreeze_after_epoch = option::some(ctx.epoch());
+    <b>if</b> (state.unfreeze_lock != UnfreezeLock::Permanent) {
+        state.unfreeze_lock = UnfreezeLock::UntilEpoch(ctx.epoch() + 1);
+    };
     id.delete();
     <a href="../sui/event.md#sui_event_emit">event::emit</a>(<a href="../sui/coin_regulation.md#sui_coin_regulation_SeizeAuthDestroyed">SeizeAuthDestroyed</a>&lt;T&gt; { id: auth_id, <a href="../sui/coin_regulation.md#sui_coin_regulation_frozen_address">frozen_address</a> });
 }
@@ -989,9 +1038,9 @@ Whether <code>addr</code> is permanently frozen for <code>T</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_is_permanently_frozen">is_permanently_frozen</a>&lt;T&gt;(list: &<a href="../sui/coin_regulation.md#sui_coin_regulation_FreezeList">FreezeList</a>, addr: <b>address</b>): bool {
-    df::get_fold!(&list.id, <a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressKey">FrozenAddressKey</a>&lt;T&gt;(addr), <b>false</b>, |state: &<a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressState">FrozenAddressState</a>| {
-        state.permanent
-    })
+    df::get_fold!(&list.id, <a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressKey">FrozenAddressKey</a>&lt;T&gt;(addr), <b>false</b>, |state: &<a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressState">FrozenAddressState</a>|
+        state.unfreeze_lock == UnfreezeLock::Permanent
+    )
 }
 </code></pre>
 
@@ -1041,9 +1090,9 @@ The IDs of the outstanding <code><a href="../sui/coin_regulation.md#sui_coin_reg
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_seize_auths">seize_auths</a>&lt;T&gt;(list: &<a href="../sui/coin_regulation.md#sui_coin_regulation_FreezeList">FreezeList</a>, addr: <b>address</b>): vector&lt;ID&gt; {
-    df::get_fold!(&list.id, <a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressKey">FrozenAddressKey</a>&lt;T&gt;(addr), vector[], |state: &<a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressState">FrozenAddressState</a>| {
+    df::get_fold!(&list.id, <a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressKey">FrozenAddressKey</a>&lt;T&gt;(addr), vector[], |state: &<a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressState">FrozenAddressState</a>|
         *state.<a href="../sui/coin_regulation.md#sui_coin_regulation_seize_auths">seize_auths</a>.keys()
-    })
+    )
 }
 </code></pre>
 
@@ -1189,7 +1238,7 @@ list.
         <b>if</b> (
             <a href="../sui/coin.md#sui_coin_deny_list_v2_contains_next_epoch">coin::deny_list_v2_contains_next_epoch</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>, addr)
                 && !list.<a href="../sui/coin_regulation.md#sui_coin_regulation_is_frozen">is_frozen</a>&lt;T&gt;(addr)
-        ) list.<a href="../sui/coin_regulation.md#sui_coin_regulation_add_frozen_address">add_frozen_address</a>&lt;T&gt;(addr, <b>false</b>, ctx)
+        ) list.<a href="../sui/coin_regulation.md#sui_coin_regulation_add_frozen_address">add_frozen_address</a>&lt;T&gt;(addr, UnfreezeLock::None, ctx)
     });
     <a href="../sui/coin.md#sui_coin_deny_list_v2_mark_migrated">coin::deny_list_v2_mark_migrated</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>);
     <a href="../sui/event.md#sui_event_emit">event::emit</a>(<a href="../sui/coin_regulation.md#sui_coin_regulation_DenyCapMigrated">DenyCapMigrated</a>&lt;T&gt; { cap: <a href="../sui/object.md#sui_object_id">object::id</a>(&cap) });
@@ -1234,7 +1283,7 @@ Create and share the <code><a href="../sui/coin_regulation.md#sui_coin_regulatio
 Freeze <code>addr</code> for <code>T</code> and count it in <code>T</code>'s state. Aborts if <code>addr</code> is already frozen.
 
 
-<pre><code><b>fun</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_add_frozen_address">add_frozen_address</a>&lt;T&gt;(list: &<b>mut</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_FreezeList">sui::coin_regulation::FreezeList</a>, addr: <b>address</b>, permanent: bool, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_add_frozen_address">add_frozen_address</a>&lt;T&gt;(list: &<b>mut</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_FreezeList">sui::coin_regulation::FreezeList</a>, addr: <b>address</b>, unfreeze_lock: <a href="../sui/coin_regulation.md#sui_coin_regulation_UnfreezeLock">sui::coin_regulation::UnfreezeLock</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1243,7 +1292,12 @@ Freeze <code>addr</code> for <code>T</code> and count it in <code>T</code>'s sta
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_add_frozen_address">add_frozen_address</a>&lt;T&gt;(list: &<b>mut</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_FreezeList">FreezeList</a>, addr: <b>address</b>, permanent: bool, ctx: &TxContext) {
+<pre><code><b>fun</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_add_frozen_address">add_frozen_address</a>&lt;T&gt;(
+    list: &<b>mut</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_FreezeList">FreezeList</a>,
+    addr: <b>address</b>,
+    unfreeze_lock: <a href="../sui/coin_regulation.md#sui_coin_regulation_UnfreezeLock">UnfreezeLock</a>,
+    ctx: &TxContext,
+) {
     <b>let</b> key = <a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressKey">FrozenAddressKey</a>&lt;T&gt;(addr);
     <b>assert</b>!(!df::exists(&list.id, key), <a href="../sui/coin_regulation.md#sui_coin_regulation_EAlreadyFrozen">EAlreadyFrozen</a>);
     <b>let</b> state = list.<a href="../sui/coin_regulation.md#sui_coin_regulation_coin_type_state_mut_or_add">coin_type_state_mut_or_add</a>&lt;T&gt;();
@@ -1253,9 +1307,8 @@ Freeze <code>addr</code> for <code>T</code> and count it in <code>T</code>'s sta
         key,
         <a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressState">FrozenAddressState</a> {
             <a href="../sui/coin_regulation.md#sui_coin_regulation_seize_auths">seize_auths</a>: <a href="../sui/vec_set.md#sui_vec_set_empty">vec_set::empty</a>(),
-            permanent,
             <a href="../sui/coin_regulation.md#sui_coin_regulation_frozen_epoch">frozen_epoch</a>: ctx.epoch(),
-            unfreeze_after_epoch: option::none(),
+            unfreeze_lock,
         },
     );
     <a href="../sui/event.md#sui_event_emit">event::emit</a>(<a href="../sui/coin_regulation.md#sui_coin_regulation_AddressFrozen">AddressFrozen</a>&lt;T&gt;(addr));
