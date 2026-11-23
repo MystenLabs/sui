@@ -122,6 +122,14 @@ pub struct PoolConfig {
     /// request on the channel receives anything, so it should be at least
     /// `http2_stream_window_bytes` times the most requests a channel carries at once.
     pub http2_connection_window_bytes: u32,
+    /// Most locally reset HTTP/2 streams each channel remembers so late frames from BigTable on
+    /// cancelled reads are ignored instead of answered with another RST_STREAM.
+    pub http2_max_concurrent_reset_streams: usize,
+    /// How long each channel remembers a locally reset HTTP/2 stream before forgetting it.
+    pub http2_reset_stream_duration: Duration,
+    /// Maximum library-initiated error resets a channel allows over its lifetime before closing
+    /// with GOAWAY (`too_many_internal_resets`). `None` disables the limit.
+    pub http2_max_local_error_reset_streams: Option<usize>,
 }
 
 /// Thresholds for detecting, quarantining, and replacing stalled channels.
@@ -385,7 +393,10 @@ impl ChannelPool {
     ) -> Self {
         let endpoint = endpoint
             .initial_stream_window_size(config.http2_stream_window_bytes)
-            .initial_connection_window_size(config.http2_connection_window_bytes);
+            .initial_connection_window_size(config.http2_connection_window_bytes)
+            .http2_max_concurrent_reset_streams(config.http2_max_concurrent_reset_streams)
+            .http2_reset_stream_duration(config.http2_reset_stream_duration)
+            .http2_max_local_error_reset_streams(config.http2_max_local_error_reset_streams);
         Self {
             inner: Arc::new(ChannelPoolInner {
                 entries: ArcSwap::from_pointee(Vec::new()),
@@ -1259,6 +1270,15 @@ impl Default for PoolConfig {
             // still streams faster than a BigTable read needs at in-region round trips.
             http2_stream_window_bytes: 256 << 10,
             http2_connection_window_bytes: 256 << 20,
+            // List scans cancel BigTable ReadRows streams once a page is full, and a stalled
+            // channel quarantine resets every open stream on the channel at once. Remember reset
+            // streams long enough for late in-flight frames to arrive and be ignored instead of
+            // triggering another RST_STREAM, and disable h2's monotonic local-error-reset cap so
+            // occasional stragglers past the window cannot accumulate over a channel's lifetime
+            // and GOAWAY the connection. BigTable is a trusted peer.
+            http2_max_concurrent_reset_streams: 2_000,
+            http2_reset_stream_duration: Duration::from_secs(10),
+            http2_max_local_error_reset_streams: None,
         }
     }
 }
@@ -1657,6 +1677,7 @@ mod tests {
     use crate::bigtable::client::BigtablePrimer;
     use crate::bigtable::client::CheckpointSpan;
     use crate::bigtable::client::ReadRowsRetryConfig;
+    use crate::bigtable::client::raw_h2_server::GoAway;
     use crate::bigtable::client::raw_h2_server::RawH2Server;
     use crate::bigtable::client::raw_h2_server::ReadRowsMode;
     use crate::bigtable::metrics::KvMetrics;
@@ -3161,9 +3182,9 @@ mod tests {
         assert_eq!(entry.waiting.load(Ordering::Relaxed), 0);
         server.wait_for_resets(1_500).await;
 
-        // The server keeps sending DATA on every stream the client reset. Most of those streams
-        // are past h2's short memory of locally reset streams; if h2 answered each late frame
-        // with its own reset, the 1024 local-reset limit would make it GOAWAY.
+        // The server keeps sending DATA on every stream the client reset. Under h2's defaults
+        // (50 remembered streams, 1,024 local error resets), late frames on these streams would
+        // close the connection with GOAWAY(too_many_internal_resets).
         server.flood_reset_streams(512).await;
         assert_eq!(server.client_goaway(), None);
 
@@ -3256,5 +3277,65 @@ mod tests {
         }
         assert_eq!(server.client_goaway(), None);
         assert_eq!(server.connections(), 1);
+    }
+
+    /// Cancel `count` held streams on a one-channel pool with `config`, flood each with a late
+    /// DATA frame, and return any GOAWAY frame the client sent.
+    async fn flood_cancelled_streams(config: PoolConfig, count: usize) -> Option<GoAway> {
+        let server = RawH2Server::start().await;
+        let pool = ChannelPool::new(server.endpoint(), config, None, None);
+        pool.connect().await.unwrap();
+        server.set_read_rows_mode(ReadRowsMode::HoldAfterHeaders);
+        let streams = open_held_streams(&pool, count).await;
+        drop(streams);
+        server.wait_for_resets(count).await;
+        server.flood_reset_streams(512).await;
+        server.client_goaway()
+    }
+
+    #[tokio::test]
+    async fn http2_reset_stream_config_controls_goaway_on_late_frames() {
+        // h2's built-in defaults (50 remembered streams, 1024 local error reset limit) GOAWAY when
+        // 1,200 cancelled streams receive late DATA frames.
+        let goaway = flood_cancelled_streams(
+            PoolConfig {
+                http2_max_concurrent_reset_streams: 50,
+                http2_reset_stream_duration: Duration::from_secs(1),
+                http2_max_local_error_reset_streams: Some(1_024),
+                ..PoolConfig::singleton()
+            },
+            1_200,
+        )
+        .await
+        .expect("h2 defaults should GOAWAY on 1,200 late frames");
+        assert_eq!(goaway.debug_data.as_ref(), b"too_many_internal_resets");
+
+        // Remembering all 1,200 reset streams absorbs every late frame without counting toward
+        // even a strict local-error-reset cap of 1.
+        let goaway = flood_cancelled_streams(
+            PoolConfig {
+                http2_max_concurrent_reset_streams: 2_000,
+                http2_reset_stream_duration: Duration::from_secs(10),
+                http2_max_local_error_reset_streams: Some(1),
+                ..PoolConfig::singleton()
+            },
+            1_200,
+        )
+        .await;
+        assert_eq!(goaway, None);
+
+        // Disabling the local-error-reset cap avoids GOAWAY even when late frames arrive after
+        // streams have been evicted from the reset cache.
+        let goaway = flood_cancelled_streams(
+            PoolConfig {
+                http2_max_concurrent_reset_streams: 50,
+                http2_reset_stream_duration: Duration::from_millis(1),
+                http2_max_local_error_reset_streams: None,
+                ..PoolConfig::singleton()
+            },
+            1_200,
+        )
+        .await;
+        assert_eq!(goaway, None);
     }
 }

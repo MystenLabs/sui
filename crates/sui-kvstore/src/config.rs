@@ -137,6 +137,15 @@ pub struct BigtablePoolLayer {
     /// 256 MiB). While unread response data fills it, no request on that channel receives
     /// anything.
     pub http2_connection_window_bytes: Option<u32>,
+    /// Most locally reset HTTP/2 streams each BigTable channel remembers (default: 2000).
+    pub http2_max_concurrent_reset_streams: Option<usize>,
+    /// How long each BigTable channel remembers a locally reset HTTP/2 stream, in milliseconds
+    /// (default: 10000 = 10 s).
+    pub http2_reset_stream_duration_ms: Option<u64>,
+    /// Maximum library-initiated HTTP/2 error resets a BigTable channel allows over its lifetime
+    /// before closing with GOAWAY (`too_many_internal_resets`). `0` disables the limit (default:
+    /// disabled).
+    pub http2_max_local_error_reset_streams: Option<usize>,
 
     /// Deprecated and ignored; setting it logs a warning. The pool sizes itself on
     /// `min-rpcs-per-channel` and `max-rpcs-per-channel`.
@@ -195,6 +204,18 @@ impl BigtablePoolLayer {
             http2_connection_window_bytes: self
                 .http2_connection_window_bytes
                 .unwrap_or(base.http2_connection_window_bytes),
+            http2_max_concurrent_reset_streams: self
+                .http2_max_concurrent_reset_streams
+                .unwrap_or(base.http2_max_concurrent_reset_streams),
+            http2_reset_stream_duration: self
+                .http2_reset_stream_duration_ms
+                .map(Duration::from_millis)
+                .unwrap_or(base.http2_reset_stream_duration),
+            http2_max_local_error_reset_streams: match self.http2_max_local_error_reset_streams {
+                None => base.http2_max_local_error_reset_streams,
+                Some(0) => None,
+                Some(limit) => Some(limit),
+            },
         }
     }
 }
