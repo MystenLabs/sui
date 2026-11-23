@@ -48,7 +48,7 @@ use sui_types::{
     messages_consensus::{
         AuthorityCapabilitiesV2, AuthorityIndex, ConsensusDeterminedVersionAssignments,
         ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
-        ExecutionTimeObservation, SharedTransactionDenyConfig,
+        EncryptedBundleMessage, ExecutionTimeObservation, SharedTransactionDenyConfig,
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{
@@ -938,6 +938,7 @@ struct CommitHandlerInput {
     end_of_publish_transactions: Vec<AuthorityName>,
     new_jwks: Vec<(AuthorityName, JwkId, JWK)>,
     transaction_deny_config_updates: Vec<(AuthorityName, SharedTransactionDenyConfig)>,
+    encrypted_bundles: Vec<EncryptedBundleMessage>,
 }
 
 /// Copy counts from one commit for the staggered-submission duplication signal. They
@@ -1198,6 +1199,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             end_of_publish_transactions,
             new_jwks,
             transaction_deny_config_updates,
+            encrypted_bundles,
         } = self.build_commit_handler_input(transactions);
 
         self.process_gasless_transactions(&commit_info, &user_transactions);
@@ -2891,7 +2893,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         // Note: we no longer have to check protocol_config.ignore_execution_time_observations_after_certs_closed()
                         | ConsensusTransactionKind::ExecutionTimeObservation(_)
                         | ConsensusTransactionKind::NewJWKFetched(_, _, _)
-                        | ConsensusTransactionKind::UpdateTransactionDenyConfig(_) => {
+                        | ConsensusTransactionKind::UpdateTransactionDenyConfig(_)
+                        | ConsensusTransactionKind::EncryptedBundle(_) => {
                             // Deterministic drop: the reconfig state is derived from prior
                             // commits, so all validators ignore this transaction. Record a
                             // terminal status for user transactions so status waiters are
@@ -2924,8 +2927,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
                 if !initial_reconfig_state.should_accept_tx() {
                     match &parsed.transaction.kind {
+                        // A bundle accepted now could still be pending when the epoch closes,
+                        // so bundles are dropped once user transactions stop. No key share is
+                        // released for a dropped bundle.
                         ConsensusTransactionKind::RandomnessDkgConfirmation(_, _)
-                        | ConsensusTransactionKind::RandomnessDkgMessage(_, _) => continue,
+                        | ConsensusTransactionKind::RandomnessDkgMessage(_, _)
+                        | ConsensusTransactionKind::EncryptedBundle(_) => continue,
                         _ => {}
                     }
                 }
@@ -3351,6 +3358,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                                 .transaction_deny_config_updates
                                 .push((transaction.certificate_author, *msg));
                         }
+                        ConsensusTransactionKind::EncryptedBundle(msg) => {
+                            commit_handler_input.encrypted_bundles.push(*msg);
+                        }
 
                         // Deprecated messages, filtered earlier by filter_consensus_txns()
                         // or rejected by SuiTxValidator. Kept for exhaustiveness.
@@ -3592,6 +3602,7 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
         ConsensusTransactionKind::UpdateTransactionDenyConfig(_) => {
             "update_transaction_deny_config"
         }
+        ConsensusTransactionKind::EncryptedBundle(_) => "encrypted_bundle",
     }
 }
 

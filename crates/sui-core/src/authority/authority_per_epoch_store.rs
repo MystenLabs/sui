@@ -3185,6 +3185,18 @@ impl AuthorityPerEpochStore {
                 // generation checks happen in TransactionDenyConfigManager::apply_updates
                 // when the commit handler applies the update.
             }
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::EncryptedBundle(msg),
+                ..
+            }) => {
+                if transaction.sender_authority() != msg.bundle.author {
+                    warn!(
+                        "EncryptedBundle author {} does not match its author from consensus {}",
+                        msg.bundle.author, transaction.certificate_author_index
+                    );
+                    return None;
+                }
+            }
             SequencedConsensusTransactionKind::System(_) => {}
         }
         Some(VerifiedSequencedConsensusTransaction(transaction))

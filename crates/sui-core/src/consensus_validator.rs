@@ -209,6 +209,21 @@ impl SuiTxValidator {
                         })?;
                     }
                 }
+
+                ConsensusTransactionKind::EncryptedBundle(msg) => {
+                    if !epoch_store.protocol_config().encrypted_bundles() {
+                        return Err(SuiErrorKind::UnexpectedMessage(
+                            "EncryptedBundle is not supported by current protocol version"
+                                .to_string(),
+                        )
+                        .into());
+                    }
+                    // A bundle with an invalid one-time signature can only come from a
+                    // byzantine proposer, so it invalidates the whole block.
+                    msg.bundle.verify_signature().map_err(|e| -> SuiError {
+                        SuiErrorKind::UnexpectedMessage(format!("EncryptedBundle: {e}")).into()
+                    })?;
+                }
             }
         }
 
