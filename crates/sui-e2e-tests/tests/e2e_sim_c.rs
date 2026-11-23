@@ -9,6 +9,7 @@ mod allowance_tests;
 mod authenticated_events_api_tests;
 mod authenticated_events_end_to_end_test;
 mod checkpoint_tests;
+mod coin_regulation_tests;
 mod derived_object_release_tests;
 mod discovery_tests;
 mod ecdsa_r1_ecrecover_tests;
