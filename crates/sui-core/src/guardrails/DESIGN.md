@@ -464,9 +464,10 @@ transactions and one new rule in the transaction model for it.
   to congestion control and version assignment. The overload check at submission and the gas price
   suggestion compute their own. Each computation is one object cache read, a hit or a
   negative hit.
-- Implementation note: after version assignment, and in effects, a consensus object a transaction
-  does not declare is a mutable input, outside the implicitly read system objects. Only a
-  guardrails policy can be one today.
+- Implementation note: after version assignment a consensus object a transaction does not declare
+  is a mutable input, outside the implicitly read system objects. Only a guardrails policy can be
+  one today. In effects only the sender's policy counts, so a consensus object of any other kind
+  that effects show undeclared is skipped as before.
 - Implementation note: the execution scheduler's barrier dependencies for non-exclusive writes read
   only declared inputs. No dependency is missed, because only the owner declares a policy and only
   as a mutable input, so nothing takes a non-exclusive write on it.
@@ -480,6 +481,9 @@ transactions and one new rule in the transaction model for it.
   active policy goes through consensus on the policy, but submission and the latency metrics
   treat it as single-writer, and the direct sequencing mode of the mock consensus in unit tests
   does not sequence it.
+- Implementation note: the `shared_object_disabled` deny config sees only declared inputs, at
+  signing and in simulation. It does not refuse a transaction with only owned inputs whose sender
+  has an active policy.
 - Implementation note: the registry is created at genesis only. A network that started without it
   needs an end-of-epoch creation transaction, which is a follow-up.
 - Implementation note: the signing checks for gasless transactions, withdrawals from other

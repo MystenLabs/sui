@@ -23,6 +23,7 @@ use sui_rpc::proto::sui::rpc::v2::SimulateTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::SimulateTransactionResponse;
 use sui_rpc::proto::sui::rpc::v2::Transaction;
 use sui_types::balance_change::derive_balance_changes_2;
+use sui_types::consensus_inputs::added_shared_inputs_at_latest;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::SuiError;
 use sui_types::error::SuiErrorKind;
@@ -973,11 +974,20 @@ fn is_gasless_candidate(
     }
 
     // Load Move object inputs so we can run the runtime input check. Packages need not be loaded
-    // since check_gasless_object_inputs skips them.
-    let input_object_kinds = match transaction.input_objects() {
+    // since check_gasless_object_inputs skips them. The shared inputs consensus would add count
+    // too.
+    let mut input_object_kinds = match transaction.input_objects() {
         Ok(kinds) => kinds,
         Err(_) => return Ok(false),
     };
+    let epoch = service.reader.inner().get_latest_checkpoint()?.epoch();
+    input_object_kinds.extend(
+        added_shared_inputs_at_latest(protocol_config, epoch, transaction, |id| {
+            service.reader.inner().get_object(id)
+        })
+        .into_iter()
+        .map(InputObjectKind::from),
+    );
     let mut loaded = Vec::with_capacity(input_object_kinds.len());
     for kind in input_object_kinds {
         match kind {

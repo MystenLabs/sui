@@ -6,19 +6,14 @@
 //! policy (see `guardrails/DESIGN.md`).
 //!
 //! Before version assignment the added inputs come from the latest state. After it they are the
-//! assigned objects the transaction does not declare, and in effects they are the accessed
-//! consensus objects it does not declare.
+//! assigned objects the transaction does not declare, and in effects they are the sender's
+//! policy when the transaction accessed it without declaring it.
 
 use mysten_common::fatal;
-use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    base_types::ObjectID,
-    committee::EpochId,
-    consensus_inputs::{added_input, added_input_ids_in_effects},
+    consensus_inputs::{added_input, added_input_ids_in_effects, added_shared_inputs_at_latest},
     effects::TransactionEffects,
     error::SuiResult,
-    guardrails::implicit_policy_input,
-    object::Object,
     transaction::{InputObjectKind, SharedInputObject, TransactionData, TransactionDataAPI},
 };
 
@@ -27,19 +22,6 @@ use crate::authority::{
     shared_object_version_manager::AssignedVersions,
 };
 use crate::execution_cache::ObjectCacheRead;
-
-/// The shared objects consensus adds to `tx_data` in `epoch`, given `latest`, which reads the
-/// latest version of an object. For anything that executes a transaction without consensus.
-pub fn added_shared_inputs_at_latest(
-    protocol_config: &ProtocolConfig,
-    epoch: EpochId,
-    tx_data: &TransactionData,
-    latest: impl FnOnce(&ObjectID) -> Option<Object>,
-) -> Vec<SharedInputObject> {
-    implicit_policy_input(protocol_config, epoch, tx_data, latest)
-        .into_iter()
-        .collect()
-}
 
 /// The shared objects consensus sequences `tx_data` on.
 pub(crate) fn sequenced_shared_inputs(

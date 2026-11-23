@@ -13,7 +13,6 @@ use sui_core::{
         funds_read::AccountFundsRead, object_funds_checker::metrics::ObjectFundsCheckerMetrics,
         unsettled_object_withdrawals::UnsettledObjectWithdrawals,
     },
-    consensus_inputs::added_shared_inputs_at_latest,
     transaction_simulation::{SimulationInputLoader, simulate_transaction},
 };
 use sui_execution::Executor;
@@ -24,6 +23,7 @@ use sui_types::{
     base_types::{ObjectRef, SequenceNumber, TransactionDigest},
     coin_reservation::BorrowedCoinReservationResolver,
     committee::{Committee, EpochId},
+    consensus_inputs::added_shared_inputs_at_latest,
     digests::ChainIdentifier,
     effects::{TransactionEffects, TransactionEffectsAPI},
     error::SuiResult,
@@ -179,7 +179,16 @@ impl EpochState {
         )?;
 
         // Run the transaction input checks that would run when submitting the txn to a validator
-        // for signing
+        // for signing. The guardrails check runs first, as in simulation: the input checks see the
+        // added policy input and would refuse a gasless transaction for having a shared input
+        // instead of for its sender's policy.
+        sui_transaction_checks::guardrails::check_guardrails_for_signing(
+            &self.protocol_config,
+            self.epoch_start_state.epoch(),
+            tx_data,
+            &input_objects,
+            |id| store.backing_store().get_object(id),
+        )?;
         let checked_input_objects = sui_transaction_checks::check_transaction_input(
             &self.protocol_config,
             self.epoch_start_state.reference_gas_price(),
@@ -188,13 +197,6 @@ impl EpochState {
             &receiving_objects,
             &self.bytecode_verifier_metrics,
             verifier_signing_config,
-        )?;
-        sui_transaction_checks::guardrails::check_guardrails_for_signing(
-            &self.protocol_config,
-            self.epoch_start_state.epoch(),
-            tx_data,
-            checked_input_objects.inner(),
-            |id| store.backing_store().get_object(id),
         )?;
 
         let transaction_data = transaction.data().transaction_data();
