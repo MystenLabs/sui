@@ -464,10 +464,9 @@ transactions and one new rule in the transaction model for it.
   to congestion control and version assignment. The overload check at submission and the gas price
   suggestion compute their own. Each computation is one object cache read, a hit or a
   negative hit.
-- Implementation note: after version assignment a consensus object a transaction does not declare
-  is a mutable input, outside the implicitly read system objects. Only a guardrails policy can be
-  one today. In effects only the sender's policy counts, so a consensus object of any other kind
-  that effects show undeclared is skipped as before.
+- Implementation note: `sui_types::consensus_inputs` holds the rule that the sender's policy is
+  the only object consensus can add. Validators after version assignment and fullnodes and replay
+  reading effects both apply it, and any other undeclared object is not an added input.
 - Implementation note: the execution scheduler's barrier dependencies for non-exclusive writes read
   only declared inputs. No dependency is missed, because only the owner declares a policy and only
   as a mutable input, so nothing takes a non-exclusive write on it.

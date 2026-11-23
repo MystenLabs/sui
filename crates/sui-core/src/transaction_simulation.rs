@@ -17,7 +17,7 @@ use sui_transaction_checks::{
 use sui_types::{
     base_types::{EpochId, ObjectID, ObjectRef, SystemObjectVersions},
     coin_reservation::{CoinReservationResolverTrait, ParsedDigest},
-    consensus_inputs::added_shared_inputs_at_latest,
+    consensus_inputs::input_objects_at_latest,
     digests::{ChainIdentifier, TransactionDigest},
     effects::TransactionEffectsAPI,
     error::{SuiErrorKind, SuiResult},
@@ -101,7 +101,11 @@ pub fn simulate_transaction(
     // Compute input/receiving object kinds before mock gas injection so the mock
     // gas reference is not included in input_object_kinds (it is added to
     // input_objects directly after object loading).
-    let mut input_object_kinds = transaction.input_objects()?;
+    let declared_input_object_kinds = transaction.input_objects()?;
+    let input_object_kinds =
+        input_objects_at_latest(protocol_config, execution_epoch_id, &transaction, |id| {
+            backing_store.get_object(id)
+        })?;
     let receiving_object_refs = transaction.receiving_objects();
 
     // Inject mock gas coin before validity_check so that on protocol versions
@@ -135,7 +139,8 @@ pub fn simulate_transaction(
     let declared_withdrawals = pre_object_load_checks(
         &transaction,
         &[],
-        &input_object_kinds,
+        // The deny checks see only the declared inputs, as they do at signing.
+        &declared_input_object_kinds,
         &receiving_object_refs,
         protocol_config,
         transaction_deny_config,
@@ -145,15 +150,6 @@ pub fn simulate_transaction(
         account_funds_read,
     )?;
     let address_funds: BTreeSet<_> = declared_withdrawals.keys().cloned().collect();
-
-    // After the deny checks, which see only the declared inputs, as they do at signing.
-    input_object_kinds.extend(
-        added_shared_inputs_at_latest(protocol_config, execution_epoch_id, &transaction, |id| {
-            backing_store.get_object(id)
-        })
-        .into_iter()
-        .map(InputObjectKind::from),
-    );
 
     let transaction_digest = transaction.digest();
     let (mut input_objects, receiving_objects) = input_loader.read_objects_for_simulation(

@@ -5,13 +5,16 @@
 //! mutable shared inputs consensus adds to it. Today consensus adds only the sender's guardrails
 //! policy (see `guardrails/DESIGN.md`).
 //!
-//! Before version assignment the added inputs come from the latest state. After it they are the
-//! assigned objects the transaction does not declare, and in effects they are the sender's
-//! policy when the transaction accessed it without declaring it.
+//! Before version assignment the added inputs come from the latest state. After it the added
+//! input is the sender's policy when consensus assigned it a version and the transaction does
+//! not declare it, and in effects it is the sender's policy when the transaction accessed it
+//! without declaring it.
 
 use mysten_common::fatal;
 use sui_types::{
-    consensus_inputs::{added_input, added_input_ids_in_effects, added_shared_inputs_at_latest},
+    consensus_inputs::{
+        addable_input_id, added_input, added_input_ids_in_effects, added_shared_inputs_at_latest,
+    },
     effects::TransactionEffects,
     error::SuiResult,
     transaction::{InputObjectKind, SharedInputObject, TransactionData, TransactionDataAPI},
@@ -44,10 +47,21 @@ fn added_shared_inputs(
     tx_data: &TransactionData,
     assigned_versions: &AssignedVersions,
 ) -> Vec<SharedInputObject> {
-    let declared = tx_data.shared_input_objects();
+    let addable = addable_input_id(tx_data);
+    debug_assert!(
+        assigned_versions
+            .iter()
+            .all(|((id, _), _)| Some(*id) == addable
+                || tx_data
+                    .shared_input_objects()
+                    .iter()
+                    .any(|input| input.id == *id)),
+        "assigned versions {assigned_versions:?} hold an object that {tx_data:?} neither declares \
+         nor can have added",
+    );
     assigned_versions
         .iter()
-        .filter(|((id, _), _)| declared.iter().all(|input| input.id != *id))
+        .filter(|((id, _), _)| Some(*id) == addable)
         .map(|((id, initial_shared_version), _)| added_input(*id, *initial_shared_version))
         .collect()
 }
