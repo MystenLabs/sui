@@ -4,6 +4,7 @@
 //! Converts the `filter` of `ListOwnedObjects` and `ListDynamicFields` requests
 //! into the filters the index reader evaluates.
 
+use std::borrow::Cow;
 use std::str::FromStr;
 
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
@@ -29,6 +30,13 @@ const MAX_FILTER_LITERALS: usize = 32;
 const LITERALS_FIELD: &str = "filter.terms.literals";
 const OBJECT_TYPE_FIELD: &str = "filter.terms.literals.object_type.object_type";
 const NAME_TYPE_FIELD: &str = "filter.terms.literals.name_type.name_type";
+
+/// The most bytes of client input, or of a parser error that quotes it, that
+/// an error description repeats. A status carries its description twice, as
+/// `grpc-message` and inside `grpc-status-details-bin`, so repeating a long
+/// input in full multiplies its size in the response trailers past what
+/// clients accept (grpc-core's default is 8 KiB of metadata).
+const MAX_ECHOED_LEN: usize = 256;
 
 pub(super) fn owned_object_filter(filter: &ObjectFilter) -> Result<OwnedObjectFilter, RpcError> {
     validate_shape(filter.terms.iter().map(|term| term.literals.len()))?;
@@ -150,10 +158,24 @@ where
     })?;
     value.parse().map_err(|e: anyhow::Error| {
         FieldViolation::new(field)
-            .with_description(format!("invalid type `{value}`: {e}"))
+            .with_description(format!(
+                "invalid type `{}`: {}",
+                truncate_echo(value),
+                truncate_echo(&e.to_string())
+            ))
             .with_reason(ErrorReason::FieldInvalid)
             .into()
     })
+}
+
+/// `text`, cut to at most [`MAX_ECHOED_LEN`] bytes on a character boundary,
+/// with its full length noted when cut.
+pub(super) fn truncate_echo(text: &str) -> Cow<'_, str> {
+    if text.len() <= MAX_ECHOED_LEN {
+        return Cow::Borrowed(text);
+    }
+    let end = text.floor_char_boundary(MAX_ECHOED_LEN);
+    Cow::Owned(format!("{}... ({} bytes)", &text[..end], text.len()))
 }
 
 #[cfg(test)]
@@ -241,6 +263,31 @@ mod tests {
                 .unwrap_err()
             )
             .contains("invalid type")
+        );
+
+        // A long malformed type is echoed only in part, in the value and in
+        // the parser error that quotes it, so the status stays small.
+        let long_type = format!("0x2::coin::Coin<{}", "é".repeat(1 << 20));
+        let status = tonic::Status::from(
+            owned_object_filter(&object_filter(vec![vec![object_literal(
+                false, &long_type,
+            )]]))
+            .unwrap_err(),
+        );
+        assert_eq!(status.code(), tonic::Code::InvalidArgument);
+        assert!(
+            status
+                .message()
+                .starts_with("invalid type `0x2::coin::Coin<é")
+        );
+        assert!(
+            status
+                .message()
+                .contains(&format!("({} bytes)", long_type.len()))
+        );
+        assert!(
+            status.message().len() + status.details().len() < 2048,
+            "{status:?}"
         );
 
         let mut term = DynamicFieldTerm::default();

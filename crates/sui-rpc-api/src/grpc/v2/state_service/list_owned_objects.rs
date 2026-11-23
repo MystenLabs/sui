@@ -21,6 +21,7 @@ use sui_types::storage::OwnedObjectFilter;
 use sui_types::storage::OwnedObjectInfo;
 
 use super::filter::owned_object_filter;
+use super::filter::truncate_echo;
 
 const MAX_PAGE_SIZE: usize = 1000;
 const DEFAULT_PAGE_SIZE: usize = 50;
@@ -52,9 +53,12 @@ pub fn list_owned_objects(
         .object_type
         .map(|s| s.parse())
         .transpose()
-        .map_err(|e| {
+        .map_err(|e: anyhow::Error| {
             FieldViolation::new("object_type")
-                .with_description(format!("invalid object_type: {e}"))
+                .with_description(format!(
+                    "invalid object_type: {}",
+                    truncate_echo(&e.to_string())
+                ))
                 .with_reason(ErrorReason::FieldInvalid)
         })?;
     let filter = match (&object_type, &request.filter) {
