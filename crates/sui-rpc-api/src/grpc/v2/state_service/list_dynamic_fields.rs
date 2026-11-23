@@ -21,6 +21,7 @@ use sui_rpc::proto::sui::rpc::v2::ListDynamicFieldsResponse;
 use sui_rpc::proto::sui::rpc::v2::dynamic_field::DynamicFieldKind;
 use sui_sdk_types::Address;
 use sui_types::base_types::ObjectID;
+use sui_types::object::Object;
 use sui_types::storage::DynamicFieldKey;
 
 use super::filter::dynamic_field_filter;
@@ -183,12 +184,22 @@ fn get_dynamic_field(
         message.field_id = Some(field_id.to_canonical_string(true));
     }
 
-    if should_load_field(read_mask)
-        && let Err(e) =
-            load_dynamic_field(service, field_id, read_mask, &mut message, render_context)
-    {
-        tracing::warn!("error loading dynamic object: {e}");
-        return None;
+    if should_load_field(read_mask) {
+        // The index applies a checkpoint only after its transactions have
+        // executed, so for a moment it can still list a field whose object
+        // has been deleted. That field no longer exists; skip it rather than
+        // return an entry with nothing but its ids.
+        let field_object = service.reader.inner().get_object(field_id)?;
+        if let Err(e) = load_dynamic_field(
+            service,
+            &field_object,
+            read_mask,
+            &mut message,
+            render_context,
+        ) {
+            tracing::warn!("error loading dynamic object: {e}");
+            return None;
+        }
     }
 
     Some(message)
@@ -209,17 +220,13 @@ fn should_load_field(mask: &FieldMaskTree) -> bool {
 
 fn load_dynamic_field(
     service: &RpcService,
-    field_id: &ObjectID,
+    field_object: &Object,
     read_mask: &FieldMaskTree,
     message: &mut DynamicField,
     render_context: &RenderContext,
 ) -> Result<(), anyhow::Error> {
     use sui_types::dynamic_field::DynamicFieldType;
     use sui_types::dynamic_field::visitor as DFV;
-
-    let Some(field_object) = service.reader.inner().get_object(field_id) else {
-        return Ok(());
-    };
 
     // Skip if not a move object
     let Some(move_object) = field_object.data.try_as_move() else {
@@ -274,7 +281,7 @@ fn load_dynamic_field(
 
     if let Some(submask) = read_mask.subtree(DynamicField::FIELD_OBJECT_FIELD) {
         message.set_field_object(service.render_object_to_proto(
-            &field_object,
+            field_object,
             &submask,
             render_context,
         ));
