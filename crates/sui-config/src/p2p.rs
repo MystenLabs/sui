@@ -144,16 +144,18 @@ pub struct StateSyncConfig {
 
     /// Set how far past the highest synced checkpoint contents downloads may start. Downloads
     /// that finished but wait to be released in order count against this limit. The number of
-    /// running downloads adapts to timeouts, starting at 16, and never exceeds this value.
+    /// running downloads adapts to timeouts, starting at 16, and never exceeds this value. The
+    /// retry of the next checkpoint to release starts without checking the adaptive limit, so it
+    /// can exceed that limit by one.
     ///
     /// If unspecified, this will default to `400`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint_content_download_concurrency: Option<usize>,
 
     /// Set the upper bound on the number of transactions in checkpoint contents downloads that
-    /// are still running. A download that finished does not count, even while it waits to be
-    /// released in order. A checkpoint with more transactions than this limit still downloads
-    /// when no other download is running.
+    /// are still running or that failed and wait to be retried. A download that succeeded does not
+    /// count, even while it waits to be released in order. A checkpoint with more transactions
+    /// than this limit still downloads when no other transactions count against it.
     ///
     /// If unspecified, this will default to `50,000`.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -242,6 +244,8 @@ pub struct StateSyncConfig {
     /// Maximum timeout for checkpoint content downloads (adaptive timeout upper bound). Each
     /// full-contents request that times out doubles the timeout of the next request for the same
     /// checkpoint, up to this value. It is also the timeout of each paginated download request.
+    /// If the anemo config sets a shorter outbound request timeout, or the serving peer sets a
+    /// shorter inbound one, that timeout ends requests earlier and limits how far timeouts grow.
     ///
     /// If unspecified, this will default to `60,000` milliseconds.
     #[serde(skip_serializing_if = "Option::is_none")]

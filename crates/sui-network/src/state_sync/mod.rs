@@ -47,7 +47,10 @@
 //! channel will always be made in order. StateSync will also send out a notification to its peers
 //! of the newly synchronized checkpoint so that it can help other peers synchronize.
 
-use anemo::{PeerId, Request, Response, Result, types::PeerEvent};
+use anemo::{
+    PeerId, Request, Response, Result,
+    types::{PeerEvent, response::StatusCode},
+};
 use futures::{
     FutureExt, StreamExt,
     stream::{FuturesOrdered, FuturesUnordered},
@@ -57,7 +60,7 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     sync::{
         Arc, Mutex, RwLock,
-        atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     },
     time::{Duration, Instant},
 };
@@ -1942,6 +1945,12 @@ async fn sync_checkpoint_contents<S>(
         metrics.clone(),
     ));
     let mut last_notified_sequence = None;
+    let retry_interval = || {
+        peer_heights
+            .read()
+            .unwrap()
+            .wait_interval_when_no_peer_to_sync_content()
+    };
 
     let hedge = checkpoint_content_hedge_delay.map(|delay| ContentHedge {
         delay,
@@ -2003,8 +2012,12 @@ async fn sync_checkpoint_contents<S>(
                             checkpoint.network_total_transactions - prev
                         };
                         // Retry contents sync on failure.
+                        // The failed download left its transactions reserved, and this retry uses
+                        // that reservation. It starts without checking the congestion limit,
+                        // because no checkpoint can be released before this one.
                         checkpoint_contents_tasks.push_front(running.track(
                             retry_tx_count,
+                            retry_interval(),
                             sync_one_checkpoint_contents(
                                 network.clone(),
                                 &store,
@@ -2025,8 +2038,9 @@ async fn sync_checkpoint_contents<S>(
         // Start new tasks up to configured concurrency limits.
         // `checkpoint_content_download_concurrency` bounds how far ahead of the highest synced
         // checkpoint downloads may start. Only downloads still running count against the
-        // transaction limit and the congestion limit: one that finished has stored its contents
-        // and only waits to be released in order.
+        // congestion limit, and those and failed ones that wait to be retried count against the
+        // transaction limit. A download that succeeded has stored its contents and only waits to
+        // be released in order.
         while current_sequence < target_sequence_cursor
             && checkpoint_contents_tasks.len() < checkpoint_content_download_concurrency
             && running.count() < congestion.limit()
@@ -2039,11 +2053,11 @@ async fn sync_checkpoint_contents<S>(
                 ));
 
             // Enforce transaction count concurrency limit. A checkpoint is always admitted when
-            // no download is running, so a checkpoint with more transactions than the limit is still
-            // downloaded.
+            // no transactions are reserved, so a checkpoint with more transactions than the limit
+            // is still downloaded.
             let tx_count = next_checkpoint.network_total_transactions
                 - highest_started_network_total_transactions;
-            if running.count() > 0
+            if running.tx_count() > 0
                 && running.tx_count() + tx_count > checkpoint_content_download_tx_concurrency
             {
                 break;
@@ -2051,8 +2065,10 @@ async fn sync_checkpoint_contents<S>(
 
             highest_started_network_total_transactions = next_checkpoint.network_total_transactions;
             current_sequence += 1;
+            running.reserve_transactions(tx_count);
             checkpoint_contents_tasks.push_back(running.track(
                 tx_count,
+                retry_interval(),
                 sync_one_checkpoint_contents(
                     network.clone(),
                     &store,
@@ -2066,6 +2082,12 @@ async fn sync_checkpoint_contents<S>(
                 ),
             ));
         }
+
+        congestion.set_limiting(
+            current_sequence < target_sequence_cursor
+                && checkpoint_contents_tasks.len() < checkpoint_content_download_concurrency
+                && running.count() >= congestion.limit(),
+        );
 
         if last_notified_sequence != Some(*highest_synced.sequence_number())
             && (highest_synced
@@ -2127,12 +2149,11 @@ where
     }
 
     // Request checkpoint contents from peers.
-    let now = tokio::time::Instant::now();
     let fetch = ContentFetch {
         network: &network,
         max_timeout: timeout_max,
         congestion: Some(&congestion),
-        timed_out_requests: AtomicU32::new(0),
+        largest_expired_timeout: Mutex::new(Duration::ZERO),
         peer_heights: &peer_heights,
         checkpoint: &checkpoint,
         use_get_checkpoint_contents_v2,
@@ -2140,16 +2161,6 @@ where
         metrics: &metrics,
     };
     if !get_full_checkpoint_contents(fetch, &store, hedge.as_ref()).await {
-        // Delay completion in case of error so we don't hammer the network with retries.
-        let duration = peer_heights
-            .read()
-            .unwrap()
-            .wait_interval_when_no_peer_to_sync_content();
-        if now.elapsed() < duration {
-            let duration = duration - now.elapsed();
-            info!("retrying checkpoint sync after {:?}", duration);
-            tokio::time::sleep(duration).await;
-        }
         return Err(checkpoint);
     };
     debug!("completed checkpoint contents sync");
@@ -2253,8 +2264,9 @@ struct UnaskedPeer {
     slow: bool,
 }
 
-/// This tracks the checkpoint contents downloads that are still running. A download stops
-/// counting when it finishes, even if earlier checkpoints are still downloading.
+/// This tracks the checkpoint contents downloads that are still running, and the transactions
+/// reserved for them. A download stops counting when it finishes, even if earlier checkpoints are
+/// still downloading. A failed download keeps its transactions reserved until its retry succeeds.
 struct RunningDownloads {
     count: AtomicUsize,
     tx_count: AtomicU64,
@@ -2280,23 +2292,40 @@ impl RunningDownloads {
         self.tx_count.load(Ordering::Relaxed)
     }
 
-    fn track<F: Future>(
+    fn reserve_transactions(&self, tx_count: u64) {
+        self.tx_count.fetch_add(tx_count, Ordering::Relaxed);
+    }
+
+    /// Counts `download` as running until it finishes. Releases its reserved `tx_count` if it
+    /// succeeds. If it fails, the returned future completes at least `retry_interval` after the
+    /// download started, so that retries do not overload the network.
+    fn track<T, E, F: Future<Output = Result<T, E>>>(
         self: &Arc<Self>,
         tx_count: u64,
+        retry_interval: Duration,
         download: F,
-    ) -> impl Future<Output = F::Output> + use<F> {
+    ) -> impl Future<Output = Result<T, E>> + use<T, E, F> {
         let count = self.count.fetch_add(1, Ordering::Relaxed) + 1;
         self.metrics.set_checkpoint_content_downloads_running(count);
-        self.tx_count.fetch_add(tx_count, Ordering::Relaxed);
         let running = self.clone();
         async move {
+            let retry_at = tokio::time::Instant::now() + retry_interval;
             let result = download.await;
             let count = running.count.fetch_sub(1, Ordering::Relaxed) - 1;
             running
                 .metrics
                 .set_checkpoint_content_downloads_running(count);
-            running.tx_count.fetch_sub(tx_count, Ordering::Relaxed);
+            if result.is_ok() {
+                running.tx_count.fetch_sub(tx_count, Ordering::Relaxed);
+            }
             running.finished.notify_one();
+            if result.is_err() {
+                info!(
+                    "retrying checkpoint sync after {:?}",
+                    retry_at.saturating_duration_since(tokio::time::Instant::now())
+                );
+                tokio::time::sleep_until(retry_at).await;
+            }
             result
         }
     }
@@ -2312,11 +2341,14 @@ impl Drop for RunningDownloads {
 /// whose response cannot arrive within its timeout is cancelled and its partial response is
 /// discarded, so running more downloads than the node's bandwidth delivers in time makes every
 /// download fail. The limit grows by one per successful request until the first timeout, which
-/// doubles it every round of requests. After that it grows by about one per round. It halves when
-/// at least a quarter of recent requests timed out, at most once per `decrease_interval`, because
-/// one burst of competing downloads times out together.
+/// doubles it every round of requests. After that it grows by about one per round. It grows only
+/// while it keeps downloads from starting. It halves when at least a quarter of recent requests
+/// timed out, at most once per `decrease_interval`, and only for requests sent after the last
+/// decrease, because one burst of competing downloads times out together.
 struct ContentCongestion {
     state: Mutex<CongestionState>,
+    /// This is true if the limit was what kept the next download from starting.
+    limiting: AtomicBool,
     min: f64,
     max: f64,
     decrease_interval: Duration,
@@ -2333,11 +2365,13 @@ struct CongestionState {
 }
 
 impl CongestionState {
-    // Halves the counts once per interval, so they weigh recent requests most.
+    // Halves the counts once per elapsed interval, so they weigh recent requests most.
     fn decay(&mut self, interval: Duration) {
-        if self.window_start.elapsed() >= interval {
-            self.successes /= 2.0;
-            self.timeouts /= 2.0;
+        let intervals = self.window_start.elapsed().as_nanos() / interval.as_nanos().max(1);
+        if intervals > 0 {
+            let factor = 0.5f64.powi(intervals.min(64) as i32);
+            self.successes *= factor;
+            self.timeouts *= factor;
             self.window_start = Instant::now();
         }
     }
@@ -2367,6 +2401,7 @@ impl ContentCongestion {
                 successes: 0.0,
                 timeouts: 0.0,
             }),
+            limiting: AtomicBool::new(false),
             min: min as f64,
             max,
             decrease_interval,
@@ -2378,10 +2413,17 @@ impl ContentCongestion {
         self.state.lock().unwrap().limit as usize
     }
 
+    fn set_limiting(&self, limiting: bool) {
+        self.limiting.store(limiting, Ordering::Relaxed);
+    }
+
     fn on_success(&self) {
         let mut state = self.state.lock().unwrap();
         state.decay(self.decrease_interval);
         state.successes += 1.0;
+        if !self.limiting.load(Ordering::Relaxed) {
+            return;
+        }
         let increase = if state.slow_start {
             1.0
         } else {
@@ -2392,8 +2434,11 @@ impl ContentCongestion {
             .set_checkpoint_content_download_limit(state.limit as usize);
     }
 
-    fn on_timeout(&self) {
+    fn on_timeout(&self, request_start: Instant) {
         let mut state = self.state.lock().unwrap();
+        if state.last_decrease.is_some_and(|last| request_start < last) {
+            return;
+        }
         state.decay(self.decrease_interval);
         state.timeouts += 1.0;
         state.slow_start = false;
@@ -2416,9 +2461,10 @@ impl ContentCongestion {
 /// A finished request for one checkpoint's contents to one peer.
 struct ContentResponse {
     peer_id: PeerId,
+    start: Instant,
     elapsed: Duration,
-    /// This is true if the request ran until its timeout.
-    timed_out: bool,
+    /// This is the timeout of the request if the request timed out.
+    expired_timeout: Option<Duration>,
     /// `None` if the request failed or timed out, or the peer had no contents.
     contents: Option<VersionedFullCheckpointContents>,
 }
@@ -2436,10 +2482,10 @@ enum FullContentsDownload {
 /// Downloads the contents of one checkpoint from peers.
 struct ContentFetch<'a> {
     network: &'a anemo::Network,
-    /// Upper bound for the timeout of a request, which doubles after each request that timed out.
+    /// Upper bound for the timeout of a request, which doubles after a request timed out.
     max_timeout: Duration,
-    /// This counts the requests for this checkpoint that ran until their timeout.
-    timed_out_requests: AtomicU32,
+    /// This is the largest timeout of the requests for this checkpoint that timed out.
+    largest_expired_timeout: Mutex<Duration>,
     /// This adapts the number of downloads that run at once to timeouts. It is `None` in tests
     /// that call the download directly.
     congestion: Option<&'a ContentCongestion>,
@@ -2640,12 +2686,13 @@ impl ContentFetch<'_> {
         let peer_id = peer.inner().peer_id();
         let digest = self.checkpoint.content_digest;
         // A checkpoint that timed out with one peer is likely too large for the current timeout,
-        // so each request that timed out doubles the timeout of the next one, up to `max_timeout`.
-        // A fast failure, such as a peer without the contents, does not escalate.
-        let timed_out = self.timed_out_requests.load(Ordering::Relaxed).min(31);
-        let timeout = self
-            .timeout
-            .saturating_mul(1 << timed_out)
+        // so the next timeout is twice the largest one that expired, up to `max_timeout`. Requests
+        // that ran at the same time with the same timeout escalate it once. A fast failure, such as
+        // a peer without the contents, does not escalate.
+        let expired = *self.largest_expired_timeout.lock().unwrap();
+        let timeout = expired
+            .saturating_mul(2)
+            .max(self.timeout)
             .min(self.max_timeout.max(self.timeout));
         let use_get_checkpoint_contents_v2 = self.use_get_checkpoint_contents_v2;
         debug!(
@@ -2657,7 +2704,8 @@ impl ContentFetch<'_> {
         async move {
             // anemo reports its own timeout as an opaque error, so the client's timer decides
             // whether the request timed out. The anemo timeout tells the server the deadline and
-            // is set later, so the client's timer fires first.
+            // is set later, so the client's timer fires first unless this task is polled late. An
+            // error after the timeout counts as a timeout for that case.
             let request = Request::new(digest).with_timeout(timeout + CONTENT_REQUEST_SERVER_GRACE);
             let start = Instant::now();
             let result = tokio::time::timeout(timeout, async {
@@ -2675,11 +2723,13 @@ impl ContentFetch<'_> {
                 trace!("request timed out after {timeout:?}");
                 return ContentResponse {
                     peer_id,
+                    start,
                     elapsed,
-                    timed_out: true,
+                    expired_timeout: Some(timeout),
                     contents: None,
                 };
             };
+            let mut expired_timeout = None;
             let contents = match result {
                 Ok(response) => {
                     let contents = response.into_inner();
@@ -2690,13 +2740,17 @@ impl ContentFetch<'_> {
                 }
                 Err(e) => {
                     trace!("{e:?}");
+                    if elapsed >= timeout || e.status() == StatusCode::RequestTimeout {
+                        expired_timeout = Some(timeout);
+                    }
                     None
                 }
             };
             ContentResponse {
                 peer_id,
+                start,
                 elapsed,
-                timed_out: false,
+                expired_timeout,
                 contents,
             }
         }
@@ -2710,16 +2764,20 @@ impl ContentFetch<'_> {
     ) -> Option<(VersionedFullCheckpointContents, u64)> {
         let ContentResponse {
             peer_id,
+            start,
             elapsed,
-            timed_out,
+            expired_timeout,
             contents,
         } = response;
         let peer_label = content_metrics_peer_label(self.network, peer_id);
         let Some(contents) = contents else {
-            if timed_out {
-                self.timed_out_requests.fetch_add(1, Ordering::Relaxed);
+            if let Some(expired_timeout) = expired_timeout {
+                {
+                    let mut largest = self.largest_expired_timeout.lock().unwrap();
+                    *largest = expired_timeout.max(*largest);
+                }
                 if let Some(congestion) = self.congestion {
-                    congestion.on_timeout();
+                    congestion.on_timeout(start);
                 }
             }
             self.peer_heights.write().unwrap().record_failure(peer_id);

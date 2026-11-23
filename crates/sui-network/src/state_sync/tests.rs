@@ -8,7 +8,7 @@ use crate::{
     },
     utils::build_network,
 };
-use anemo::{PeerId, Request};
+use anemo::{PeerId, Request, types::response::StatusCode};
 use anyhow::anyhow;
 use futures::StreamExt;
 use futures::stream::FuturesOrdered;
@@ -1662,6 +1662,8 @@ struct DelayedContentsServer<S> {
     inner: super::server::Server<S>,
     delay: Duration,
     delayed_digest: Option<sui_types::digests::CheckpointContentsDigest>,
+    /// If this is set, v2 contents requests fail with this status after the delay.
+    failure: Option<StatusCode>,
 }
 
 impl<S> DelayedContentsServer<S> {
@@ -1720,6 +1722,9 @@ where
         anemo::rpc::Status,
     > {
         self.delay(request.inner()).await;
+        if let Some(failure) = self.failure {
+            return Err(anemo::rpc::Status::new(failure));
+        }
         self.inner.get_checkpoint_contents_v2(request).await
     }
 
@@ -1761,11 +1766,12 @@ fn build_contents_peer(
         checkpoints_with_contents,
         contents_delay,
         None,
+        None,
     )
 }
 
 /// Like `build_contents_peer`, but if `delayed_digest` is set, only requests for those contents
-/// wait `contents_delay`.
+/// wait `contents_delay`. If `failure` is set, v2 contents requests fail with that status.
 fn build_delayed_contents_peer(
     committee: &CommitteeFixture,
     checkpoints: &[sui_types::messages_checkpoint::VerifiedCheckpoint],
@@ -1773,6 +1779,7 @@ fn build_delayed_contents_peer(
     checkpoints_with_contents: usize,
     contents_delay: Duration,
     delayed_digest: Option<sui_types::digests::CheckpointContentsDigest>,
+    failure: Option<StatusCode>,
 ) -> anemo::Network {
     let store = SharedInMemoryStore::default();
     store.inner_mut().insert_genesis_state(
@@ -1798,6 +1805,7 @@ fn build_delayed_contents_peer(
             inner: server,
             delay: contents_delay,
             delayed_digest,
+            failure,
         }));
     build_network(|r| r.merge(router))
 }
@@ -1956,7 +1964,7 @@ impl HedgeTestClient {
         super::ContentFetch {
             network: &self.network,
             max_timeout,
-            timed_out_requests: std::sync::atomic::AtomicU32::new(0),
+            largest_expired_timeout: std::sync::Mutex::new(Duration::ZERO),
             congestion: None,
             peer_heights: &self.peer_heights,
             checkpoint,
@@ -3385,14 +3393,14 @@ async fn paginated_checkpoints_exceeding_transaction_budget_keep_syncing() {
     );
 }
 
-/// Both peers answer after 1 s and the first request times out after 700 ms. The timed-out
-/// request doubles the timeout of the next one to 1.4 s, so the second peer's answer arrives in
+/// Both peers answer after 3 s and the first request times out after 2 s. The timed-out
+/// request doubles the timeout of the next one to 4 s, so the second peer's answer arrives in
 /// time.
 #[tokio::test]
 async fn contents_request_timeout_doubles_after_failed_request() {
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
     let (checkpoints, contents, _, _) = committee.make_random_checkpoints(2, None);
-    let delay = Duration::from_secs(1);
+    let delay = Duration::from_secs(3);
     let peer_a = build_contents_peer(&committee, &checkpoints, &contents, 2, delay);
     let peer_b = build_contents_peer(&committee, &checkpoints, &contents, 2, delay);
     let client =
@@ -3400,8 +3408,8 @@ async fn contents_request_timeout_doubles_after_failed_request() {
 
     let fetch = client.content_fetch_with_timeouts(
         &checkpoints[1],
-        Duration::from_millis(700),
-        Duration::from_secs(5),
+        Duration::from_secs(2),
+        Duration::from_secs(20),
     );
     assert!(super::get_full_checkpoint_contents(fetch, &client.store, None).await);
 
@@ -3415,12 +3423,12 @@ async fn contents_request_timeout_doubles_after_failed_request() {
 }
 
 /// As above, in hedged mode with a hedge delay longer than the test. The first request times out
-/// after 700 ms, so the request to the other peer gets 1.4 s and succeeds.
+/// after 2 s, so the request to the other peer gets 4 s and succeeds.
 #[tokio::test]
 async fn hedged_contents_request_timeout_doubles_after_failed_request() {
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
     let (checkpoints, contents, _, _) = committee.make_random_checkpoints(2, None);
-    let delay = Duration::from_secs(1);
+    let delay = Duration::from_secs(3);
     let peer_a = build_contents_peer(&committee, &checkpoints, &contents, 2, delay);
     let peer_b = build_contents_peer(&committee, &checkpoints, &contents, 2, delay);
     let client =
@@ -3432,11 +3440,11 @@ async fn hedged_contents_request_timeout_doubles_after_failed_request() {
 
     let fetch = client.content_fetch_with_timeouts(
         &checkpoints[1],
-        Duration::from_millis(700),
-        Duration::from_secs(5),
+        Duration::from_secs(2),
+        Duration::from_secs(20),
     );
     let fetched = timeout(
-        Duration::from_secs(10),
+        Duration::from_secs(30),
         super::get_full_checkpoint_contents(fetch, &client.store, Some(&hedge)),
     )
     .await
@@ -3458,14 +3466,14 @@ async fn hedged_contents_request_timeout_doubles_after_failed_request() {
     );
 }
 
-/// As above, but the maximum timeout of 750 ms caps the second request's timeout below the
-/// peers' 1 s delay. Both requests time out and the client falls back to the paginated
+/// As above, but the maximum timeout of 2 s caps the second request's timeout below the
+/// peers' 3 s delay. Both requests time out and the client falls back to the paginated
 /// download, which the peers answer without delay.
 #[tokio::test]
 async fn contents_request_timeout_stops_at_max_timeout() {
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
     let (checkpoints, contents, _, _) = committee.make_random_checkpoints(2, None);
-    let delay = Duration::from_secs(1);
+    let delay = Duration::from_secs(3);
     let peer_a = build_contents_peer(&committee, &checkpoints, &contents, 2, delay);
     let peer_b = build_contents_peer(&committee, &checkpoints, &contents, 2, delay);
     let client =
@@ -3473,8 +3481,8 @@ async fn contents_request_timeout_stops_at_max_timeout() {
 
     let fetch = client.content_fetch_with_timeouts(
         &checkpoints[1],
-        Duration::from_millis(700),
-        Duration::from_millis(750),
+        Duration::from_secs(2),
+        Duration::from_secs(2),
     );
     assert!(super::get_full_checkpoint_contents(fetch, &client.store, None).await);
 
@@ -3503,8 +3511,10 @@ async fn running_downloads_free_slot_when_download_finishes_out_of_order() {
     let (first_done, first) = tokio::sync::oneshot::channel::<()>();
     let (second_done, second) = tokio::sync::oneshot::channel::<()>();
     let mut downloads = FuturesOrdered::new();
-    downloads.push_back(running.track(10, first));
-    downloads.push_back(running.track(20, second));
+    running.reserve_transactions(10);
+    downloads.push_back(running.track(10, Duration::ZERO, first));
+    running.reserve_transactions(20);
+    downloads.push_back(running.track(20, Duration::ZERO, second));
     assert_eq!(running.count(), 2);
     assert_eq!(running.tx_count(), 30);
 
@@ -3539,7 +3549,7 @@ async fn contents_request_timeout_escalates_only_after_timeout() {
         &checkpoints,
         &contents,
         2,
-        Duration::from_secs(1),
+        Duration::from_secs(3),
     );
     let client = HedgeTestClient::new(
         *checkpoints[0].digest(),
@@ -3548,8 +3558,8 @@ async fn contents_request_timeout_escalates_only_after_timeout() {
     .await;
     let fetch = client.content_fetch_with_timeouts(
         &checkpoints[1],
-        Duration::from_millis(300),
-        Duration::from_secs(5),
+        Duration::from_secs(1),
+        Duration::from_secs(20),
     );
     let peer = |id: PeerId| {
         fetch
@@ -3561,13 +3571,11 @@ async fn contents_request_timeout_escalates_only_after_timeout() {
     let response = fetch
         .request(peer(empty_peer.peer_id()), super::ContentRequestKind::First)
         .await;
-    assert!(!response.timed_out);
+    assert!(response.expired_timeout.is_none());
     assert!(fetch.record_response(response).is_none());
     assert_eq!(
-        fetch
-            .timed_out_requests
-            .load(std::sync::atomic::Ordering::Relaxed),
-        0
+        *fetch.largest_expired_timeout.lock().unwrap(),
+        Duration::ZERO
     );
 
     let response = fetch
@@ -3576,13 +3584,11 @@ async fn contents_request_timeout_escalates_only_after_timeout() {
             super::ContentRequestKind::Fallback,
         )
         .await;
-    assert!(response.timed_out);
+    assert_eq!(response.expired_timeout, Some(Duration::from_secs(1)));
     assert!(fetch.record_response(response).is_none());
     assert_eq!(
-        fetch
-            .timed_out_requests
-            .load(std::sync::atomic::Ordering::Relaxed),
-        1
+        *fetch.largest_expired_timeout.lock().unwrap(),
+        Duration::from_secs(1)
     );
 }
 
@@ -3603,6 +3609,7 @@ async fn finished_downloads_free_slots_behind_stalled_download() {
         6,
         Duration::from_secs(5),
         Some(checkpoints[1].content_digest),
+        None,
     );
     let store = SharedInMemoryStore::default();
     store.inner_mut().insert_genesis_state(
@@ -3661,6 +3668,11 @@ fn content_congestion_grows_halves_and_respects_bounds() {
     );
     assert_eq!(congestion.limit(), 4);
 
+    // The limit does not grow while it does not keep downloads from starting.
+    congestion.on_success();
+    assert_eq!(congestion.limit(), 4);
+    congestion.set_limiting(true);
+
     // Before the first timeout, each success adds one.
     for _ in 0..4 {
         congestion.on_success();
@@ -3671,17 +3683,17 @@ fn content_congestion_grows_halves_and_respects_bounds() {
     for _ in 0..4 {
         congestion.on_success();
     }
-    congestion.on_timeout();
+    congestion.on_timeout(StdInstant::now());
     assert_eq!(congestion.limit(), 10);
 
     // Timeouts reaching a quarter of recent requests halve the limit.
-    congestion.on_timeout();
-    congestion.on_timeout();
+    congestion.on_timeout(StdInstant::now());
+    congestion.on_timeout(StdInstant::now());
     assert_eq!(congestion.limit(), 5);
 
     // Further timeouts within the decrease interval do not halve it again.
-    congestion.on_timeout();
-    congestion.on_timeout();
+    congestion.on_timeout(StdInstant::now());
+    congestion.on_timeout(StdInstant::now());
     assert_eq!(congestion.limit(), 5);
 
     // After the first timeout the limit grows by about one per round of successes.
@@ -3707,7 +3719,258 @@ fn content_congestion_grows_halves_and_respects_bounds() {
         super::metrics::Metrics::disabled(),
     );
     for _ in 0..5 {
-        fast_decrease.on_timeout();
+        fast_decrease.on_timeout(StdInstant::now());
     }
     assert_eq!(fast_decrease.limit(), 2);
+}
+
+#[test]
+fn content_congestion_decays_counts_and_limits_decreases() {
+    let interval = Duration::from_secs(1);
+    let congestion =
+        super::ContentCongestion::new(16, 2, 100, interval, super::metrics::Metrics::disabled());
+    let counts = |congestion: &super::ContentCongestion| {
+        let state = congestion.state.lock().unwrap();
+        (state.successes, state.timeouts)
+    };
+    let sent_before_decrease = StdInstant::now();
+    congestion.on_timeout(sent_before_decrease);
+    assert_eq!(congestion.limit(), 8);
+
+    // A timeout of a request sent after the decrease counts, but cannot halve the limit again
+    // within the interval.
+    congestion.on_timeout(StdInstant::now());
+    assert_eq!(congestion.limit(), 8);
+    assert_eq!(counts(&congestion), (0.0, 1.0));
+
+    // The request sent before the decrease is ignored even once the interval has passed.
+    std::thread::sleep(interval + Duration::from_millis(100));
+    congestion.on_timeout(sent_before_decrease);
+    assert_eq!(congestion.limit(), 8);
+    assert_eq!(counts(&congestion), (0.0, 1.0));
+
+    congestion.on_timeout(StdInstant::now());
+    assert_eq!(congestion.limit(), 4);
+
+    // The counts halve once for each elapsed interval.
+    {
+        let mut state = congestion.state.lock().unwrap();
+        state.successes = 16.0;
+        state.window_start = StdInstant::now().checked_sub(interval * 3).unwrap();
+        state.decay(interval);
+        assert_eq!(state.successes, 2.0);
+        state.decay(interval);
+        assert_eq!(state.successes, 2.0);
+    }
+}
+
+/// A failed download frees its running slot at once, but completes only after the retry interval
+/// and keeps its transactions reserved until its retry succeeds.
+#[tokio::test(start_paused = true)]
+async fn failed_download_frees_slot_and_keeps_transactions_reserved() {
+    let running = std::sync::Arc::new(super::RunningDownloads::new(
+        super::metrics::Metrics::disabled(),
+    ));
+    let start = Instant::now();
+    let retry_interval = Duration::from_secs(5);
+    running.reserve_transactions(10);
+    let failed = running.track(10, retry_interval, async { Err::<(), ()>(()) });
+    tokio::pin!(failed);
+    tokio::select! {
+        biased;
+        _ = &mut failed => panic!("the failed download should wait for the retry interval"),
+        () = running.finished.notified() => {}
+    }
+    assert_eq!(running.count(), 0);
+    assert_eq!(running.tx_count(), 10);
+    assert!(failed.await.is_err());
+    assert!(start.elapsed() >= retry_interval);
+
+    let retry = running.track(10, retry_interval, async { Ok::<(), ()>(()) });
+    assert_eq!(running.count(), 1);
+    assert_eq!(running.tx_count(), 10);
+    assert!(retry.await.is_ok());
+    assert_eq!(running.count(), 0);
+    assert_eq!(running.tx_count(), 0);
+}
+
+/// Two requests that ran at the same time with the same timeout double the next timeout once.
+#[tokio::test]
+async fn concurrent_timeouts_escalate_timeout_once() {
+    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let (checkpoints, contents, _, _) = committee.make_random_checkpoints(2, None);
+    let slow_peer = build_contents_peer(
+        &committee,
+        &checkpoints,
+        &contents,
+        2,
+        Duration::from_secs(60),
+    );
+    let client = HedgeTestClient::new(*checkpoints[0].digest(), &[(&slow_peer, 1)]).await;
+    let fetch = client.content_fetch_with_timeouts(
+        &checkpoints[1],
+        Duration::from_millis(200),
+        Duration::from_secs(10),
+    );
+    let request = || {
+        let peer = fetch.candidates().next().unwrap();
+        fetch.request(peer, super::ContentRequestKind::First)
+    };
+
+    let (first, second) = tokio::join!(request(), request());
+    fetch.record_response(first);
+    fetch.record_response(second);
+    let third = request().await;
+    assert_eq!(third.expired_timeout, Some(Duration::from_millis(400)));
+}
+
+/// The peer answers contents requests after 3 s and they time out after 1 s, so every download
+/// falls back to the paginated download. At most the initial limit of 16 downloads run at once,
+/// the timeouts lower the limit, and every checkpoint syncs.
+#[tokio::test]
+async fn running_downloads_stay_within_congestion_limit() {
+    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let (checkpoints, contents, _, _) = committee.make_random_checkpoints(40, None);
+    let source = build_contents_peer(
+        &committee,
+        &checkpoints,
+        &contents,
+        40,
+        Duration::from_secs(3),
+    );
+    let store = SharedInMemoryStore::default();
+    store.inner_mut().insert_genesis_state(
+        checkpoints[0].clone(),
+        contents[0].clone(),
+        committee.committee().clone(),
+    );
+    let registry = prometheus::Registry::new();
+    let config = StateSyncConfig {
+        checkpoint_content_timeout_min_ms: Some(1_000),
+        checkpoint_content_timeout_max_ms: Some(1_000),
+        ..Default::default()
+    };
+    let (builder, router) = Builder::new()
+        .store(store.clone())
+        .config(config)
+        .with_metrics(&registry)
+        .build();
+    let network = build_network(|r| r.merge(router));
+    let _handle = builder.start(network.clone());
+    network.connect(source.local_addr()).await.unwrap();
+
+    let gauge = |name: &str| gauge_value(&registry, name);
+    let mut max_running = 0;
+    timeout(Duration::from_secs(60), async {
+        while store
+            .get_highest_synced_checkpoint()
+            .unwrap()
+            .sequence_number
+            < 39
+        {
+            max_running = max_running.max(gauge("state_sync_checkpoint_content_downloads_running"));
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("every checkpoint should sync");
+    assert_eq!(max_running, super::CONTENT_DOWNLOAD_INITIAL_LIMIT);
+    assert!(
+        gauge("state_sync_checkpoint_content_download_limit")
+            < super::CONTENT_DOWNLOAD_INITIAL_LIMIT
+    );
+}
+
+fn gauge_value(registry: &prometheus::Registry, name: &str) -> usize {
+    registry
+        .gather()
+        .iter()
+        .find(|family| family.name() == name)
+        .unwrap()
+        .get_metric()[0]
+        .get_gauge()
+        .value() as usize
+}
+
+/// The peer answers every contents request in time and more checkpoints wait than the initial limit
+/// admits, so the limit grows and more downloads run at once.
+#[tokio::test]
+async fn congestion_limit_grows_while_checkpoints_wait() {
+    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let (checkpoints, contents, _, _) = committee.make_random_checkpoints(120, None);
+    let source = build_contents_peer(
+        &committee,
+        &checkpoints,
+        &contents,
+        120,
+        Duration::from_millis(500),
+    );
+    let store = SharedInMemoryStore::default();
+    store.inner_mut().insert_genesis_state(
+        checkpoints[0].clone(),
+        contents[0].clone(),
+        committee.committee().clone(),
+    );
+    let registry = prometheus::Registry::new();
+    let config = StateSyncConfig {
+        checkpoint_content_timeout_min_ms: Some(30_000),
+        checkpoint_content_timeout_max_ms: Some(60_000),
+        ..Default::default()
+    };
+    let (builder, router) = Builder::new()
+        .store(store.clone())
+        .config(config)
+        .with_metrics(&registry)
+        .build();
+    let network = build_network(|r| r.merge(router));
+    let _handle = builder.start(network.clone());
+    network.connect(source.local_addr()).await.unwrap();
+
+    let mut max_running = 0;
+    timeout(Duration::from_secs(60), async {
+        while store
+            .get_highest_synced_checkpoint()
+            .unwrap()
+            .sequence_number
+            < 119
+        {
+            max_running = max_running.max(gauge_value(
+                &registry,
+                "state_sync_checkpoint_content_downloads_running",
+            ));
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("every checkpoint should sync");
+    assert!(max_running > super::CONTENT_DOWNLOAD_INITIAL_LIMIT);
+}
+
+/// A request that the serving peer ends with `RequestTimeout` counts as timed out. A request that
+/// fails at once with another status does not.
+#[tokio::test]
+async fn server_timeout_status_counts_as_timeout() {
+    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let (checkpoints, contents, _, _) = committee.make_random_checkpoints(2, None);
+    for (status, expected) in [
+        (StatusCode::RequestTimeout, Some(Duration::from_secs(20))),
+        (StatusCode::InternalServerError, None),
+    ] {
+        let peer = build_delayed_contents_peer(
+            &committee,
+            &checkpoints,
+            &contents,
+            2,
+            Duration::ZERO,
+            None,
+            Some(status),
+        );
+        let client = HedgeTestClient::new(*checkpoints[0].digest(), &[(&peer, 1)]).await;
+        let fetch = client.content_fetch(&checkpoints[1]);
+        let candidate = fetch.candidates().next().unwrap();
+        let response = fetch
+            .request(candidate, super::ContentRequestKind::First)
+            .await;
+        assert_eq!(response.expired_timeout, expected);
+    }
 }
