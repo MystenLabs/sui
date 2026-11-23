@@ -375,7 +375,7 @@ futures-core = "0.3.21"
 git-version = "0.3.5"
 governor = "0.6.0"
 gcp_auth = "0.12.6"
-h2 = "0.4.19"
+h2 = "0.4.20"
 hdrhistogram = "7.5.1"
 headers = "0.4.0"
 hex = "0.4.3"
@@ -523,17 +523,17 @@ tokio-tungstenite = { version = "0.26.2", features = ["connect"] }
 tokio-util = "0.7.18"
 toml = { version = "0.7.4", features = ["preserve_order"] }
 toml_edit = { version = "0.19.10" }
-tonic = { version = "0.14.6", features = [
+tonic = { version = "0.14.9", features = [
   "zstd",
   "transport",
   "tls-webpki-roots",
 ] }
-tonic-build = "0.14.6"
-tonic-prost = "0.14.6"
-tonic-prost-build = "0.14.6"
-tonic-health = "0.14.6"
-tonic-reflection = "0.14.6"
-tonic-web = "0.14.6"
+tonic-build = "0.14.9"
+tonic-prost = "0.14.9"
+tonic-prost-build = "0.14.9"
+tonic-health = "0.14.9"
+tonic-reflection = "0.14.9"
+tonic-web = "0.14.9"
 tonic-rustls = "0.3.0"
 tower = { version = "0.5", features = [
   "full",
@@ -762,7 +762,3 @@ sui-execution = { path = "sui-execution" }
 async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-axum = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-value = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
-# h2 master plus hyperium/h2#983 (clients ignore frames on streams they reset and forgot), kept on
-# a fork branch so the commit stays fetchable while the PR is in review; remove once an h2 release
-# includes it.
-h2 = { git = "https://github.com/nickvikeras/h2", rev = "44260b15da7d6cf15c241295a2d27917c157f4c8" }

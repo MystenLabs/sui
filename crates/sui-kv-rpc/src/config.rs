@@ -631,6 +631,23 @@ pub struct KvRpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bigtable_http2_connection_window_bytes: Option<u32>,
 
+    /// Most locally reset HTTP/2 streams each BigTable channel remembers so late
+    /// frames on cancelled reads are ignored instead of answered with another
+    /// RST_STREAM. Defaults to `2000`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bigtable_http2_max_concurrent_reset_streams: Option<usize>,
+
+    /// How long each BigTable channel remembers a locally reset HTTP/2 stream, in
+    /// milliseconds. Defaults to `10000` (10 s).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bigtable_http2_reset_stream_duration_ms: Option<u64>,
+
+    /// Maximum library-initiated HTTP/2 error resets a BigTable channel allows
+    /// over its lifetime before closing with GOAWAY (`too_many_internal_resets`).
+    /// `0` disables the limit. Defaults to disabled (`0`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bigtable_http2_max_local_error_reset_streams: Option<usize>,
+
     /// Deprecated and ignored: the `GetServiceInfo` watermark set always
     /// includes the List API pipelines and cannot be chosen per pipeline.
     /// Still parsed so existing config files keep loading.
@@ -774,6 +791,20 @@ impl KvRpcConfig {
             http2_connection_window_bytes: self
                 .bigtable_http2_connection_window_bytes
                 .unwrap_or(base.http2_connection_window_bytes),
+            http2_max_concurrent_reset_streams: self
+                .bigtable_http2_max_concurrent_reset_streams
+                .unwrap_or(base.http2_max_concurrent_reset_streams),
+            http2_reset_stream_duration: self
+                .bigtable_http2_reset_stream_duration_ms
+                .map(Duration::from_millis)
+                .unwrap_or(base.http2_reset_stream_duration),
+            http2_max_local_error_reset_streams: match self
+                .bigtable_http2_max_local_error_reset_streams
+            {
+                None => base.http2_max_local_error_reset_streams,
+                Some(0) => None,
+                Some(limit) => Some(limit),
+            },
             ..base
         }
     }
@@ -1129,6 +1160,40 @@ plaintext-address = "127.0.0.1:8001"
             .validate()
             .expect_err("plaintext_address == address must fail");
         assert!(err.to_string().contains("plaintext_address"), "{err}");
+    }
+
+    #[test]
+    fn bigtable_http2_reset_stream_config_overrides_defaults() {
+        let defaults = KvRpcConfig::default().pool_config();
+        assert_eq!(defaults.http2_max_concurrent_reset_streams, 2_000);
+        assert_eq!(
+            defaults.http2_reset_stream_duration,
+            Duration::from_secs(10)
+        );
+        assert_eq!(defaults.http2_max_local_error_reset_streams, None);
+
+        let cfg: KvRpcConfig = toml::from_str(
+            r#"
+bigtable-http2-max-concurrent-reset-streams = 500
+bigtable-http2-reset-stream-duration-ms = 2500
+bigtable-http2-max-local-error-reset-streams = 1024
+"#,
+        )
+        .unwrap();
+        let pool = cfg.pool_config();
+        assert_eq!(pool.http2_max_concurrent_reset_streams, 500);
+        assert_eq!(
+            pool.http2_reset_stream_duration,
+            Duration::from_millis(2_500)
+        );
+        assert_eq!(pool.http2_max_local_error_reset_streams, Some(1024));
+
+        let disabled: KvRpcConfig =
+            toml::from_str("bigtable-http2-max-local-error-reset-streams = 0").unwrap();
+        assert_eq!(
+            disabled.pool_config().http2_max_local_error_reset_streams,
+            None
+        );
     }
 
     #[test]
