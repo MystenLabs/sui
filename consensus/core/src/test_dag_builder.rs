@@ -415,6 +415,7 @@ pub struct LayerBuilder<'a> {
     // Select random available ancestors by stake, using a seed if provided.
     min_ancestor_links: bool,
     min_ancestor_links_random_seed: Option<u64>,
+    min_ancestor_links_include_leader: bool,
     // Add random weak links to the current layer using a seed, if provided
     random_weak_links: bool,
     random_weak_links_random_seed: Option<u64>,
@@ -455,6 +456,7 @@ impl<'a> LayerBuilder<'a> {
             fully_linked_ancestors: true,
             min_ancestor_links: false,
             min_ancestor_links_random_seed: None,
+            min_ancestor_links_include_leader: false,
             random_weak_links: false,
             random_weak_links_random_seed: None,
             ancestors,
@@ -476,15 +478,13 @@ impl<'a> LayerBuilder<'a> {
     }
 
     // Select random available parents until their stake reaches quorum, using a seed
-    // if provided. If insufficient stake is available, select all available parents.
+    // if provided. Panic if the available parent stake cannot reach quorum.
     // Also provide a flag to include the leader when its block is available.
     // note: configuration is terminal and layer will be built after this call.
     pub fn min_ancestor_links(mut self, include_leader: bool, seed: Option<u64>) -> Self {
         self.min_ancestor_links = true;
         self.min_ancestor_links_random_seed = seed;
-        if include_leader {
-            self.leader_round = Some(self.ancestors.iter().max_by_key(|b| b.round).unwrap().round);
-        }
+        self.min_ancestor_links_include_leader = include_leader;
         self.fully_linked_ancestors = false;
         self.build()
     }
@@ -644,6 +644,9 @@ impl<'a> LayerBuilder<'a> {
         &mut self,
         round: Round,
     ) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
+        let parent_round = round
+            .checked_sub(1)
+            .expect("Minimal parent links require a non-genesis round");
         let committee = &self.dag_builder.context.committee;
         let authorities: Vec<AuthorityIndex> = committee
             .authorities()
@@ -659,7 +662,7 @@ impl<'a> LayerBuilder<'a> {
         let ancestors_by_author = self
             .ancestors
             .iter()
-            .filter(|ancestor| ancestor.round < round)
+            .filter(|ancestor| ancestor.round == parent_round)
             .fold(
                 BTreeMap::<AuthorityIndex, Vec<BlockRef>>::new(),
                 |mut grouped, ancestor| {
@@ -669,14 +672,14 @@ impl<'a> LayerBuilder<'a> {
             );
 
         let mut leaders = vec![];
-        if let Some(leader_round) = self.leader_round {
+        if self.min_ancestor_links_include_leader {
             let leader_offsets = (0..self.dag_builder.number_of_leaders).collect::<Vec<_>>();
 
             for leader_offset in leader_offsets {
                 leaders.push(
                     self.dag_builder
                         .leader_schedule
-                        .elect_leader(leader_round, leader_offset),
+                        .elect_leader(parent_round, leader_offset),
                 );
             }
         }
@@ -707,6 +710,11 @@ impl<'a> LayerBuilder<'a> {
                         selected_authorities.push(*leader);
                     }
                 }
+
+                assert!(
+                    committee.reached_quorum(selected_stake),
+                    "Available parent stake cannot reach quorum"
+                );
 
                 (
                     *authority,
@@ -986,17 +994,27 @@ mod stake_unit_regression {
 
     #[tokio::test]
     async fn minimal_links_preserve_forced_leader() {
-        let builder = minimal_layer(vec![10; 4], true);
-        let leader = builder.leader_schedule.elect_leader(1, 0);
-        for block in builder.blocks.values().filter(|block| block.round() == 2) {
-            assert!(
-                block
-                    .ancestors()
-                    .iter()
-                    .any(|parent| parent.author == leader)
-            );
-            assert!((3..=4).contains(&block.ancestors().len()));
+        let context = Arc::new(Context::new_with_test_options(4, false).0);
+        let mut added_leader = false;
+        for seed in 0..16 {
+            let mut builder = DagBuilder::new(context.clone());
+            builder.layer(1).build();
+            builder.layer(2).min_ancestor_links(true, Some(seed));
+            let leader = builder.leader_schedule.elect_leader(1, 0);
+            let blocks = builder.blocks(2..=2);
+            assert_eq!(blocks.len(), 4);
+            for block in blocks {
+                assert!(
+                    block
+                        .ancestors()
+                        .iter()
+                        .any(|parent| parent.author == leader)
+                );
+                assert!((3..=4).contains(&block.ancestors().len()));
+                added_leader |= block.ancestors().len() == 4;
+            }
         }
+        assert!(added_leader, "No seed exercised adding the forced leader");
     }
 
     #[tokio::test]
@@ -1012,8 +1030,8 @@ mod stake_unit_regression {
 
     #[tokio::test]
     async fn minimal_links_count_only_available_parent_stake() {
+        let context = Arc::new(Context::new_with_test_options(4, false).0);
         for seed in 0..16 {
-            let context = Arc::new(Context::new_for_test(4).0);
             let mut builder = DagBuilder::new(context.clone());
             let missing = context.committee.to_authority_index(3).unwrap();
             builder
@@ -1026,7 +1044,9 @@ mod stake_unit_regression {
                 .authorities(vec![missing])
                 .skip_block()
                 .min_ancestor_links(false, Some(seed));
-            for block in builder.blocks.values().filter(|block| block.round() == 2) {
+            let blocks = builder.blocks(2..=2);
+            assert_eq!(blocks.len(), 3);
+            for block in blocks {
                 assert_eq!(block.ancestors()[0].author, block.author());
                 assert!(block.ancestors().iter().all(|parent| parent.round == 1));
                 let stake = block
@@ -1043,8 +1063,9 @@ mod stake_unit_regression {
     }
 
     #[tokio::test]
-    async fn minimal_links_use_all_parents_when_quorum_is_unavailable() {
-        let context = Arc::new(Context::new_for_test(4).0);
+    #[should_panic(expected = "Available parent stake cannot reach quorum")]
+    async fn minimal_links_panic_when_quorum_is_unavailable() {
+        let context = Arc::new(Context::new_with_test_options(4, false).0);
         let mut builder = DagBuilder::new(context.clone());
         let missing = [2, 3]
             .map(|index| context.committee.to_authority_index(index).unwrap())
@@ -1060,13 +1081,185 @@ mod stake_unit_regression {
             .authorities(missing)
             .skip_block()
             .min_ancestor_links(false, Some(7));
-        for block in builder.blocks.values().filter(|block| block.round() == 2) {
-            let authors = block
+    }
+
+    #[tokio::test]
+    async fn minimal_links_allow_a_missing_leader_when_quorum_is_available() {
+        let context = Arc::new(Context::new_with_test_options(4, false).0);
+        for seed in 0..16 {
+            let mut builder = DagBuilder::new(context.clone());
+            let leader = builder.leader_schedule.elect_leader(1, 0);
+            builder
+                .layer(1)
+                .authorities(vec![leader])
+                .skip_block()
+                .build();
+            builder
+                .layer(2)
+                .authorities(vec![leader])
+                .skip_block()
+                .min_ancestor_links(true, Some(seed));
+            let blocks = builder
+                .blocks
+                .values()
+                .filter(|block| block.round() == 2)
+                .collect::<Vec<_>>();
+            assert_eq!(blocks.len(), 3);
+            for block in blocks {
+                assert_eq!(block.ancestors()[0].author, block.author());
+                assert_eq!(block.ancestors().len(), 3);
+                assert!(
+                    block
+                        .ancestors()
+                        .iter()
+                        .all(|parent| parent.round == 1 && parent.author != leader)
+                );
+                let stake = block
+                    .ancestors()
+                    .iter()
+                    .map(|parent| context.committee.stake(parent.author))
+                    .sum::<u64>();
+                assert!(context.committee.reached_quorum(stake), "seed={seed}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "Available parent stake cannot reach quorum")]
+    async fn minimal_links_panic_when_high_stake_authority_is_missing() {
+        let (context, _) = Context::new_with_test_options(4, false);
+        let (committee, _) =
+            local_committee_and_keys_with_test_options(0, vec![1, 1, 1, 10], false);
+        let context = Arc::new(context.with_committee(committee));
+        let mut builder = DagBuilder::new(context.clone());
+        let missing = context.committee.to_authority_index(3).unwrap();
+        builder
+            .layer(1)
+            .authorities(vec![missing])
+            .skip_block()
+            .build();
+        builder
+            .layer(2)
+            .authorities(vec![missing])
+            .skip_block()
+            .min_ancestor_links(false, Some(7));
+    }
+
+    #[tokio::test]
+    async fn minimal_links_do_not_count_a_missing_self_parent() {
+        // This synthetic block checks stake accounting, not self-parent validity.
+        let context = Arc::new(Context::new_with_test_options(4, false).0);
+        let missing = context.committee.to_authority_index(3).unwrap();
+        for seed in 0..16 {
+            let mut builder = DagBuilder::new(context.clone());
+            builder
+                .layer(1)
+                .authorities(vec![missing])
+                .skip_block()
+                .build();
+            builder.layer(2).min_ancestor_links(false, Some(seed));
+            let blocks = builder.blocks(2..=2);
+            assert_eq!(blocks.len(), 4);
+            let block = blocks
+                .iter()
+                .find(|block| block.author() == missing)
+                .unwrap();
+            assert_eq!(block.ancestors().len(), 3);
+            assert!(
+                block
+                    .ancestors()
+                    .iter()
+                    .all(|parent| parent.author != missing)
+            );
+            let stake = block
                 .ancestors()
                 .iter()
-                .map(|parent| parent.author.value())
-                .collect::<std::collections::BTreeSet<_>>();
-            assert_eq!(authors, [0, 1].into_iter().collect());
+                .map(|parent| context.committee.stake(parent.author))
+                .sum::<u64>();
+            assert!(context.committee.reached_quorum(stake), "seed={seed}");
         }
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "Available parent stake cannot reach quorum")]
+    async fn minimal_links_panic_when_missing_leader_leaves_insufficient_stake() {
+        let context = Arc::new(Context::new_with_test_options(4, false).0);
+        let mut builder = DagBuilder::new(context.clone());
+        let leader = builder.leader_schedule.elect_leader(1, 0);
+        let other = context
+            .committee
+            .authorities()
+            .map(|(author, _)| author)
+            .find(|author| *author != leader)
+            .unwrap();
+        builder
+            .layer(1)
+            .authorities(vec![leader, other])
+            .skip_block()
+            .build();
+        builder.layer(2).min_ancestor_links(true, Some(7));
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "Available parent stake cannot reach quorum")]
+    async fn minimal_links_do_not_count_older_round_stake() {
+        let context = Arc::new(Context::new_with_test_options(4, false).0);
+        let mut builder = DagBuilder::new(context);
+        builder.layer(1).build();
+        builder.layer(3).min_ancestor_links(false, Some(7));
+    }
+
+    #[tokio::test]
+    async fn minimal_links_include_each_previous_round_leader() {
+        let context = Arc::new(Context::new_with_test_options(4, false).0);
+        for seed in 0..16 {
+            let mut builder = DagBuilder::new(context.clone());
+            builder.layer(1).build();
+            builder.layers(2..=4).min_ancestor_links(true, Some(seed));
+            let blocks = builder.blocks(2..=4);
+            assert_eq!(blocks.len(), 12);
+            for block in blocks {
+                let leader = builder.leader_schedule.elect_leader(block.round() - 1, 0);
+                assert!(
+                    block
+                        .ancestors()
+                        .iter()
+                        .any(|parent| parent.round == block.round() - 1 && parent.author == leader),
+                    "seed={seed}, block={block:?}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn minimal_links_include_leader_when_self_stake_reaches_quorum() {
+        let builder = minimal_layer(vec![1, 1, 1, 10], true);
+        let leader = builder.leader_schedule.elect_leader(1, 0);
+        for block in builder.blocks(2..=2) {
+            assert!(
+                block
+                    .ancestors()
+                    .iter()
+                    .any(|parent| parent.author == leader)
+            );
+        }
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "Available parent stake cannot reach quorum")]
+    async fn minimal_links_panic_when_all_parents_are_missing_with_leader() {
+        let context = Arc::new(Context::new_with_test_options(4, false).0);
+        let authorities = context
+            .committee
+            .authorities()
+            .map(|(author, _)| author)
+            .collect();
+        let mut builder = DagBuilder::new(context);
+        builder
+            .layer(1)
+            .authorities(authorities)
+            .skip_block()
+            .build();
+        builder.layer(2).min_ancestor_links(true, Some(7));
     }
 }
