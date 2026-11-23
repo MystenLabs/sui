@@ -141,6 +141,7 @@ impl UnstartedRandomness {
                 received_partial_sigs: BTreeMap::new(),
                 completed_sigs: BTreeMap::new(),
                 highest_completed_round: BTreeMap::new(),
+                bundle_keys: Default::default(),
             },
             handle,
         )

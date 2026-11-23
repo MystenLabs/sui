@@ -82,6 +82,11 @@ impl RandomnessRoundReceiverHandle {
         })
     }
 
+    /// The beacon public key of the current epoch, if DKG completed.
+    pub fn public_key(&self) -> Option<bls12381::G2Element> {
+        *self.vss_pk_tx.borrow()
+    }
+
     #[cfg(test)]
     pub(crate) fn public_key_for_testing(&self) -> Option<bls12381::G2Element> {
         let rx = self.vss_pk_tx.subscribe();

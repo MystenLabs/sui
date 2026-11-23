@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{Randomness, RandomnessMessage, SendSignaturesRequest};
+use super::{Randomness, RandomnessMessage, SendBundleKeySharesRequest, SendSignaturesRequest};
 use anemo::{Request, Response};
 use tokio::sync::mpsc;
 
@@ -35,6 +35,26 @@ impl Randomness for Server {
                 round,
                 partial_sigs,
                 sig,
+            ))
+            .await;
+        Ok(anemo::Response::new(()))
+    }
+
+    async fn send_bundle_key_shares(
+        &self,
+        request: Request<SendBundleKeySharesRequest>,
+    ) -> Result<Response<()>, anemo::rpc::Status> {
+        let sender = self
+            .sender
+            .upgrade()
+            .ok_or_else(|| anemo::rpc::Status::internal("shutting down"))?;
+        let peer_id = *request
+            .peer_id()
+            .ok_or_else(|| anemo::rpc::Status::internal("missing peer ID"))?;
+        let _ = sender // throw away error, caller will retry
+            .send(RandomnessMessage::ReceiveBundleKeyShares(
+                peer_id,
+                request.into_inner(),
             ))
             .await;
         Ok(anemo::Response::new(()))

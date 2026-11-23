@@ -42,6 +42,7 @@ use tracing::{debug, info, warn};
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::epoch::randomness::DkgStatus;
 use crate::execution_cache::{ObjectCacheRead, TransactionCacheRead};
+use crate::randomness_round_receiver::RandomnessRoundReceiverHandle;
 
 /// The smallest computation charge in gas units (the first computation bucket). A fee
 /// transaction pays at least this many units times its gas price.
@@ -63,6 +64,42 @@ pub trait EncryptedBundleKeys: Send + Sync {
 
     /// The beacon public key of `epoch`, if DKG completed.
     fn beacon_public_key(&self, epoch: EpochId) -> Option<BeaconPublicKey>;
+}
+
+/// Derives bundle keys over the randomness network service.
+pub struct NetworkBundleKeys {
+    network: sui_network::randomness::Handle,
+    beacon: Arc<RandomnessRoundReceiverHandle>,
+}
+
+impl NetworkBundleKeys {
+    pub fn new(
+        network: sui_network::randomness::Handle,
+        beacon: Arc<RandomnessRoundReceiverHandle>,
+    ) -> Self {
+        Self { network, beacon }
+    }
+}
+
+#[async_trait]
+impl EncryptedBundleKeys for NetworkBundleKeys {
+    fn request(&self, epoch: EpochId, id_message: Vec<u8>) {
+        self.network.request_bundle_key(epoch, id_message);
+    }
+
+    async fn wait(&self, epoch: EpochId, id_message: Vec<u8>) -> BundleKey {
+        match self.network.wait_bundle_key(epoch, id_message).await {
+            Ok(key) => key,
+            // The event loop dropped the request because the epoch ended. The consensus
+            // handler of that epoch is shutting down, so the wait never completes.
+            Err(_) => std::future::pending().await,
+        }
+    }
+
+    fn beacon_public_key(&self, _epoch: EpochId) -> Option<BeaconPublicKey> {
+        // The receiver handle holds the key of the current epoch only.
+        self.beacon.public_key()
+    }
 }
 
 /// Per-epoch handler state for encrypted bundles.

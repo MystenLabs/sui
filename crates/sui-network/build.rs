@@ -253,6 +253,15 @@ fn build_anemo_services(out_dir: &Path) {
                 .codec_path(codec_path)
                 .build(),
         )
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("send_bundle_key_shares")
+                .route_name("SendBundleKeyShares")
+                .request_type("crate::randomness::SendBundleKeySharesRequest")
+                .response_type("()")
+                .codec_path(codec_path)
+                .build(),
+        )
         .build();
 
     anemo_build::manual::Builder::new()

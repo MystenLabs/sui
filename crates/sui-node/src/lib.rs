@@ -39,6 +39,7 @@ use sui_core::authority::execution_time_estimator::ExecutionTimeObserver;
 use sui_core::consensus_adapter::ConsensusClient;
 use sui_core::consensus_manager::UpdatableConsensusClient;
 use sui_core::consensus_transaction_pool::TransactionPoolContext;
+use sui_core::encrypted_bundles::NetworkBundleKeys;
 use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::build_execution_cache;
 use sui_core::randomness_round_receiver::{RandomnessRoundReceiver, RandomnessRoundReceiverHandle};
@@ -1621,7 +1622,7 @@ impl SuiNode {
             let randomness_manager = RandomnessManager::try_new(
                 Arc::downgrade(&epoch_store),
                 Box::new(consensus_adapter.clone()),
-                randomness_handle,
+                randomness_handle.clone(),
                 authority_key_pair,
                 randomness_receiver_handle.clone(),
             )
@@ -1630,6 +1631,12 @@ impl SuiNode {
                 epoch_store
                     .set_randomness_manager(randomness_manager)
                     .await?;
+            }
+            if epoch_store.protocol_config().encrypted_bundles() {
+                epoch_store.set_encrypted_bundle_keys(Arc::new(NetworkBundleKeys::new(
+                    randomness_handle,
+                    randomness_receiver_handle.clone(),
+                )));
             }
         }
 
