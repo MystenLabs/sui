@@ -15,8 +15,6 @@ use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
 
-use crate::dynamic_field::DynamicFieldInfo;
-
 /// A Move struct type at one of four levels of specificity.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StructTypePattern {
@@ -30,21 +28,6 @@ pub enum StructTypePattern {
     /// A struct type. With empty `type_params` it matches every
     /// instantiation of the type; otherwise only this exact instantiation.
     Type(StructTag),
-}
-
-impl StructTypePattern {
-    pub fn matches(&self, tag: &StructTag) -> bool {
-        match self {
-            Self::Package(package) => tag.address == *package,
-            Self::Module { package, module } => tag.address == *package && tag.module == *module,
-            Self::Type(pattern) if pattern.type_params.is_empty() => {
-                tag.address == pattern.address
-                    && tag.module == pattern.module
-                    && tag.name == pattern.name
-            }
-            Self::Type(pattern) => tag == pattern,
-        }
-    }
 }
 
 /// Parses `address`, `address::module`, `address::module::Name` or
@@ -76,16 +59,6 @@ pub enum NameTypePattern {
     Struct(StructTypePattern),
     /// Exactly this non-struct type, e.g. `u64` or `vector<u8>`.
     Exact(TypeTag),
-}
-
-impl NameTypePattern {
-    pub fn matches(&self, name_type: &TypeTag) -> bool {
-        match (self, name_type) {
-            (Self::Struct(pattern), TypeTag::Struct(tag)) => pattern.matches(tag),
-            (Self::Struct(_), _) => false,
-            (Self::Exact(pattern), name_type) => pattern == name_type,
-        }
-    }
 }
 
 /// Parses a complete Move type, or a struct type pattern as accepted by
@@ -131,17 +104,6 @@ pub struct DnfFilter<P> {
     pub terms: Vec<Vec<FilterLiteral<P>>>,
 }
 
-impl<P> DnfFilter<P> {
-    /// Whether the filter accepts a value that each predicate is evaluated
-    /// against with `predicate_matches`.
-    pub fn matches(&self, mut predicate_matches: impl FnMut(&P) -> bool) -> bool {
-        self.terms.iter().any(|term| {
-            term.iter()
-                .all(|literal| predicate_matches(&literal.predicate) != literal.negated)
-        })
-    }
-}
-
 /// Filters owned objects by their Move type.
 pub type OwnedObjectFilter = DnfFilter<StructTypePattern>;
 
@@ -156,46 +118,10 @@ impl OwnedObjectFilter {
             }]],
         }
     }
-
-    pub fn matches_object_type(&self, object_type: &StructTag) -> bool {
-        self.matches(|pattern| pattern.matches(object_type))
-    }
 }
 
 /// Filters dynamic fields by their name type and kind.
 pub type DynamicFieldFilter = DnfFilter<DynamicFieldPredicate>;
-
-impl DynamicFieldFilter {
-    /// Whether the filter accepts the object of type `field_type` that a
-    /// parent owns. Only `Field<Name, Value>` objects can match.
-    pub fn matches_field_type(&self, field_type: &StructTag) -> bool {
-        if !DynamicFieldInfo::is_dynamic_field(field_type) {
-            return false;
-        }
-        let [name_type, _value_type] = field_type.type_params.as_slice() else {
-            return false;
-        };
-        // `name_type` is `None` only for a malformed `Wrapper` without exactly
-        // one type parameter.
-        let (name_type, is_dynamic_object_field) = match name_type {
-            TypeTag::Struct(wrapper)
-                if DynamicFieldInfo::is_dynamic_object_field_wrapper(wrapper) =>
-            {
-                match wrapper.type_params.as_slice() {
-                    [name_type] => (Some(name_type), true),
-                    _ => (None, true),
-                }
-            }
-            name_type => (Some(name_type), false),
-        };
-        self.matches(|predicate| match predicate {
-            DynamicFieldPredicate::NameType(pattern) => {
-                name_type.is_some_and(|name| pattern.matches(name))
-            }
-            DynamicFieldPredicate::DynamicObjectField => is_dynamic_object_field,
-        })
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -203,23 +129,6 @@ mod tests {
 
     fn struct_tag(s: &str) -> StructTag {
         crate::parse_sui_struct_tag(s).unwrap()
-    }
-
-    fn type_tag(s: &str) -> TypeTag {
-        crate::parse_sui_type_tag(s).unwrap()
-    }
-
-    fn dynamic_field(name: &str) -> StructTag {
-        DynamicFieldInfo::dynamic_field_type(type_tag(name), type_tag("u64"))
-    }
-
-    fn dynamic_object_field(name: &str) -> StructTag {
-        DynamicFieldInfo::dynamic_field_type(
-            TypeTag::Struct(Box::new(DynamicFieldInfo::dynamic_object_field_wrapper(
-                type_tag(name),
-            ))),
-            type_tag("0x2::object::ID"),
-        )
     }
 
     #[test]
@@ -246,16 +155,6 @@ mod tests {
     }
 
     #[test]
-    fn type_without_params_matches_every_instantiation() {
-        let any_coin: StructTypePattern = "0x2::coin::Coin".parse().unwrap();
-        let sui_coin: StructTypePattern = "0x2::coin::Coin<0x2::sui::SUI>".parse().unwrap();
-        let usdc = struct_tag("0x2::coin::Coin<0xa::usdc::USDC>");
-        assert!(any_coin.matches(&usdc));
-        assert!(!sui_coin.matches(&usdc));
-        assert!(!any_coin.matches(&struct_tag("0x2::coin::CoinMetadata<0x2::sui::SUI>")));
-    }
-
-    #[test]
     fn name_type_pattern_accepts_types_and_struct_patterns() {
         assert_eq!(
             "u64".parse::<NameTypePattern>().unwrap(),
@@ -266,58 +165,5 @@ mod tests {
             NameTypePattern::Struct(StructTypePattern::Package(AccountAddress::TWO)),
         );
         assert!("u64::x".parse::<NameTypePattern>().is_err());
-    }
-
-    #[test]
-    fn name_type_matches_the_unwrapped_name_of_dynamic_object_fields() {
-        let only = |negated, predicate| DynamicFieldFilter {
-            terms: vec![vec![FilterLiteral { negated, predicate }]],
-        };
-        let item = only(
-            false,
-            DynamicFieldPredicate::NameType("0x2::kiosk::Item".parse().unwrap()),
-        );
-        assert!(item.matches_field_type(&dynamic_field("0x2::kiosk::Item")));
-        assert!(item.matches_field_type(&dynamic_object_field("0x2::kiosk::Item")));
-
-        // The wrapper is defined at 0x2, but the name type is not.
-        let framework = only(
-            false,
-            DynamicFieldPredicate::NameType("0x2".parse().unwrap()),
-        );
-        assert!(!framework.matches_field_type(&dynamic_object_field("0xabc::m::Key")));
-        assert!(framework.matches_field_type(&dynamic_object_field("0x2::kiosk::Item")));
-
-        let is_object = only(false, DynamicFieldPredicate::DynamicObjectField);
-        assert!(is_object.matches_field_type(&dynamic_object_field("u64")));
-        assert!(!is_object.matches_field_type(&dynamic_field("u64")));
-
-        // Only `Field` objects match, even through a negated literal: the
-        // value object of a dynamic object field is owned by its `Field`.
-        let inline_value = only(true, DynamicFieldPredicate::DynamicObjectField);
-        assert!(inline_value.matches_field_type(&dynamic_field("u64")));
-        assert!(!inline_value.matches_field_type(&struct_tag("0x2::coin::Coin<0x2::sui::SUI>")));
-    }
-
-    #[test]
-    fn dnf_filter_ors_terms_and_ands_literals() {
-        let not = |s: &str| FilterLiteral {
-            negated: true,
-            predicate: s.parse::<StructTypePattern>().unwrap(),
-        };
-        // Everything except coins and SuiNS registrations.
-        let filter = OwnedObjectFilter {
-            terms: vec![vec![
-                not("0x2::coin::Coin"),
-                not("0xd22b::suins_registration"),
-            ]],
-        };
-        assert!(!filter.matches_object_type(&struct_tag("0x2::coin::Coin<0x2::sui::SUI>")));
-        assert!(
-            !filter
-                .matches_object_type(&struct_tag("0xd22b::suins_registration::SuinsRegistration"))
-        );
-        assert!(filter.matches_object_type(&struct_tag("0x2::kiosk::KioskOwnerCap")));
-        assert!(!OwnedObjectFilter { terms: vec![] }.matches_object_type(&struct_tag("0x2::a::B")));
     }
 }

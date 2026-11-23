@@ -391,6 +391,175 @@ mod tests {
         .unwrap()
     }
 
+    // Reference semantics of the filters, defined on Move types rather than
+    // key bytes. The compiled ranges must select exactly what these accept.
+
+    fn struct_pattern_matches(pattern: &StructTypePattern, tag: &StructTag) -> bool {
+        match pattern {
+            StructTypePattern::Package(package) => tag.address == *package,
+            StructTypePattern::Module { package, module } => {
+                tag.address == *package && tag.module == *module
+            }
+            StructTypePattern::Type(pattern) if pattern.type_params.is_empty() => {
+                tag.address == pattern.address
+                    && tag.module == pattern.module
+                    && tag.name == pattern.name
+            }
+            StructTypePattern::Type(pattern) => tag == pattern,
+        }
+    }
+
+    fn name_pattern_matches(pattern: &NameTypePattern, name_type: &TypeTag) -> bool {
+        match (pattern, name_type) {
+            (NameTypePattern::Struct(pattern), TypeTag::Struct(tag)) => {
+                struct_pattern_matches(pattern, tag)
+            }
+            (NameTypePattern::Struct(_), _) => false,
+            (NameTypePattern::Exact(pattern), name_type) => pattern == name_type,
+        }
+    }
+
+    fn dnf_matches<P>(
+        filter: &DnfFilter<P>,
+        mut predicate_matches: impl FnMut(&P) -> bool,
+    ) -> bool {
+        filter.terms.iter().any(|term| {
+            term.iter()
+                .all(|literal| predicate_matches(&literal.predicate) != literal.negated)
+        })
+    }
+
+    fn object_filter_matches(filter: &OwnedObjectFilter, object_type: &StructTag) -> bool {
+        dnf_matches(filter, |pattern| {
+            struct_pattern_matches(pattern, object_type)
+        })
+    }
+
+    /// Only `Field<Name, Value>` objects can match.
+    fn dynamic_field_filter_matches(filter: &DynamicFieldFilter, field_type: &StructTag) -> bool {
+        if !DynamicFieldInfo::is_dynamic_field(field_type) {
+            return false;
+        }
+        let [name_type, _value_type] = field_type.type_params.as_slice() else {
+            return false;
+        };
+        // `name_type` is `None` only for a malformed `Wrapper` without exactly
+        // one type parameter.
+        let (name_type, is_dynamic_object_field) = match name_type {
+            TypeTag::Struct(wrapper)
+                if DynamicFieldInfo::is_dynamic_object_field_wrapper(wrapper) =>
+            {
+                match wrapper.type_params.as_slice() {
+                    [name_type] => (Some(name_type), true),
+                    _ => (None, true),
+                }
+            }
+            name_type => (Some(name_type), false),
+        };
+        dnf_matches(filter, |predicate| match predicate {
+            DynamicFieldPredicate::NameType(pattern) => {
+                name_type.is_some_and(|name| name_pattern_matches(pattern, name))
+            }
+            DynamicFieldPredicate::DynamicObjectField => is_dynamic_object_field,
+        })
+    }
+
+    #[test]
+    fn type_without_params_matches_every_instantiation() {
+        let any_coin: StructTypePattern = "0x2::coin::Coin".parse().unwrap();
+        let sui_coin: StructTypePattern = "0x2::coin::Coin<0x2::sui::SUI>".parse().unwrap();
+        let usdc = struct_tag("0x2::coin::Coin<0xa::usdc::USDC>");
+        assert!(struct_pattern_matches(&any_coin, &usdc));
+        assert!(!struct_pattern_matches(&sui_coin, &usdc));
+        assert!(!struct_pattern_matches(
+            &any_coin,
+            &struct_tag("0x2::coin::CoinMetadata<0x2::sui::SUI>")
+        ));
+    }
+
+    #[test]
+    fn name_type_matches_the_unwrapped_name_of_dynamic_object_fields() {
+        let only = |negated, predicate| DynamicFieldFilter {
+            terms: vec![vec![literal(negated, predicate)]],
+        };
+        let item = only(
+            false,
+            DynamicFieldPredicate::NameType("0x2::kiosk::Item".parse().unwrap()),
+        );
+        assert!(dynamic_field_filter_matches(
+            &item,
+            &dynamic_field("0x2::kiosk::Item")
+        ));
+        assert!(dynamic_field_filter_matches(
+            &item,
+            &dynamic_object_field("0x2::kiosk::Item")
+        ));
+
+        // The wrapper is defined at 0x2, but the name type is not.
+        let framework = only(
+            false,
+            DynamicFieldPredicate::NameType("0x2".parse().unwrap()),
+        );
+        assert!(!dynamic_field_filter_matches(
+            &framework,
+            &dynamic_object_field("0xabc::m::Key")
+        ));
+        assert!(dynamic_field_filter_matches(
+            &framework,
+            &dynamic_object_field("0x2::kiosk::Item")
+        ));
+
+        let is_object = only(false, DynamicFieldPredicate::DynamicObjectField);
+        assert!(dynamic_field_filter_matches(
+            &is_object,
+            &dynamic_object_field("u64")
+        ));
+        assert!(!dynamic_field_filter_matches(
+            &is_object,
+            &dynamic_field("u64")
+        ));
+
+        // Only `Field` objects match, even through a negated literal: the
+        // value object of a dynamic object field is owned by its `Field`.
+        let inline_value = only(true, DynamicFieldPredicate::DynamicObjectField);
+        assert!(dynamic_field_filter_matches(
+            &inline_value,
+            &dynamic_field("u64")
+        ));
+        assert!(!dynamic_field_filter_matches(
+            &inline_value,
+            &struct_tag("0x2::coin::Coin<0x2::sui::SUI>")
+        ));
+    }
+
+    #[test]
+    fn dnf_filter_ors_terms_and_ands_literals() {
+        let not = |s: &str| literal(true, s.parse::<StructTypePattern>().unwrap());
+        // Everything except coins and SuiNS registrations.
+        let filter = OwnedObjectFilter {
+            terms: vec![vec![
+                not("0x2::coin::Coin"),
+                not("0xd22b::suins_registration"),
+            ]],
+        };
+        assert!(!object_filter_matches(
+            &filter,
+            &struct_tag("0x2::coin::Coin<0x2::sui::SUI>")
+        ));
+        assert!(!object_filter_matches(
+            &filter,
+            &struct_tag("0xd22b::suins_registration::SuinsRegistration")
+        ));
+        assert!(object_filter_matches(
+            &filter,
+            &struct_tag("0x2::kiosk::KioskOwnerCap")
+        ));
+        assert!(!object_filter_matches(
+            &OwnedObjectFilter { terms: vec![] },
+            &struct_tag("0x2::a::B")
+        ));
+    }
+
     #[test]
     fn struct_type_tag_variant_matches_bcs() {
         let tag = TypeTag::Struct(Box::new(struct_tag("0x2::sui::SUI")));
@@ -427,8 +596,8 @@ mod tests {
     }
 
     /// The compiled ranges hold exactly the keys of `kind` whose type the
-    /// filter matches, for every key in a corpus spanning other owners,
-    /// every specificity level, and both kinds of dynamic field.
+    /// reference matchers accept, for every key in a corpus spanning other
+    /// owners, every specificity level, and both kinds of dynamic field.
     #[test]
     fn ranges_select_exactly_the_matching_keys() {
         let owner = OwnerKind::AddressOwner(SuiAddress::from(ObjectID::from_single_byte(0x10)));
@@ -495,7 +664,7 @@ mod tests {
             for type_ in &object_types {
                 assert_eq!(
                     ranges.contains(&key(owner, type_.clone(), 1)),
-                    filter.matches_object_type(type_),
+                    object_filter_matches(filter, type_),
                     "{filter:?} on {type_}",
                 );
                 for neighbour in neighbours {
@@ -543,7 +712,7 @@ mod tests {
             for type_ in &field_types {
                 assert_eq!(
                     ranges.contains(&key(parent, type_.clone(), 1)),
-                    filter.matches_field_type(type_),
+                    dynamic_field_filter_matches(filter, type_),
                     "{filter:?} on {type_}",
                 );
                 for neighbour in neighbours {
