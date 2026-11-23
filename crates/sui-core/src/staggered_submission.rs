@@ -56,9 +56,6 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 /// and the later copies are dropped. A shorter step would turn honest fan-out into
 /// duplicate copies.
 const DEFAULT_STAGGER_STEP: Duration = Duration::from_millis(400);
-/// Held (staggered) submissions may occupy at most `capacity / this` of the owner's
-/// pending-transaction capacity and of its byte capacity; see [`StaggerQuota`].
-const STAGGERED_HELD_QUOTA_DIVISOR: usize = 4;
 /// Share of total voting power, in basis points, that a transaction's proposer set
 /// covers: the leading slots of its stagger order whose cumulative stake first reaches
 /// this share may propose it (the free slots immediately, the rest after their hold);
@@ -696,12 +693,12 @@ impl StaggerDecision {
 /// in the epoch store.
 ///
 /// Held submissions are not drained until their delay elapses, so without the quota
-/// (`max_pending_transactions / STAGGERED_HELD_QUOTA_DIVISOR` entries and, when the pool
-/// has a byte capacity, the same share of its bytes), sustained no-proposer-list inflow
+/// (`held_quota_percent` of `max_pending_transactions` entries and, when the pool has a
+/// byte capacity, the same share of its bytes), sustained no-proposer-list inflow
 /// at up to `max_delay` of dwell each could fill the pool's capacity and crowd out
-/// restricted traffic. At the quota the caller gets a retriable overload error instead —
-/// which also steers the client to retry against another validator, plausibly one of
-/// the transaction's free-slot validators.
+/// restricted traffic. At either quota the caller gets the retriable
+/// `StaggeredSubmissionHoldQuotaFull` error instead, and the client retries against
+/// another validator, plausibly one of the transaction's free-slot validators.
 pub struct StaggerQuota {
     quota: usize,
     held: Arc<AtomicUsize>,
@@ -727,13 +724,19 @@ impl StaggerQuota {
     pub fn new(
         max_pending_transactions: usize,
         max_pending_bytes: Option<u64>,
+        held_quota_percent: u8,
         metrics: &AdmissionQueueMetrics,
     ) -> Self {
+        assert!(
+            (1..=100).contains(&held_quota_percent),
+            "staggered held quota percent must be between 1 and 100, got {held_quota_percent}"
+        );
+        let percent = u128::from(held_quota_percent);
         Self {
-            quota: (max_pending_transactions / STAGGERED_HELD_QUOTA_DIVISOR).max(1),
+            quota: ((max_pending_transactions as u128 * percent / 100) as usize).max(1),
             held: Arc::new(AtomicUsize::new(0)),
             byte_quota: max_pending_bytes
-                .map(|bytes| (bytes / STAGGERED_HELD_QUOTA_DIVISOR as u64).max(1)),
+                .map(|bytes| ((u128::from(bytes) * percent / 100) as u64).max(1)),
             held_bytes: Arc::new(AtomicU64::new(0)),
             metric: metrics.pool_staggered_held.clone(),
             bytes_metric: metrics.pool_staggered_held_bytes.clone(),
@@ -798,10 +801,7 @@ impl StaggerQuota {
             self.quota_rejected_metric
                 .with_label_values(&["entries"])
                 .inc();
-            return Err(SuiErrorKind::ValidatorOverloadedRetryAfter {
-                retry_after_secs: 1,
-            }
-            .into());
+            return Err(SuiErrorKind::StaggeredSubmissionHoldQuotaFull.into());
         }
         if self
             .held_bytes
@@ -816,10 +816,7 @@ impl StaggerQuota {
             self.quota_rejected_metric
                 .with_label_values(&["bytes"])
                 .inc();
-            return Err(SuiErrorKind::ValidatorOverloadedRetryAfter {
-                retry_after_secs: 1,
-            }
-            .into());
+            return Err(SuiErrorKind::StaggeredSubmissionHoldQuotaFull.into());
         }
         self.metric.inc();
         self.bytes_metric.add(bytes as i64);
@@ -999,7 +996,7 @@ pub(crate) fn stagger_order(seed: &[u8; 32], committee: &Committee) -> Vec<Autho
 
 /// This validator's slot in the [`stagger_order`] permutation.
 #[cfg(test)]
-fn stagger_slot(seed: &[u8; 32], committee: &Committee, own_index: u32) -> u64 {
+pub(crate) fn stagger_slot(seed: &[u8; 32], committee: &Committee, own_index: u32) -> u64 {
     slot_in_order(&stagger_order(seed, committee), committee, own_index)
 }
 
@@ -1999,7 +1996,7 @@ mod tests {
         max_pending_bytes: Option<u64>,
         metrics: &AdmissionQueueMetrics,
     ) -> StaggerQuota {
-        StaggerQuota::new(max_pending_transactions, max_pending_bytes, metrics)
+        StaggerQuota::new(max_pending_transactions, max_pending_bytes, 50, metrics)
     }
 
     /// Returns the held count and bytes, and checks that both gauges match them.
@@ -2021,8 +2018,8 @@ mod tests {
     #[test]
     fn held_byte_quota_bounds_held_bytes() {
         let metrics = AdmissionQueueMetrics::new_for_tests();
-        // The quotas are a quarter of the capacities: 25 entries and 100 bytes.
-        let quota = test_quota(100, Some(400), &metrics);
+        // The quotas are half the capacities: 25 entries and 100 bytes.
+        let quota = test_quota(50, Some(200), &metrics);
         let delay = Duration::from_secs(1);
 
         let first = quota.hold(delay, 60).unwrap();
@@ -2033,7 +2030,7 @@ mod tests {
         // unchanged.
         assert!(matches!(
             quota.hold(delay, 1).err().unwrap().as_inner(),
-            SuiErrorKind::ValidatorOverloadedRetryAfter { .. }
+            SuiErrorKind::StaggeredSubmissionHoldQuotaFull
         ));
         assert_eq!(held(&quota), (2, 120));
         assert_eq!(quota_rejections(&metrics, "bytes"), 1);
@@ -2056,14 +2053,38 @@ mod tests {
     }
 
     #[test]
+    fn held_quota_percent_scales_both_quotas() {
+        let metrics = AdmissionQueueMetrics::new_for_tests();
+        let full = StaggerQuota::new(20_000, Some(1 << 28), 100, &metrics);
+        assert_eq!(full.quota, 20_000);
+        assert_eq!(full.byte_quota(), Some(1 << 28));
+        let quarter = StaggerQuota::new(20_000, Some(1 << 28), 25, &metrics);
+        assert_eq!(quarter.quota, 5_000);
+        assert_eq!(quarter.byte_quota(), Some(1 << 26));
+        // A small capacity still admits one hold.
+        let tiny = StaggerQuota::new(1, Some(1), 1, &metrics);
+        assert_eq!(tiny.quota, 1);
+        assert_eq!(tiny.byte_quota(), Some(1));
+    }
+
+    #[test]
+    #[should_panic(expected = "between 1 and 100")]
+    fn held_quota_percent_above_100_is_rejected() {
+        StaggerQuota::new(10, None, 101, &AdmissionQueueMetrics::new_for_tests());
+    }
+
+    #[test]
     fn without_a_byte_capacity_only_the_entry_quota_binds() {
         let metrics = AdmissionQueueMetrics::new_for_tests();
-        // The entry quota is 8 / 4 = 2 holds.
-        let quota = test_quota(8, None, &metrics);
+        // The entry quota is 4 / 2 = 2 holds.
+        let quota = test_quota(4, None, &metrics);
         let delay = Duration::from_secs(1);
         let first = quota.hold(delay, 1 << 30).unwrap();
         let second = quota.hold(delay, 1 << 30).unwrap();
-        assert!(quota.hold(delay, 1).is_err());
+        assert!(matches!(
+            quota.hold(delay, 1).err().unwrap().as_inner(),
+            SuiErrorKind::StaggeredSubmissionHoldQuotaFull
+        ));
         assert_eq!(quota_rejections(&metrics, "entries"), 1);
         assert_eq!(quota_rejections(&metrics, "bytes"), 0);
         drop(first);
@@ -2202,8 +2223,14 @@ mod pool_tests {
         });
         let (state, sender, keypair, _, immediate_gas, candidates) = setup().await;
         let epoch_store = state.epoch_store_for_testing();
-        // Capacity 10 gives a held quota of 10 / STAGGERED_HELD_QUOTA_DIVISOR = 2.
-        let pool = pool_for(&state);
+        // Capacity 3 gives a held quota of 75% of 3, rounded down to 2.
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let pool = Arc::new(ConsensusTransactionPool::new_for_tests(
+            epoch_store.clone(),
+            state.get_cache_writer().clone(),
+            3,
+            metrics.clone(),
+        ));
 
         let staggered = epoch_store.staggered_submission();
         staggered.set_params_for_testing(StaggerParams {
@@ -2234,9 +2261,16 @@ mod pool_tests {
         assert!(
             matches!(
                 error.as_inner(),
-                sui_types::error::SuiErrorKind::ValidatorOverloadedRetryAfter { .. }
+                sui_types::error::SuiErrorKind::StaggeredSubmissionHoldQuotaFull
             ),
             "unexpected quota rejection error: {error}"
+        );
+        assert_eq!(
+            metrics
+                .pool_staggered_quota_rejected
+                .with_label_values(&["entries"])
+                .get(),
+            1
         );
 
         // An immediate-slot transaction is unaffected by the quota and is proposed.
@@ -2265,6 +2299,8 @@ mod pool_tests {
             None,
             Some(ttl),
             None,
+            // 20% of capacity 10 gives a held quota of 2.
+            20,
             metrics.clone(),
             crate::consensus_adapter::ConsensusAdapterMetrics::new_test(),
         ));
@@ -2307,6 +2343,7 @@ mod pool_tests {
     #[tokio::test]
     async fn held_byte_quota_leaves_byte_capacity_for_unheld_entries() {
         const MAX_BLOCK_BYTES: u64 = 4096;
+        const HELD_QUOTA_PERCENT: u8 = 50;
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut c| {
             c.set_allowed_proposers_for_testing(true);
             c.set_consensus_max_transactions_in_block_bytes_for_testing(MAX_BLOCK_BYTES);
@@ -2314,8 +2351,8 @@ mod pool_tests {
         });
         let (state, sender, keypair, _, immediate_gas, candidates) = setup().await;
         let epoch_store = state.epoch_store_for_testing();
-        // The byte capacity is raised to the block limit, so held entries may take a
-        // quarter of it. The entry quota of 100 / STAGGERED_HELD_QUOTA_DIVISOR = 25 is
+        // The byte capacity is raised to the block limit, so held entries may take half
+        // of it. The entry quota of 50% of 100 = 50 is
         // not reached.
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
         let pool = ConsensusTransactionPool::new(
@@ -2325,10 +2362,11 @@ mod pool_tests {
             None,
             None,
             Some(1),
+            HELD_QUOTA_PERCENT,
             metrics.clone(),
             ConsensusAdapterMetrics::new_test(),
         );
-        let byte_quota = MAX_BLOCK_BYTES / STAGGERED_HELD_QUOTA_DIVISOR as u64;
+        let byte_quota = MAX_BLOCK_BYTES * u64::from(HELD_QUOTA_PERCENT) / 100;
 
         let staggered = epoch_store.staggered_submission();
         staggered.set_params_for_testing(StaggerParams {
@@ -2355,7 +2393,7 @@ mod pool_tests {
         assert!(
             matches!(
                 error.as_inner(),
-                SuiErrorKind::ValidatorOverloadedRetryAfter { .. }
+                SuiErrorKind::StaggeredSubmissionHoldQuotaFull
             ),
             "unexpected quota rejection error: {error}"
         );

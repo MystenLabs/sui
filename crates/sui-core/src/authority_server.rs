@@ -1545,6 +1545,21 @@ impl ValidatorService {
                 consensus_position: consensus_positions[0],
             }));
         } else {
+            // A group refused at the held quota or for an owned object conflict is not queued.
+            // Its digests are released, so that a resubmission is handled afresh instead of
+            // being suppressed as recently submitted. The release runs for every such group
+            // before the loop below, because the loop returns at the first group that fails the
+            // whole request.
+            for (group_result, txns_meta) in group_results.iter().zip_debug_eq(&group_tx_meta) {
+                if matches!(
+                    group_result,
+                    Err(err) if Self::is_hold_quota_full(err) || Self::is_owned_object_conflict(err)
+                ) {
+                    for (_, tx_digest) in txns_meta {
+                        inflight_guard.release(*tx_digest);
+                    }
+                }
+            }
             for (group_result, txns_meta) in group_results.into_iter().zip_debug_eq(group_tx_meta) {
                 match group_result {
                     Ok(consensus_positions) => {
@@ -1561,16 +1576,16 @@ impl ValidatorService {
                     }
                     // Another queued transaction holds an owned gas object of this group. Report
                     // it per-tx, like a duplicate, so it counts toward the request's spam weight
-                    // and does not fail the other groups. The group is not queued, so its digests
-                    // are released rather than recorded as recently submitted.
+                    // and does not fail the other groups. Its digests were released above.
                     Err(err) if Self::is_owned_object_conflict(&err) => {
-                        for (idx, tx_digest) in txns_meta {
-                            inflight_guard.release(tx_digest);
+                        for (idx, _) in txns_meta {
                             results[idx] = Some(SubmitTxResult::Rejected { error: err.clone() });
                         }
                     }
                     // The transaction(s) in this group are already being processed by consensus.
                     // Report per-tx as a retriable rejection rather than failing the whole request.
+                    // Every other error, including the staggered-submission errors, fails the
+                    // whole request. See `Self::without_undecodable_rejection`.
                     Err(err) => {
                         let SuiErrorKind::TransactionProcessing { status, .. } =
                             err.as_inner().clone()
@@ -1617,6 +1632,13 @@ impl ValidatorService {
         matches!(error.as_inner(), SuiErrorKind::OwnedObjectConflict { .. })
     }
 
+    fn is_hold_quota_full(error: &SuiError) -> bool {
+        matches!(
+            error.as_inner(),
+            SuiErrorKind::StaggeredSubmissionHoldQuotaFull
+        )
+    }
+
     /// Traffic-control spam weight for a whole submit request. The request is spam unless it is
     /// entirely accepted gas-chargable work.
     fn request_spam_weight(
@@ -1659,12 +1681,35 @@ impl ValidatorService {
             let result = result.ok_or_else(|| SuiErrorKind::GenericAuthorityError {
                 error: format!("Missing transaction result at {}", i),
             })?;
+            let result = Self::without_undecodable_rejection(result);
             let raw_result = result.try_into()?;
             raw_results.push(raw_result);
         }
         Ok(RawSubmitTxResponse {
             results: raw_results,
         })
+    }
+
+    /// Replaces a per-transaction `StaggeredSubmissionHoldQuotaFull` rejection with the
+    /// overload error that released clients decode. A released client decodes an unknown
+    /// variant in a whole-request error as a retriable RPC error, but it fails to decode the
+    /// whole response when the unknown variant is inside a per-transaction result, and it
+    /// then treats the request as failed with a non-retriable error. The submit handler
+    /// returns this error only for the whole request, so the replacement runs only after a
+    /// bug.
+    fn without_undecodable_rejection(result: SubmitTxResult) -> SubmitTxResult {
+        match result {
+            SubmitTxResult::Rejected { error } if Self::is_hold_quota_full(&error) => {
+                debug_fatal!("StaggeredSubmissionHoldQuotaFull in a per-transaction rejection");
+                SubmitTxResult::Rejected {
+                    error: SuiErrorKind::ValidatorOverloadedRetryAfter {
+                        retry_after_secs: 1,
+                    }
+                    .into(),
+                }
+            }
+            result => result,
+        }
     }
 
     /// Extract the gas price from a batch of consensus transactions.

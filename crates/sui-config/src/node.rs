@@ -302,6 +302,10 @@ impl Default for TransactionDriverConfig {
 /// at this value when `max_pending_user_bytes` is unset.
 pub const DEFAULT_MAX_PENDING_USER_BYTES: u64 = 256 * 1024 * 1024;
 
+/// Staggered (held) submissions may occupy this percentage of the consensus transaction
+/// pool's user-lane capacities when `staggered-held-quota-percent` is unset.
+pub const DEFAULT_STAGGERED_HELD_QUOTA_PERCENT: u8 = 75;
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ConsensusTransactionPoolConfig {
@@ -338,6 +342,13 @@ pub struct ConsensusTransactionPoolConfig {
     /// A non-zero value below `max_transactions_in_block_bytes` is raised to it, so
     /// that a maximum-size bundle can always be admitted to an empty queue.
     pub max_pending_user_bytes: Option<u64>,
+
+    /// Percentage of `max_pending_transactions` and of `max_pending_user_bytes` that
+    /// staggered (held) submissions may occupy. Held submissions over the quota are
+    /// refused with a retriable error. The rest of the capacity stays available for
+    /// submissions that this validator proposes without a hold, which cannot evict held
+    /// entries at the same gas price. Defaults to 75. Must be between 1 and 100.
+    pub staggered_held_quota_percent: Option<u8>,
 }
 
 impl Default for ConsensusTransactionPoolConfig {
@@ -349,6 +360,7 @@ impl Default for ConsensusTransactionPoolConfig {
             max_user_bytes_per_second: None,
             max_queue_age_secs: None,
             max_pending_user_bytes: None,
+            staggered_held_quota_percent: None,
         }
     }
 }
@@ -382,6 +394,22 @@ impl ConsensusTransactionPoolConfig {
             Some(bytes) => Some(bytes),
             None => Some(DEFAULT_MAX_PENDING_USER_BYTES),
         }
+    }
+
+    pub fn staggered_held_quota_percent(&self) -> u8 {
+        self.staggered_held_quota_percent
+            .unwrap_or(DEFAULT_STAGGERED_HELD_QUOTA_PERCENT)
+    }
+
+    /// Checked at node startup. The pool is built at the start of each validator epoch, so
+    /// an invalid value found there would crash the node during reconfiguration.
+    pub fn validate(&self) -> anyhow::Result<()> {
+        let percent = self.staggered_held_quota_percent();
+        anyhow::ensure!(
+            (1..=100).contains(&percent),
+            "consensus-transaction-pool.staggered-held-quota-percent ({percent}) must be between 1 and 100",
+        );
+        Ok(())
     }
 }
 
@@ -1943,7 +1971,8 @@ mod tests {
 
     use super::{
         AuthorityStorePruningConfig, ConsensusTransactionPoolConfig,
-        DEFAULT_MAX_PENDING_USER_BYTES, ExecutionTimeObserverConfig, Genesis, StateArchiveConfig,
+        DEFAULT_MAX_PENDING_USER_BYTES, DEFAULT_STAGGERED_HELD_QUOTA_PERCENT,
+        ExecutionTimeObserverConfig, Genesis, StateArchiveConfig,
     };
     use crate::NodeConfig;
 
@@ -2048,6 +2077,28 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(disabled.max_pending_user_bytes(), None);
+    }
+
+    #[test]
+    fn staggered_held_quota_percent_defaults() {
+        let omitted: ConsensusTransactionPoolConfig = serde_yaml::from_str("{}").unwrap();
+        assert_eq!(
+            omitted.staggered_held_quota_percent(),
+            DEFAULT_STAGGERED_HELD_QUOTA_PERCENT
+        );
+        let parsed: ConsensusTransactionPoolConfig =
+            serde_yaml::from_str("staggered-held-quota-percent: 100").unwrap();
+        assert_eq!(parsed.staggered_held_quota_percent(), 100);
+        parsed.validate().unwrap();
+        omitted.validate().unwrap();
+
+        for invalid in [0, 101] {
+            let config = ConsensusTransactionPoolConfig {
+                staggered_held_quota_percent: Some(invalid),
+                ..Default::default()
+            };
+            assert!(config.validate().is_err(), "{invalid} was accepted");
+        }
     }
 
     #[test]
