@@ -21,17 +21,12 @@ use serde::{Deserialize, Serialize};
 use crate::{
     SUI_FRAMEWORK_ADDRESS, SUI_GUARDRAILS_REGISTRY_OBJECT_ID,
     base_types::{ObjectID, SuiAddress},
-    collection_types::{Entry, VecMap},
-    committee::EpochId,
-    consensus_inputs::added_input,
+    collection_types::VecMap,
     derived_object::derive_object_id,
     id::UID,
     object::Object,
-    transaction::{
-        SharedInputObject, TransactionData, TransactionDataAPI, TransactionKind, WithdrawFrom,
-    },
+    transaction::{TransactionData, TransactionDataAPI, TransactionKind, WithdrawFrom},
 };
-use sui_protocol_config::ProtocolConfig;
 
 pub const GUARDRAILS_MODULE_NAME: &IdentStr = ident_str!("guardrails");
 pub const POLICY_STRUCT_NAME: &IdentStr = ident_str!("Policy");
@@ -80,11 +75,6 @@ pub struct Policy {
     pub spent: VecMap<String, u64>,
 }
 
-/// How `std::type_name` prints `coin_type`, which is how `Policy` keys its limits and spend.
-fn type_key(coin_type: &TypeTag) -> String {
-    coin_type.to_canonical_string(/* with_prefix */ false)
-}
-
 impl Policy {
     pub fn is_policy(object: &Object) -> bool {
         object
@@ -117,64 +107,6 @@ impl Policy {
     pub fn exempts(&self, gas_owner: SuiAddress) -> bool {
         gas_owner == self.guardian
     }
-
-    /// The per-epoch limit of `coin_type`. A type without an entry cannot leave at all.
-    pub fn limit(&self, coin_type: &TypeTag) -> u64 {
-        self.limits.get(&type_key(coin_type)).copied().unwrap_or(0)
-    }
-
-    /// What left the account in `epoch` so far.
-    pub fn spent(&self, epoch: u64, coin_type: &TypeTag) -> u64 {
-        if self.spent_epoch != epoch {
-            return 0;
-        }
-        self.spent.get(&type_key(coin_type)).copied().unwrap_or(0)
-    }
-
-    /// Adds `amount` to what left the account in `epoch`, starting over if the epoch moved on.
-    /// Does not check the limit.
-    pub fn record(&mut self, epoch: u64, coin_type: &TypeTag, amount: u64) {
-        if self.spent_epoch != epoch {
-            self.spent_epoch = epoch;
-            self.spent.contents.clear();
-        }
-        let key = type_key(coin_type);
-        match self.spent.contents.iter_mut().find(|e| e.key == key) {
-            Some(entry) => entry.value = entry.value.saturating_add(amount),
-            None => self.spent.contents.push(Entry { key, value: amount }),
-        }
-    }
-}
-
-/// The policy consensus adds to `tx_data` as a mutable shared input: the sender's, when the
-/// transaction does not declare it and the policy is active in `epoch`. `latest` reads the
-/// latest version of an object.
-///
-/// Every validator reaches the same answer from its own latest state. Whether a policy is
-/// active in an epoch never changes within that epoch, since enabling and disabling take effect
-/// at later epochs, and the initial shared version of a policy never changes.
-pub fn implicit_policy_input(
-    protocol_config: &ProtocolConfig,
-    epoch: EpochId,
-    tx_data: &TransactionData,
-    latest: impl FnOnce(&ObjectID) -> Option<Object>,
-) -> Option<SharedInputObject> {
-    if !protocol_config.enable_guardrails() {
-        return None;
-    }
-    let id = sender_policy_id(tx_data.kind(), tx_data.sender())?;
-    if tx_data
-        .shared_input_objects()
-        .iter()
-        .any(|input| input.id == id)
-    {
-        return None;
-    }
-    let object = latest(&id)?;
-    if !Policy::from_object(&object)?.is_active(epoch) {
-        return None;
-    }
-    Some(added_input(id, object.owner().start_version()?))
 }
 
 /// The policy that binds a transaction: its sender's. `None` for anything but a user

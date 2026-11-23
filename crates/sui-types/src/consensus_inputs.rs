@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! The shared inputs consensus adds to a user transaction beyond the ones it declares. Today the
-//! only one is the sender's guardrails policy (`crate::guardrails::implicit_policy_input`).
+//! only one is the sender's guardrails policy (see `crate::guardrails`).
 
 use sui_protocol_config::ProtocolConfig;
 
@@ -11,7 +11,7 @@ use crate::{
     committee::EpochId,
     effects::{TransactionEffects, TransactionEffectsAPI},
     error::UserInputResult,
-    guardrails::{implicit_policy_input, sender_policy_id},
+    guardrails::{Policy, sender_policy_id},
     object::Object,
     transaction::{
         InputObjectKind, SharedInputObject, SharedObjectMutability, TransactionData,
@@ -19,7 +19,7 @@ use crate::{
     },
 };
 
-/// The shared input consensus adds for the object `id`. Consensus adds only mutable inputs.
+/// Returns the shared input consensus adds for the object `id`. Consensus adds only mutable inputs.
 pub fn added_input(id: ObjectID, initial_shared_version: SequenceNumber) -> SharedInputObject {
     SharedInputObject {
         id,
@@ -28,22 +28,37 @@ pub fn added_input(id: ObjectID, initial_shared_version: SequenceNumber) -> Shar
     }
 }
 
-/// The shared objects consensus adds to `tx_data` in `epoch`, given `latest`, which reads the
-/// latest version of an object. For anything that executes or checks a transaction without
-/// consensus.
+/// Returns the shared objects consensus adds to `tx_data` in `epoch`: the sender's policy, when
+/// the transaction does not declare it and the policy is active in `epoch`. `latest` reads the
+/// latest version of an object.
+///
+/// Every validator reaches the same answer from its own latest state. Whether a policy is active
+/// in an epoch never changes within that epoch, since enabling and disabling take effect at later
+/// epochs, and the initial shared version of a policy never changes.
 pub fn added_shared_inputs_at_latest(
     protocol_config: &ProtocolConfig,
     epoch: EpochId,
     tx_data: &TransactionData,
     latest: impl FnOnce(&ObjectID) -> Option<Object>,
 ) -> Vec<SharedInputObject> {
-    implicit_policy_input(protocol_config, epoch, tx_data, latest)
+    if !protocol_config.enable_guardrails() {
+        return vec![];
+    }
+    addable_input_id(tx_data)
+        .and_then(|id| {
+            let object = latest(&id)?;
+            if !Policy::from_object(&object)?.is_active(epoch) {
+                return None;
+            }
+            Some(added_input(id, object.owner().start_version()?))
+        })
         .into_iter()
         .collect()
 }
 
-/// The objects to load to check or execute `tx_data` in `epoch` without consensus: the declared
-/// inputs and the ones consensus adds, given `latest`, which reads the latest version of an object.
+/// Returns the objects to load to check or execute `tx_data` in `epoch` without consensus: the
+/// declared inputs and the ones consensus adds, given `latest`, which reads the latest version of
+/// an object.
 pub fn input_objects_at_latest(
     protocol_config: &ProtocolConfig,
     epoch: EpochId,
@@ -59,8 +74,8 @@ pub fn input_objects_at_latest(
     Ok(kinds)
 }
 
-/// The only object consensus can add to `tx_data`: the sender's policy, unless the transaction
-/// declares it.
+/// Returns the only object consensus can add to `tx_data`: the sender's policy, unless the
+/// transaction declares it.
 pub fn addable_input_id(tx_data: &TransactionData) -> Option<ObjectID> {
     let policy_id = sender_policy_id(tx_data.kind(), tx_data.sender())?;
     let declared = tx_data
@@ -70,7 +85,7 @@ pub fn addable_input_id(tx_data: &TransactionData) -> Option<ObjectID> {
     (!declared).then_some(policy_id)
 }
 
-/// The objects `effects` show consensus added to `tx_data`: the sender's policy, when the
+/// Returns the objects `effects` show consensus added to `tx_data`: the sender's policy, when the
 /// transaction accessed it without declaring it.
 pub fn added_input_ids_in_effects(
     tx_data: &TransactionData,

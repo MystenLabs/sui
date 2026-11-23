@@ -23,10 +23,7 @@ transaction sponsored by the policy's guardian is exempt.
 -  [Function `set_guardian`](#sui_guardrails_set_guardian)
 -  [Function `request_disable`](#sui_guardrails_request_disable)
 -  [Function `cancel_disable`](#sui_guardrails_cancel_disable)
--  [Function `owner`](#sui_guardrails_owner)
--  [Function `guardian`](#sui_guardrails_guardian)
 -  [Function `is_active`](#sui_guardrails_is_active)
--  [Function `limit`](#sui_guardrails_limit)
 -  [Function `policy_address`](#sui_guardrails_policy_address)
 -  [Function `assert_authorized`](#sui_guardrails_assert_authorized)
 
@@ -75,7 +72,8 @@ transaction sponsored by the policy's guardian is exempt.
 
 ## Struct `GuardrailsRegistry`
 
-System object created at genesis. Only the parent that policy IDs derive from.
+The registry is a system object created at genesis. It serves only as the parent that policy
+IDs derive from.
 
 
 <pre><code><b>public</b> <b>struct</b> <a href="../sui/guardrails.md#sui_guardrails_GuardrailsRegistry">GuardrailsRegistry</a> <b>has</b> key
@@ -102,8 +100,8 @@ System object created at genesis. Only the parent that policy IDs derive from.
 
 ## Struct `PolicyKey`
 
-Derivation key: the policy of <code><a href="../sui/guardrails.md#sui_guardrails_owner">owner</a></code> has the ID derived from the registry and
-<code><a href="../sui/guardrails.md#sui_guardrails_PolicyKey">PolicyKey</a>(<a href="../sui/guardrails.md#sui_guardrails_owner">owner</a>)</code>.
+Derivation key: the policy of <code>owner</code> has the ID derived from the registry and
+<code><a href="../sui/guardrails.md#sui_guardrails_PolicyKey">PolicyKey</a>(owner)</code>.
 
 
 <pre><code><b>public</b> <b>struct</b> <a href="../sui/guardrails.md#sui_guardrails_PolicyKey">PolicyKey</a> <b>has</b> <b>copy</b>, drop, store
@@ -130,7 +128,8 @@ Derivation key: the policy of <code><a href="../sui/guardrails.md#sui_guardrails
 
 ## Struct `Policy`
 
-One per account, shared. Field layout is mirrored by <code>sui_types::guardrails::Policy</code>.
+Each account has at most one policy, which is shared. <code>sui_types::guardrails::Policy</code> mirrors
+its field layout.
 
 
 <pre><code><b>public</b> <b>struct</b> <a href="../sui/guardrails.md#sui_guardrails_Policy">Policy</a> <b>has</b> key
@@ -149,12 +148,12 @@ One per account, shared. Field layout is mirrored by <code>sui_types::guardrails
 <dd>
 </dd>
 <dt>
-<code><a href="../sui/guardrails.md#sui_guardrails_owner">owner</a>: <b>address</b></code>
+<code>owner: <b>address</b></code>
 </dt>
 <dd>
 </dd>
 <dt>
-<code><a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a>: <b>address</b></code>
+<code>guardian: <b>address</b></code>
 </dt>
 <dd>
 </dd>
@@ -220,7 +219,7 @@ One per account, shared. Field layout is mirrored by <code>sui_types::guardrails
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/guardrails.md#sui_guardrails_ENotOwner">ENotOwner</a>: vector&lt;u8&gt; = b"Only the <a href="../sui/guardrails.md#sui_guardrails_owner">owner</a> of a policy can change it.";
+<b>const</b> <a href="../sui/guardrails.md#sui_guardrails_ENotOwner">ENotOwner</a>: vector&lt;u8&gt; = b"Only the owner of a policy can change it.";
 </code></pre>
 
 
@@ -230,7 +229,7 @@ One per account, shared. Field layout is mirrored by <code>sui_types::guardrails
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/guardrails.md#sui_guardrails_ENotAuthorized">ENotAuthorized</a>: vector&lt;u8&gt; = b"Changing an active policy requires the <a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a> to sponsor the transaction.";
+<b>const</b> <a href="../sui/guardrails.md#sui_guardrails_ENotAuthorized">ENotAuthorized</a>: vector&lt;u8&gt; = b"Changing an active policy requires the guardian to sponsor the transaction.";
 </code></pre>
 
 
@@ -240,7 +239,7 @@ One per account, shared. Field layout is mirrored by <code>sui_types::guardrails
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/guardrails.md#sui_guardrails_EGuardianIsOwner">EGuardianIsOwner</a>: vector&lt;u8&gt; = b"The <a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a> must differ from the <a href="../sui/guardrails.md#sui_guardrails_owner">owner</a>.";
+<b>const</b> <a href="../sui/guardrails.md#sui_guardrails_EGuardianIsOwner">EGuardianIsOwner</a>: vector&lt;u8&gt; = b"The guardian must differ from the owner.";
 </code></pre>
 
 
@@ -320,15 +319,15 @@ One per account, shared. Field layout is mirrored by <code>sui_types::guardrails
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/guardrails.md#sui_guardrails_ENotGuardian">ENotGuardian</a>: vector&lt;u8&gt; = b"Only a transaction sponsored by the <a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a> can do this.";
+<b>const</b> <a href="../sui/guardrails.md#sui_guardrails_ENotGuardian">ENotGuardian</a>: vector&lt;u8&gt; = b"Only a transaction sponsored by the guardian can do this.";
 </code></pre>
 
 
 
 <a name="sui_guardrails_MAX_LIMITED_TYPES"></a>
 
-Most coin types one policy can limit. Keeps the object small, since every transaction of the
-account rewrites it.
+A policy limits at most this many coin types. The bound keeps the object small, since every
+transaction of the account rewrites it.
 
 
 <pre><code><b>const</b> <a href="../sui/guardrails.md#sui_guardrails_MAX_LIMITED_TYPES">MAX_LIMITED_TYPES</a>: u64 = 32;
@@ -338,7 +337,7 @@ account rewrites it.
 
 <a name="sui_guardrails_MIN_RECOVERY_DELAY_EPOCHS"></a>
 
-Shortest recovery delay a policy may choose.
+A policy cannot choose a shorter recovery delay than this.
 
 
 <pre><code><b>const</b> <a href="../sui/guardrails.md#sui_guardrails_MIN_RECOVERY_DELAY_EPOCHS">MIN_RECOVERY_DELAY_EPOCHS</a>: u64 = 14;
@@ -348,7 +347,8 @@ Shortest recovery delay a policy may choose.
 
 <a name="sui_guardrails_MAX_RECOVERY_DELAY_EPOCHS"></a>
 
-Longest recovery delay a policy may choose. Keeps <code><a href="../sui/guardrails.md#sui_guardrails_request_disable">request_disable</a></code> from overflowing.
+A policy cannot choose a longer recovery delay than this. The bound keeps <code><a href="../sui/guardrails.md#sui_guardrails_request_disable">request_disable</a></code>
+from overflowing.
 
 
 <pre><code><b>const</b> <a href="../sui/guardrails.md#sui_guardrails_MAX_RECOVERY_DELAY_EPOCHS">MAX_RECOVERY_DELAY_EPOCHS</a>: u64 = 365;
@@ -399,7 +399,7 @@ Creates the sender's policy. It is enforced from the next epoch on; until then t
 configure or <code><a href="../sui/guardrails.md#sui_guardrails_cancel">cancel</a></code> it with the key alone.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_enable">enable</a>(registry: &<b>mut</b> <a href="../sui/guardrails.md#sui_guardrails_GuardrailsRegistry">sui::guardrails::GuardrailsRegistry</a>, <a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a>: <b>address</b>, sui_limit: u64, recovery_delay_epochs: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_enable">enable</a>(registry: &<b>mut</b> <a href="../sui/guardrails.md#sui_guardrails_GuardrailsRegistry">sui::guardrails::GuardrailsRegistry</a>, guardian: <b>address</b>, sui_limit: u64, recovery_delay_epochs: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -410,13 +410,13 @@ configure or <code><a href="../sui/guardrails.md#sui_guardrails_cancel">cancel</
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_enable">enable</a>(
     registry: &<b>mut</b> <a href="../sui/guardrails.md#sui_guardrails_GuardrailsRegistry">GuardrailsRegistry</a>,
-    <a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a>: <b>address</b>,
+    guardian: <b>address</b>,
     sui_limit: u64,
     recovery_delay_epochs: u64,
     ctx: &TxContext,
 ) {
-    <b>let</b> <a href="../sui/guardrails.md#sui_guardrails_owner">owner</a> = ctx.sender();
-    <b>assert</b>!(<a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a> != <a href="../sui/guardrails.md#sui_guardrails_owner">owner</a>, <a href="../sui/guardrails.md#sui_guardrails_EGuardianIsOwner">EGuardianIsOwner</a>);
+    <b>let</b> owner = ctx.sender();
+    <b>assert</b>!(guardian != owner, <a href="../sui/guardrails.md#sui_guardrails_EGuardianIsOwner">EGuardianIsOwner</a>);
     <b>assert</b>!(
         recovery_delay_epochs &gt;= <a href="../sui/guardrails.md#sui_guardrails_MIN_RECOVERY_DELAY_EPOCHS">MIN_RECOVERY_DELAY_EPOCHS</a> &&
         recovery_delay_epochs &lt;= <a href="../sui/guardrails.md#sui_guardrails_MAX_RECOVERY_DELAY_EPOCHS">MAX_RECOVERY_DELAY_EPOCHS</a>,
@@ -425,9 +425,9 @@ configure or <code><a href="../sui/guardrails.md#sui_guardrails_cancel">cancel</
     <b>let</b> <b>mut</b> limits = <a href="../sui/vec_map.md#sui_vec_map_empty">vec_map::empty</a>();
     limits.insert(type_name::with_defining_ids&lt;SUI&gt;(), sui_limit);
     <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(<a href="../sui/guardrails.md#sui_guardrails_Policy">Policy</a> {
-        id: <a href="../sui/derived_object.md#sui_derived_object_claim">derived_object::claim</a>(&<b>mut</b> registry.id, <a href="../sui/guardrails.md#sui_guardrails_PolicyKey">PolicyKey</a>(<a href="../sui/guardrails.md#sui_guardrails_owner">owner</a>)),
-        <a href="../sui/guardrails.md#sui_guardrails_owner">owner</a>,
-        <a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a>,
+        id: <a href="../sui/derived_object.md#sui_derived_object_claim">derived_object::claim</a>(&<b>mut</b> registry.id, <a href="../sui/guardrails.md#sui_guardrails_PolicyKey">PolicyKey</a>(owner)),
+        owner,
+        guardian,
         active_from: ctx.epoch() + 1,
         active_until: <a href="../sui/guardrails.md#sui_guardrails_NEVER">NEVER</a>,
         limits,
@@ -449,7 +449,7 @@ configure or <code><a href="../sui/guardrails.md#sui_guardrails_cancel">cancel</
 Enables a policy that was cancelled or has become inactive, keeping its limits.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_re_enable">re_enable</a>(policy: &<b>mut</b> <a href="../sui/guardrails.md#sui_guardrails_Policy">sui::guardrails::Policy</a>, <a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a>: <b>address</b>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_re_enable">re_enable</a>(policy: &<b>mut</b> <a href="../sui/guardrails.md#sui_guardrails_Policy">sui::guardrails::Policy</a>, guardian: <b>address</b>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -458,12 +458,12 @@ Enables a policy that was cancelled or has become inactive, keeping its limits.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_re_enable">re_enable</a>(policy: &<b>mut</b> <a href="../sui/guardrails.md#sui_guardrails_Policy">Policy</a>, <a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a>: <b>address</b>, ctx: &TxContext) {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_re_enable">re_enable</a>(policy: &<b>mut</b> <a href="../sui/guardrails.md#sui_guardrails_Policy">Policy</a>, guardian: <b>address</b>, ctx: &TxContext) {
     <b>let</b> epoch = ctx.epoch();
     policy.<a href="../sui/guardrails.md#sui_guardrails_assert_authorized">assert_authorized</a>(ctx);
-    <b>assert</b>!(<a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a> != policy.<a href="../sui/guardrails.md#sui_guardrails_owner">owner</a>, <a href="../sui/guardrails.md#sui_guardrails_EGuardianIsOwner">EGuardianIsOwner</a>);
+    <b>assert</b>!(guardian != policy.owner, <a href="../sui/guardrails.md#sui_guardrails_EGuardianIsOwner">EGuardianIsOwner</a>);
     <b>assert</b>!(policy.active_from == <a href="../sui/guardrails.md#sui_guardrails_NEVER">NEVER</a> || policy.active_until &lt;= epoch, <a href="../sui/guardrails.md#sui_guardrails_EAlreadyActive">EAlreadyActive</a>);
-    policy.<a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a> = <a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a>;
+    policy.guardian = guardian;
     policy.active_from = epoch + 1;
     policy.active_until = <a href="../sui/guardrails.md#sui_guardrails_NEVER">NEVER</a>;
 }
@@ -534,7 +534,7 @@ Ends an active policy at the next epoch. The guardian must sponsor the transacti
 Sets the per-epoch limit of coin type <code>T</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_set_limit">set_limit</a>&lt;T&gt;(policy: &<b>mut</b> <a href="../sui/guardrails.md#sui_guardrails_Policy">sui::guardrails::Policy</a>, <a href="../sui/guardrails.md#sui_guardrails_limit">limit</a>: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_set_limit">set_limit</a>&lt;T&gt;(policy: &<b>mut</b> <a href="../sui/guardrails.md#sui_guardrails_Policy">sui::guardrails::Policy</a>, limit: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -543,14 +543,14 @@ Sets the per-epoch limit of coin type <code>T</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_set_limit">set_limit</a>&lt;T&gt;(policy: &<b>mut</b> <a href="../sui/guardrails.md#sui_guardrails_Policy">Policy</a>, <a href="../sui/guardrails.md#sui_guardrails_limit">limit</a>: u64, ctx: &TxContext) {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_set_limit">set_limit</a>&lt;T&gt;(policy: &<b>mut</b> <a href="../sui/guardrails.md#sui_guardrails_Policy">Policy</a>, limit: u64, ctx: &TxContext) {
     policy.<a href="../sui/guardrails.md#sui_guardrails_assert_authorized">assert_authorized</a>(ctx);
     <b>let</b> coin_type = type_name::with_defining_ids&lt;T&gt;();
     <b>if</b> (policy.limits.contains(&coin_type)) {
-        *policy.limits.get_mut(&coin_type) = <a href="../sui/guardrails.md#sui_guardrails_limit">limit</a>;
+        *policy.limits.get_mut(&coin_type) = limit;
     } <b>else</b> {
         <b>assert</b>!(policy.limits.length() &lt; <a href="../sui/guardrails.md#sui_guardrails_MAX_LIMITED_TYPES">MAX_LIMITED_TYPES</a>, <a href="../sui/guardrails.md#sui_guardrails_ETooManyLimits">ETooManyLimits</a>);
-        policy.limits.insert(coin_type, <a href="../sui/guardrails.md#sui_guardrails_limit">limit</a>);
+        policy.limits.insert(coin_type, limit);
     }
 }
 </code></pre>
@@ -591,7 +591,7 @@ Removes the limit of coin type <code>T</code>, after which <code>T</code> cannot
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_set_guardian">set_guardian</a>(policy: &<b>mut</b> <a href="../sui/guardrails.md#sui_guardrails_Policy">sui::guardrails::Policy</a>, <a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a>: <b>address</b>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_set_guardian">set_guardian</a>(policy: &<b>mut</b> <a href="../sui/guardrails.md#sui_guardrails_Policy">sui::guardrails::Policy</a>, guardian: <b>address</b>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -600,10 +600,10 @@ Removes the limit of coin type <code>T</code>, after which <code>T</code> cannot
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_set_guardian">set_guardian</a>(policy: &<b>mut</b> <a href="../sui/guardrails.md#sui_guardrails_Policy">Policy</a>, <a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a>: <b>address</b>, ctx: &TxContext) {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_set_guardian">set_guardian</a>(policy: &<b>mut</b> <a href="../sui/guardrails.md#sui_guardrails_Policy">Policy</a>, guardian: <b>address</b>, ctx: &TxContext) {
     policy.<a href="../sui/guardrails.md#sui_guardrails_assert_authorized">assert_authorized</a>(ctx);
-    <b>assert</b>!(<a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a> != policy.<a href="../sui/guardrails.md#sui_guardrails_owner">owner</a>, <a href="../sui/guardrails.md#sui_guardrails_EGuardianIsOwner">EGuardianIsOwner</a>);
-    policy.<a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a> = <a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a>;
+    <b>assert</b>!(guardian != policy.owner, <a href="../sui/guardrails.md#sui_guardrails_EGuardianIsOwner">EGuardianIsOwner</a>);
+    policy.guardian = guardian;
 }
 </code></pre>
 
@@ -630,7 +630,7 @@ it cannot also hold it open, and cannot push an owner's own request further out.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_request_disable">request_disable</a>(policy: &<b>mut</b> <a href="../sui/guardrails.md#sui_guardrails_Policy">Policy</a>, ctx: &TxContext) {
-    <b>assert</b>!(policy.<a href="../sui/guardrails.md#sui_guardrails_owner">owner</a> == ctx.sender(), <a href="../sui/guardrails.md#sui_guardrails_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(policy.owner == ctx.sender(), <a href="../sui/guardrails.md#sui_guardrails_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(policy.<a href="../sui/guardrails.md#sui_guardrails_is_active">is_active</a>(ctx.epoch()), <a href="../sui/guardrails.md#sui_guardrails_ENotActive">ENotActive</a>);
     <b>assert</b>!(policy.active_until == <a href="../sui/guardrails.md#sui_guardrails_NEVER">NEVER</a>, <a href="../sui/guardrails.md#sui_guardrails_EDisablePending">EDisablePending</a>);
     policy.active_until = ctx.epoch() + policy.recovery_delay_epochs;
@@ -659,55 +659,11 @@ sponsor the transaction.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_cancel_disable">cancel_disable</a>(policy: &<b>mut</b> <a href="../sui/guardrails.md#sui_guardrails_Policy">Policy</a>, ctx: &TxContext) {
-    <b>assert</b>!(policy.<a href="../sui/guardrails.md#sui_guardrails_owner">owner</a> == ctx.sender(), <a href="../sui/guardrails.md#sui_guardrails_ENotOwner">ENotOwner</a>);
-    <b>assert</b>!(ctx.sponsor() == option::some(policy.<a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a>), <a href="../sui/guardrails.md#sui_guardrails_ENotGuardian">ENotGuardian</a>);
+    <b>assert</b>!(policy.owner == ctx.sender(), <a href="../sui/guardrails.md#sui_guardrails_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(ctx.sponsor() == option::some(policy.guardian), <a href="../sui/guardrails.md#sui_guardrails_ENotGuardian">ENotGuardian</a>);
     <b>assert</b>!(policy.active_until != <a href="../sui/guardrails.md#sui_guardrails_NEVER">NEVER</a> && policy.active_until &gt; ctx.epoch(), <a href="../sui/guardrails.md#sui_guardrails_ENoPendingDisable">ENoPendingDisable</a>);
     policy.active_until = <a href="../sui/guardrails.md#sui_guardrails_NEVER">NEVER</a>;
 }
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_guardrails_owner"></a>
-
-## Function `owner`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_owner">owner</a>(policy: &<a href="../sui/guardrails.md#sui_guardrails_Policy">sui::guardrails::Policy</a>): <b>address</b>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_owner">owner</a>(policy: &<a href="../sui/guardrails.md#sui_guardrails_Policy">Policy</a>): <b>address</b> { policy.<a href="../sui/guardrails.md#sui_guardrails_owner">owner</a> }
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_guardrails_guardian"></a>
-
-## Function `guardian`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a>(policy: &<a href="../sui/guardrails.md#sui_guardrails_Policy">sui::guardrails::Policy</a>): <b>address</b>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a>(policy: &<a href="../sui/guardrails.md#sui_guardrails_Policy">Policy</a>): <b>address</b> { policy.<a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a> }
 </code></pre>
 
 
@@ -720,7 +676,7 @@ sponsor the transaction.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_is_active">is_active</a>(policy: &<a href="../sui/guardrails.md#sui_guardrails_Policy">sui::guardrails::Policy</a>, epoch: u64): bool
+<pre><code><b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_is_active">is_active</a>(policy: &<a href="../sui/guardrails.md#sui_guardrails_Policy">sui::guardrails::Policy</a>, epoch: u64): bool
 </code></pre>
 
 
@@ -729,32 +685,8 @@ sponsor the transaction.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_is_active">is_active</a>(policy: &<a href="../sui/guardrails.md#sui_guardrails_Policy">Policy</a>, epoch: u64): bool {
+<pre><code><b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_is_active">is_active</a>(policy: &<a href="../sui/guardrails.md#sui_guardrails_Policy">Policy</a>, epoch: u64): bool {
     policy.active_from &lt;= epoch && epoch &lt; policy.active_until
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_guardrails_limit"></a>
-
-## Function `limit`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_limit">limit</a>&lt;T&gt;(policy: &<a href="../sui/guardrails.md#sui_guardrails_Policy">sui::guardrails::Policy</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_limit">limit</a>&lt;T&gt;(policy: &<a href="../sui/guardrails.md#sui_guardrails_Policy">Policy</a>): Option&lt;u64&gt; {
-    policy.limits.try_get(&type_name::with_defining_ids&lt;T&gt;())
 }
 </code></pre>
 
@@ -766,10 +698,10 @@ sponsor the transaction.
 
 ## Function `policy_address`
 
-The policy ID of <code><a href="../sui/guardrails.md#sui_guardrails_owner">owner</a></code>, whether or not the policy exists.
+Returns the policy ID of <code>owner</code>, whether or not the policy exists.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_policy_address">policy_address</a>(registry: &<a href="../sui/guardrails.md#sui_guardrails_GuardrailsRegistry">sui::guardrails::GuardrailsRegistry</a>, <a href="../sui/guardrails.md#sui_guardrails_owner">owner</a>: <b>address</b>): <b>address</b>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_policy_address">policy_address</a>(registry: &<a href="../sui/guardrails.md#sui_guardrails_GuardrailsRegistry">sui::guardrails::GuardrailsRegistry</a>, owner: <b>address</b>): <b>address</b>
 </code></pre>
 
 
@@ -778,8 +710,8 @@ The policy ID of <code><a href="../sui/guardrails.md#sui_guardrails_owner">owner
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_policy_address">policy_address</a>(registry: &<a href="../sui/guardrails.md#sui_guardrails_GuardrailsRegistry">GuardrailsRegistry</a>, <a href="../sui/guardrails.md#sui_guardrails_owner">owner</a>: <b>address</b>): <b>address</b> {
-    <a href="../sui/derived_object.md#sui_derived_object_derive_address">derived_object::derive_address</a>(<a href="../sui/object.md#sui_object_id">object::id</a>(registry), <a href="../sui/guardrails.md#sui_guardrails_PolicyKey">PolicyKey</a>(<a href="../sui/guardrails.md#sui_guardrails_owner">owner</a>))
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_policy_address">policy_address</a>(registry: &<a href="../sui/guardrails.md#sui_guardrails_GuardrailsRegistry">GuardrailsRegistry</a>, owner: <b>address</b>): <b>address</b> {
+    <a href="../sui/derived_object.md#sui_derived_object_derive_address">derived_object::derive_address</a>(<a href="../sui/object.md#sui_object_id">object::id</a>(registry), <a href="../sui/guardrails.md#sui_guardrails_PolicyKey">PolicyKey</a>(owner))
 }
 </code></pre>
 
@@ -805,9 +737,9 @@ transaction's sponsor.
 
 
 <pre><code><b>fun</b> <a href="../sui/guardrails.md#sui_guardrails_assert_authorized">assert_authorized</a>(policy: &<a href="../sui/guardrails.md#sui_guardrails_Policy">Policy</a>, ctx: &TxContext) {
-    <b>assert</b>!(policy.<a href="../sui/guardrails.md#sui_guardrails_owner">owner</a> == ctx.sender(), <a href="../sui/guardrails.md#sui_guardrails_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(policy.owner == ctx.sender(), <a href="../sui/guardrails.md#sui_guardrails_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(
-        !policy.<a href="../sui/guardrails.md#sui_guardrails_is_active">is_active</a>(ctx.epoch()) || ctx.sponsor() == option::some(policy.<a href="../sui/guardrails.md#sui_guardrails_guardian">guardian</a>),
+        !policy.<a href="../sui/guardrails.md#sui_guardrails_is_active">is_active</a>(ctx.epoch()) || ctx.sponsor() == option::some(policy.guardian),
         <a href="../sui/guardrails.md#sui_guardrails_ENotAuthorized">ENotAuthorized</a>,
     );
 }

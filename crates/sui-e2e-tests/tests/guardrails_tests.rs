@@ -11,6 +11,7 @@ use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
     SUI_FRAMEWORK_PACKAGE_ID, SUI_GUARDRAILS_REGISTRY_OBJECT_ID, TypeTag,
     base_types::{ObjectRef, SuiAddress},
+    collection_types::VecMap,
     effects::{TransactionEffects, TransactionEffectsAPI},
     execution_status::{
         ExecutionFailure, ExecutionFailureStatus, ExecutionStatus, GuardrailsViolationKind,
@@ -52,6 +53,13 @@ fn sui() -> TypeTag {
 
 /// Asserts that execution failed the transaction because `account`'s budget of `coin_type` had
 /// no room.
+/// Returns the SUI entry of a policy's limits or spend, keyed as `std::type_name` prints the type.
+fn sui_entry(map: &VecMap<String, u64>) -> u64 {
+    map.get(&sui().to_canonical_string(/* with_prefix */ false))
+        .copied()
+        .unwrap_or(0)
+}
+
 fn assert_over_budget(effects: &TransactionEffects, account: SuiAddress, coin_type: &TypeTag) {
     let ExecutionStatus::Failure(ExecutionFailure {
         error:
@@ -215,7 +223,11 @@ impl Env {
             .fullnode_handle
             .sui_node
             .with(|node| node.state().epoch_store_for_testing().epoch());
-        self.policy(self.owner).await.spent(epoch, &sui())
+        let policy = self.policy(self.owner).await;
+        if policy.spent_epoch != epoch {
+            return 0;
+        }
+        sui_entry(&policy.spent)
     }
 
     /// An owner transaction calling `guardrails::set_limit<coin_type>(policy, limit, ctx)`.
@@ -460,7 +472,10 @@ async fn test_guardian_sponsorship() {
     // With the guardian the limit changes at once.
     env.execute_with_guardian(env.set_limit_tx(sui(), 10 * SUI_LIMIT).await)
         .await;
-    assert_eq!(env.policy(env.owner).await.limit(&sui()), 10 * SUI_LIMIT);
+    assert_eq!(
+        sui_entry(&env.policy(env.owner).await.limits),
+        10 * SUI_LIMIT
+    );
     let tx = env.transfer_sui_tx(5 * SUI_LIMIT, env.stranger).await;
     env.execute_ok(tx).await;
 

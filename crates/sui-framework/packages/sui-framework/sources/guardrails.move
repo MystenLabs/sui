@@ -39,16 +39,18 @@ const ENoPendingDisable: vector<u8> = b"The policy is not set to become inactive
 #[error(code = 11)]
 const ENotGuardian: vector<u8> = b"Only a transaction sponsored by the guardian can do this.";
 
-/// Most coin types one policy can limit. Keeps the object small, since every transaction of the
-/// account rewrites it.
+/// A policy limits at most this many coin types. The bound keeps the object small, since every
+/// transaction of the account rewrites it.
 const MAX_LIMITED_TYPES: u64 = 32;
-/// Shortest recovery delay a policy may choose.
+/// A policy cannot choose a shorter recovery delay than this.
 const MIN_RECOVERY_DELAY_EPOCHS: u64 = 14;
-/// Longest recovery delay a policy may choose. Keeps `request_disable` from overflowing.
+/// A policy cannot choose a longer recovery delay than this. The bound keeps `request_disable`
+/// from overflowing.
 const MAX_RECOVERY_DELAY_EPOCHS: u64 = 365;
 const NEVER: u64 = 0xFFFF_FFFF_FFFF_FFFF;
 
-/// System object created at genesis. Only the parent that policy IDs derive from.
+/// The registry is a system object created at genesis. It serves only as the parent that policy
+/// IDs derive from.
 public struct GuardrailsRegistry has key {
     id: UID,
 }
@@ -57,7 +59,8 @@ public struct GuardrailsRegistry has key {
 /// `PolicyKey(owner)`.
 public struct PolicyKey(address) has copy, drop, store;
 
-/// One per account, shared. Field layout is mirrored by `sui_types::guardrails::Policy`.
+/// Each account has at most one policy, which is shared. `sui_types::guardrails::Policy` mirrors
+/// its field layout.
 public struct Policy has key {
     id: UID,
     owner: address,
@@ -183,19 +186,11 @@ public fun cancel_disable(policy: &mut Policy, ctx: &TxContext) {
     policy.active_until = NEVER;
 }
 
-public fun owner(policy: &Policy): address { policy.owner }
-
-public fun guardian(policy: &Policy): address { policy.guardian }
-
-public fun is_active(policy: &Policy, epoch: u64): bool {
+fun is_active(policy: &Policy, epoch: u64): bool {
     policy.active_from <= epoch && epoch < policy.active_until
 }
 
-public fun limit<T>(policy: &Policy): Option<u64> {
-    policy.limits.try_get(&type_name::with_defining_ids<T>())
-}
-
-/// The policy ID of `owner`, whether or not the policy exists.
+/// Returns the policy ID of `owner`, whether or not the policy exists.
 public fun policy_address(registry: &GuardrailsRegistry, owner: address): address {
     derived_object::derive_address(object::id(registry), PolicyKey(owner))
 }

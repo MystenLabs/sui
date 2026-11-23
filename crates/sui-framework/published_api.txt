@@ -2764,17 +2764,8 @@ request_disable
 cancel_disable
 	public fun
 	0x2::guardrails
-owner
-	public fun
-	0x2::guardrails
-guardian
-	public fun
-	0x2::guardrails
 is_active
-	public fun
-	0x2::guardrails
-limit
-	public fun
+	fun
 	0x2::guardrails
 policy_address
 	public fun

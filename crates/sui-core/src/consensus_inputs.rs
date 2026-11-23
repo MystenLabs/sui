@@ -26,7 +26,7 @@ use crate::authority::{
 };
 use crate::execution_cache::ObjectCacheRead;
 
-/// The shared objects consensus sequences `tx_data` on.
+/// Returns the shared objects consensus sequences `tx_data` on.
 pub(crate) fn sequenced_shared_inputs(
     epoch_store: &AuthorityPerEpochStore,
     cache_reader: &dyn ObjectCacheRead,
@@ -42,23 +42,30 @@ pub(crate) fn sequenced_shared_inputs(
     inputs
 }
 
-/// The shared objects consensus added to `tx_data`, as the versions it assigned show them.
+/// Returns the shared objects consensus added to `tx_data`, as the versions it assigned show them.
 fn added_shared_inputs(
     tx_data: &TransactionData,
     assigned_versions: &AssignedVersions,
 ) -> Vec<SharedInputObject> {
     let addable = addable_input_id(tx_data);
-    debug_assert!(
-        assigned_versions
+    #[cfg(debug_assertions)]
+    if matches!(
+        tx_data.kind(),
+        sui_types::transaction::TransactionKind::ProgrammableTransaction(_)
+    ) {
+        let declared: std::collections::BTreeSet<_> = tx_data
+            .shared_input_objects()
             .iter()
-            .all(|((id, _), _)| Some(*id) == addable
-                || tx_data
-                    .shared_input_objects()
-                    .iter()
-                    .any(|input| input.id == *id)),
-        "assigned versions {assigned_versions:?} hold an object that {tx_data:?} neither declares \
-         nor can have added",
-    );
+            .map(|input| input.id)
+            .collect();
+        debug_assert!(
+            assigned_versions
+                .iter()
+                .all(|((id, _), _)| Some(*id) == addable || declared.contains(id)),
+            "assigned versions {assigned_versions:?} hold an object that {tx_data:?} neither \
+             declares nor can have added",
+        );
+    }
     assigned_versions
         .iter()
         .filter(|((id, _), _)| Some(*id) == addable)
@@ -66,7 +73,7 @@ fn added_shared_inputs(
         .collect()
 }
 
-/// The shared objects `tx_data` takes, given the versions consensus assigned it.
+/// Returns the shared objects `tx_data` takes, given the versions consensus assigned it.
 pub(crate) fn assigned_shared_inputs(
     tx_data: &TransactionData,
     assigned_versions: &AssignedVersions,
@@ -76,7 +83,7 @@ pub(crate) fn assigned_shared_inputs(
     inputs
 }
 
-/// The objects to load to execute `tx_data` with the versions consensus assigned it.
+/// Returns the objects to load to execute `tx_data` with the versions consensus assigned it.
 pub(crate) fn input_objects_for_execution(
     tx_data: &TransactionData,
     assigned_versions: &AssignedVersions,
@@ -90,7 +97,7 @@ pub(crate) fn input_objects_for_execution(
     Ok(kinds)
 }
 
-/// The shared objects `effects` show `tx_data` took.
+/// Returns the shared objects `effects` show `tx_data` took.
 pub(crate) fn shared_inputs_from_effects(
     cache_reader: &dyn ObjectCacheRead,
     tx_data: &TransactionData,

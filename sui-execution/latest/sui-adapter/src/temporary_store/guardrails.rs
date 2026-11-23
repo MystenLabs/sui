@@ -16,6 +16,7 @@ use move_core_types::language_storage::TypeTag;
 use sui_types::{
     balance::Balance,
     base_types::{ObjectID, SuiAddress},
+    collection_types::Entry,
     effects::{AccumulatorOperation, AccumulatorValue},
     error::ExecutionError,
     execution_status::{ExecutionErrorKind, GuardrailsViolationKind},
@@ -28,7 +29,7 @@ use crate::temporary_store::TemporaryStore;
 
 type Totals = BTreeMap<TypeTag, u128>;
 
-/// What the guardrails check keeps about a user transaction.
+/// Holds what the guardrails check needs to know about a user transaction.
 #[derive(Clone, Copy)]
 pub(super) struct GuardrailsTx {
     sender: SuiAddress,
@@ -53,6 +54,43 @@ impl GuardrailsTx {
 fn add(totals: &mut Totals, coin_type: TypeTag, amount: u64) {
     let total = totals.entry(coin_type).or_default();
     *total = total.saturating_add(u128::from(amount));
+}
+
+/// Returns how `std::type_name` prints `coin_type`, which is how `Policy` keys its limits and
+/// spend.
+fn type_key(coin_type: &TypeTag) -> String {
+    coin_type.to_canonical_string(/* with_prefix */ false)
+}
+
+/// Returns the per-epoch limit of `coin_type`. A type without an entry cannot leave at all.
+fn limit(policy: &Policy, coin_type: &TypeTag) -> u64 {
+    policy
+        .limits
+        .get(&type_key(coin_type))
+        .copied()
+        .unwrap_or(0)
+}
+
+/// Returns what left the account in `epoch` so far.
+fn spent(policy: &Policy, epoch: u64, coin_type: &TypeTag) -> u64 {
+    if policy.spent_epoch != epoch {
+        return 0;
+    }
+    policy.spent.get(&type_key(coin_type)).copied().unwrap_or(0)
+}
+
+/// Adds `amount` to what left the account in `epoch`, starting over if the epoch moved on. Does
+/// not check the limit.
+fn record(policy: &mut Policy, epoch: u64, coin_type: &TypeTag, amount: u64) {
+    if policy.spent_epoch != epoch {
+        policy.spent_epoch = epoch;
+        policy.spent.contents.clear();
+    }
+    let key = type_key(coin_type);
+    match policy.spent.contents.iter_mut().find(|e| e.key == key) {
+        Some(entry) => entry.value = entry.value.saturating_add(amount),
+        None => policy.spent.contents.push(Entry { key, value: amount }),
+    }
 }
 
 fn violation(account: SuiAddress, kind: GuardrailsViolationKind) -> ExecutionError {
@@ -117,10 +155,8 @@ impl TemporaryStore<'_> {
             ));
         };
         for (coin_type, amount) in outflow {
-            if policy
-                .spent(self.cur_epoch, &coin_type)
-                .saturating_add(amount)
-                > policy.limit(&coin_type)
+            if spent(&policy, self.cur_epoch, &coin_type).saturating_add(amount)
+                > limit(&policy, &coin_type)
             {
                 return Err(violation(
                     sender,
@@ -129,7 +165,7 @@ impl TemporaryStore<'_> {
                     },
                 ));
             }
-            recorded.record(self.cur_epoch, &coin_type, amount);
+            record(&mut recorded, self.cur_epoch, &coin_type, amount);
         }
         recorded.write_to(&mut object);
         self.mutate_input_object(object);
