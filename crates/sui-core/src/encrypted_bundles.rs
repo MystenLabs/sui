@@ -161,7 +161,13 @@ impl EncryptedBundleState {
             return;
         }
         let mut inner = self.inner.lock();
-        inner.scheduled_keys.extend(keys);
+        // The prologue placeholder is replaced by the real prologue transaction before
+        // scheduling, so its key is never mapped to a digest. The prologue runs before the
+        // other transactions of its commit, so waiting for those covers it.
+        inner.scheduled_keys.extend(
+            keys.into_iter()
+                .filter(|key| !matches!(key, TransactionKey::ConsensusCommitPrologue(..))),
+        );
         if inner.scheduled_keys.len() >= PRUNE_THRESHOLD
             && let Some(cache) = &self.transaction_cache
         {
