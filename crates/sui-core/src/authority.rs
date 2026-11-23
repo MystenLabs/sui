@@ -4718,8 +4718,10 @@ impl AuthorityState {
         // >1 checkpoint.
         last_checkpoint: CheckpointSequenceNumber,
     ) -> CheckpointBuilderResult<(SuiSystemState, TransactionEffects)> {
+        // The order of these transactions is part of the protocol and must not change.
         let mut txns = Vec::new();
 
+        // === One-time setup ===
         if let Some(tx) = self.create_authenticator_state_tx(epoch_store) {
             txns.push(tx);
         }
@@ -4735,6 +4737,8 @@ impl AuthorityState {
         if let Some(tx) = self.create_deny_list_state_tx(epoch_store) {
             txns.push(tx);
         }
+
+        // === Every epoch ===
         if let Some(tx) = self.create_execution_time_observations_tx(
             epoch_store,
             end_of_epoch_observation_keys,
@@ -4742,10 +4746,11 @@ impl AuthorityState {
         ) {
             txns.push(tx);
         }
+
+        // === One-time setup ===
         if let Some(tx) = self.create_accumulator_root_tx(epoch_store) {
             txns.push(tx);
         }
-
         if let Some(tx) = self.create_coin_registry_tx(epoch_store) {
             txns.push(tx);
         }
@@ -4761,6 +4766,8 @@ impl AuthorityState {
         if let Some(tx) = self.create_freeze_list_tx(epoch_store) {
             txns.push(tx);
         }
+
+        // === Every epoch ===
         if let Some(tx) = self.create_write_accumulator_storage_cost_tx(epoch_store) {
             txns.push(tx);
         }
