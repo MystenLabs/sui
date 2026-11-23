@@ -12,6 +12,9 @@ use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
 use crate::congestion_tracker::CongestionTracker;
+use crate::consensus_inputs::{
+    assigned_shared_inputs, input_objects_for_execution, sequenced_shared_inputs,
+};
 use crate::execution_cache::ExecutionCacheTraitPointers;
 use crate::execution_cache::TransactionCacheRead;
 use crate::execution_cache::writeback_cache::WritebackCache;
@@ -1189,6 +1192,14 @@ impl AuthorityState {
             epoch_store,
         )?;
 
+        sui_transaction_checks::guardrails::check_guardrails_for_signing(
+            epoch_store.protocol_config(),
+            epoch_store.epoch(),
+            tx_data,
+            checked_input_objects.inner(),
+            |id| self.get_object_cache_reader().get_object(id),
+        )?;
+
         Ok(checked_input_objects)
     }
 
@@ -1384,6 +1395,7 @@ impl AuthorityState {
 
     pub(crate) fn check_system_overload(
         &self,
+        epoch_store: &AuthorityPerEpochStore,
         tx_data: &SenderSignedData,
         do_authority_overload_check: bool,
     ) -> SuiResult {
@@ -1392,8 +1404,13 @@ impl AuthorityState {
                 self.update_overload_metrics("execution_queue");
             })?;
         }
+        let shared_input_objects = sequenced_shared_inputs(
+            epoch_store,
+            self.get_object_cache_reader().as_ref(),
+            tx_data.transaction_data(),
+        );
         self.execution_scheduler
-            .check_execution_overload(self.overload_config(), tx_data)
+            .check_execution_overload(self.overload_config(), &shared_input_objects)
             .tap_err(|_| {
                 self.update_overload_metrics("execution_pending");
             })?;
@@ -1614,6 +1631,10 @@ impl AuthorityState {
         }
 
         let accumulator_version = execution_env.assigned_versions.accumulator_version();
+        let shared_input_objects = assigned_shared_inputs(
+            certificate.data().transaction_data(),
+            &execution_env.assigned_versions,
+        );
 
         let (transaction_outputs, timings, execution_error_opt) = match self.process_certificate(
             &tx_guard,
@@ -1689,6 +1710,7 @@ impl AuthorityState {
         let elapsed = execution_start_time.elapsed();
         epoch_store.record_local_execution_time(
             certificate.data().transaction_data(),
+            shared_input_objects,
             &effects,
             timings,
             elapsed,
@@ -1715,11 +1737,14 @@ impl AuthorityState {
             .metrics
             .execution_load_input_objects_latency
             .start_timer();
-        let input_objects = &certificate.data().transaction_data().input_objects()?;
+        let input_objects = input_objects_for_execution(
+            certificate.data().transaction_data(),
+            assigned_shared_object_versions,
+        )?;
         self.input_loader.read_objects_for_execution(
             &certificate.key(),
             tx_lock,
-            input_objects,
+            &input_objects,
             assigned_shared_object_versions,
             epoch_store.epoch(),
         )
@@ -2364,9 +2389,13 @@ impl AuthorityState {
             .effective_config()
             .load();
         let epoch_data = epoch_store.epoch_start_config().epoch_data();
-        let suggested_gas_price = self
-            .congestion_tracker
-            .get_suggested_gas_prices(&transaction);
+        let suggested_gas_price =
+            self.congestion_tracker
+                .get_suggested_gas_prices(&sequenced_shared_inputs(
+                    &epoch_store,
+                    self.get_object_cache_reader().as_ref(),
+                    &transaction,
+                ));
 
         crate::transaction_simulation::simulate_transaction(
             transaction,

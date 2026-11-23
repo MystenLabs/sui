@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod deny;
+pub mod guardrails;
 
 pub use checked::*;
 
@@ -582,6 +583,8 @@ mod checked {
                         // System objects that can be taken mutably
                         (SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID, _)
                             if protocol_config.enable_forwarding_addresses() => (),
+                        (sui_types::SUI_GUARDRAILS_REGISTRY_OBJECT_ID, _)
+                            if protocol_config.enable_guardrails() => (),
                         (SUI_SYSTEM_STATE_OBJECT_ID, _)
                         | (SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, _)
                         | (SUI_COIN_REGISTRY_OBJECT_ID, _)

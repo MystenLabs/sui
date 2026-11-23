@@ -52,13 +52,14 @@ use sui_types::{
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{
-        InputObjectKind, PlainTransactionWithClaims, SenderSignedData, TransactionDataAPI,
-        TransactionKey, VerifiedTransaction, WithAliases, paid_proposer_count,
+        InputObjectKind, PlainTransactionWithClaims, SenderSignedData, SharedInputObject,
+        TransactionDataAPI, TransactionKey, VerifiedTransaction, WithAliases, paid_proposer_count,
     },
 };
 use tokio::task::JoinSet;
 use tracing::{debug, error, info, instrument, trace, warn};
 
+use crate::consensus_inputs::sequenced_shared_inputs;
 use crate::{
     authority::{
         AuthorityMetrics, AuthorityState, ExecutionEnv,
@@ -1230,6 +1231,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             randomness_transactions_to_schedule,
             cancelled_txns,
             randomness_state_update_transaction,
+            sequenced_inputs,
         ) = self.collect_transactions_to_schedule(
             &mut state,
             &mut execution_time_estimator,
@@ -1286,6 +1288,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             schedulables,
             randomness_schedulables,
             &cancelled_txns,
+            sequenced_inputs,
             final_round,
         );
 
@@ -1445,6 +1448,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         Vec<VerifiedExecutableTransactionWithAliases>,
         BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
         Option<Schedulable<VerifiedExecutableTransactionWithAliases>>,
+        BTreeMap<TransactionDigest, Vec<SharedInputObject>>,
     ) {
         let _scope = monitored_scope("ConsensusCommitHandler::collect_transactions_to_schedule");
         let protocol_config = self.epoch_store.protocol_config();
@@ -1452,6 +1456,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let (ordered_txns, ordered_randomness_txns, previously_deferred_tx_digests) =
             self.merge_and_reorder_transactions(state, commit_info, user_transactions);
+        let ordered_txns = self.with_shared_inputs(ordered_txns);
+        let ordered_randomness_txns = self.with_shared_inputs(ordered_randomness_txns);
 
         let mut shared_object_congestion_tracker =
             self.init_congestion_tracker(commit_info, false, &ordered_txns);
@@ -1473,10 +1479,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             Vec::with_capacity(ordered_randomness_txns.len());
         let mut deferred_txns = BTreeMap::new();
         let mut cancelled_txns = BTreeMap::new();
+        let mut sequenced_inputs = BTreeMap::new();
 
         self.record_duplication_signal(state);
 
-        for transaction in ordered_txns {
+        for (transaction, shared_input_objects) in ordered_txns {
+            let digest = *transaction.tx().digest();
             self.handle_deferral_and_cancellation(
                 state,
                 &mut cancelled_txns,
@@ -1485,13 +1493,16 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 protocol_config,
                 commit_info,
                 transaction,
+                &shared_input_objects,
                 &mut shared_object_congestion_tracker,
                 &previously_deferred_tx_digests,
                 execution_time_estimator,
             );
+            sequenced_inputs.insert(digest, shared_input_objects);
         }
 
-        for transaction in ordered_randomness_txns {
+        for (transaction, shared_input_objects) in ordered_randomness_txns {
+            let digest = *transaction.tx().digest();
             if state.dkg_failed {
                 debug!(
                     "Canceling randomness-using transaction {:?} because DKG failed",
@@ -1502,6 +1513,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     CancelConsensusCertificateReason::DkgFailed,
                 );
                 randomness_transactions_to_schedule.push(transaction);
+                sequenced_inputs.insert(digest, shared_input_objects);
                 continue;
             }
             self.handle_deferral_and_cancellation(
@@ -1512,10 +1524,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 protocol_config,
                 commit_info,
                 transaction,
+                &shared_input_objects,
                 &mut shared_object_using_randomness_congestion_tracker,
                 &previously_deferred_tx_digests,
                 execution_time_estimator,
             );
+            sequenced_inputs.insert(digest, shared_input_objects);
         }
 
         let mut total_deferred_txns = 0;
@@ -1649,6 +1663,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             randomness_transactions_to_schedule,
             cancelled_txns,
             randomness_state_update_transaction,
+            sequenced_inputs,
         )
     }
 
@@ -1660,6 +1675,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         schedulables: Vec<Schedulable<VerifiedExecutableTransactionWithAliases>>,
         randomness_schedulables: Vec<Schedulable<VerifiedExecutableTransactionWithAliases>>,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
+        sequenced_inputs: BTreeMap<TransactionDigest, Vec<SharedInputObject>>,
         final_round: bool,
     ) -> CheckpointHeight {
         let _scope = monitored_scope("ConsensusCommitHandler::create_pending_checkpoints");
@@ -1726,6 +1742,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 schedulables_for_version_assignment,
                 randomness_schedulables_for_version_assignment,
                 cancelled_txns,
+                sequenced_inputs,
                 &mut state.output,
             )
             .expect("failed to assign shared object versions");
@@ -1942,6 +1959,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         protocol_config: &ProtocolConfig,
         commit_info: &ConsensusCommitInfo,
         transaction: VerifiedExecutableTransactionWithAliases,
+        shared_input_objects: &[SharedInputObject],
         shared_object_congestion_tracker: &mut SharedObjectCongestionTracker,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         execution_time_estimator: &ExecutionTimeEstimator,
@@ -2087,6 +2105,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let deferral_info = self.epoch_store.should_defer(
             transaction.tx(),
+            shared_input_objects,
             commit_info,
             state.dkg_failed,
             state.randomness_round.is_some(),
@@ -2144,7 +2163,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         } else {
             // Update object execution cost for all scheduled transactions
-            shared_object_congestion_tracker.bump_object_execution_cost(tx_cost, transaction.tx());
+            shared_object_congestion_tracker.bump_object_execution_cost(
+                tx_cost,
+                transaction.tx(),
+                shared_input_objects,
+            );
             scheduled_txns.push(transaction);
         }
     }
@@ -2257,11 +2280,34 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         )
     }
 
+    /// Pairs each transaction with the shared objects consensus sequences it on.
+    fn with_shared_inputs(
+        &self,
+        txns: Vec<VerifiedExecutableTransactionWithAliases>,
+    ) -> Vec<(
+        VerifiedExecutableTransactionWithAliases,
+        Vec<SharedInputObject>,
+    )> {
+        txns.into_iter()
+            .map(|tx| {
+                let shared_input_objects = sequenced_shared_inputs(
+                    &self.epoch_store,
+                    self.cache_reader.as_ref(),
+                    tx.tx().transaction_data(),
+                );
+                (tx, shared_input_objects)
+            })
+            .collect()
+    }
+
     fn init_congestion_tracker(
         &self,
         commit_info: &ConsensusCommitInfo,
         for_randomness: bool,
-        txns: &[VerifiedExecutableTransactionWithAliases],
+        txns: &[(
+            VerifiedExecutableTransactionWithAliases,
+            Vec<SharedInputObject>,
+        )],
     ) -> SharedObjectCongestionTracker {
         #[allow(unused_mut)]
         let mut ret = SharedObjectCongestionTracker::from_protocol_config(
@@ -2272,7 +2318,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     &self.epoch_store,
                     commit_info.round,
                     for_randomness,
-                    txns,
+                    txns.iter()
+                        .flat_map(|(_, shared_input_objects)| shared_input_objects),
                 ),
             self.epoch_store.protocol_config(),
             for_randomness,

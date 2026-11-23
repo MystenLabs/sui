@@ -456,3 +456,39 @@ transactions and one new rule in the transaction model for it.
    account that rarely transacts, exactly our target user, accumulates budget that a stolen key
    drains at once.
 9. A package allowlist with custody rules for non-coin objects. That's a later layer.
+
+## Implementation notes
+
+- Implementation note: `sui_core::consensus_inputs` owns which shared objects a transaction takes.
+  The consensus handler computes each transaction's shared inputs once per commit and passes them
+  to congestion control and version assignment. The overload check at submission and the gas price
+  suggestion compute their own. Each computation is one object cache read, a hit or a
+  negative hit.
+- Implementation note: `sui_types::consensus_inputs` holds the rule that the sender's policy is
+  the only object consensus can add. Validators after version assignment and fullnodes and replay
+  reading effects both apply it, and any other undeclared object is not an added input.
+- Implementation note: the execution scheduler's barrier dependencies for non-exclusive writes read
+  only declared inputs. No dependency is missed, because only the owner declares a policy and only
+  as a mutable input, so nothing takes a non-exclusive write on it.
+- Implementation note: backtest and the single node benchmark do not add the policy input yet, so
+  they run a policy-bound transaction without its policy.
+- Implementation note: the signing checks are one function,
+  `sui_transaction_checks::guardrails::check_guardrails_for_signing`. Validators call it at signing,
+  and simulation with checks enabled and simulacrum call it before they execute.
+- Implementation note: `SenderSignedData::is_consensus_tx` looks only at declared shared inputs,
+  since it has no access to state. A transaction with only owned inputs from an account with an
+  active policy goes through consensus on the policy, but submission and the latency metrics
+  treat it as single-writer, and the direct sequencing mode of the mock consensus in unit tests
+  does not sequence it.
+- Implementation note: the `shared_object_disabled` deny config sees only declared inputs, at
+  signing and in simulation. It does not refuse a transaction with only owned inputs whose sender
+  has an active policy.
+- Implementation note: the registry is created at genesis only. A network that started without it
+  needs an end-of-epoch creation transaction, which is a follow-up.
+- Implementation note: the signing checks for gasless transactions, withdrawals from other
+  accounts and party coins, and the `PartyCoin` execution check, have no test yet. Validity
+  checks reject sponsor withdrawals today, and no test path creates a coin with several party
+  owners yet.
+- Implementation note: a consensus object that effects show was added to a transaction but that
+  the store does not hold is fatal during checkpoint execution, since running the transaction
+  without it would produce other effects than the certified ones.

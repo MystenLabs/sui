@@ -145,23 +145,23 @@ impl SharedObjectCongestionTracker {
         estimate_us
     }
 
-    // Given a transaction, returns the deferral key and the congested objects if the transaction should be deferred.
+    // Given a transaction and the shared objects consensus sequences it on, returns the deferral key and the congested objects if the transaction should be deferred.
     pub fn should_defer_due_to_object_congestion(
         &self,
         cert: &VerifiedExecutableTransaction,
+        shared_input_objects: &[SharedInputObject],
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         commit_info: &ConsensusCommitInfo,
     ) -> Option<(DeferralKey, Vec<ObjectID>)> {
         let commit_round = commit_info.round;
 
-        let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
         if shared_input_objects.is_empty() {
             // No shared object used by this transaction. No need to defer.
             return None;
         }
 
         // Allow tx if it's within configured limits.
-        let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
+        let start_cost = self.compute_tx_start_at_cost(shared_input_objects);
         let budget = self.params.commit_budget(commit_info);
         let burst_limit = budget.saturating_add(self.params.max_burst());
         if start_cost <= burst_limit {
@@ -204,19 +204,20 @@ impl SharedObjectCongestionTracker {
         Some((deferral_key, congested_objects))
     }
 
-    // Update shared objects' execution cost used in `cert` using `cert`'s execution cost.
+    // Update the execution cost of `shared_input_objects`, the shared objects consensus sequences
+    // `cert` on, using `cert`'s execution cost.
     // This is called when `cert` is scheduled for execution.
     pub fn bump_object_execution_cost(
         &mut self,
         tx_cost: u64,
         cert: &VerifiedExecutableTransaction,
+        shared_input_objects: &[SharedInputObject],
     ) {
-        let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
         if shared_input_objects.is_empty() {
             return;
         }
 
-        let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
+        let start_cost = self.compute_tx_start_at_cost(shared_input_objects);
         let end_cost = start_cost.saturating_add(tx_cost);
 
         for obj in shared_input_objects {
@@ -502,6 +503,7 @@ mod object_cost_tests {
             if let Some((_, congested_objects)) = shared_object_congestion_tracker
                 .should_defer_due_to_object_congestion(
                     &tx,
+                    &tx.shared_input_objects().collect::<Vec<_>>(),
                     &HashMap::new(),
                     &ConsensusCommitInfo::new_for_congestion_test(
                         0,
@@ -524,6 +526,7 @@ mod object_cost_tests {
                 shared_object_congestion_tracker
                     .should_defer_due_to_object_congestion(
                         &tx,
+                        &tx.shared_input_objects().collect::<Vec<_>>(),
                         &HashMap::new(),
                         &ConsensusCommitInfo::new_for_congestion_test(
                             0,
@@ -545,6 +548,7 @@ mod object_cost_tests {
                 if let Some((_, congested_objects)) = shared_object_congestion_tracker
                     .should_defer_due_to_object_congestion(
                         &tx,
+                        &tx.shared_input_objects().collect::<Vec<_>>(),
                         &HashMap::new(),
                         &ConsensusCommitInfo::new_for_congestion_test(
                             0,
@@ -590,6 +594,7 @@ mod object_cost_tests {
             _,
         )) = shared_object_congestion_tracker.should_defer_due_to_object_congestion(
             &tx,
+            &tx.shared_input_objects().collect::<Vec<_>>(),
             &previously_deferred_tx_digests,
             &ConsensusCommitInfo::new_for_congestion_test(
                 10,
@@ -620,6 +625,7 @@ mod object_cost_tests {
             _,
         )) = shared_object_congestion_tracker.should_defer_due_to_object_congestion(
             &tx,
+            &tx.shared_input_objects().collect::<Vec<_>>(),
             &previously_deferred_tx_digests,
             &ConsensusCommitInfo::new_for_congestion_test(
                 10,
@@ -651,6 +657,7 @@ mod object_cost_tests {
             _,
         )) = shared_object_congestion_tracker.should_defer_due_to_object_congestion(
             &tx,
+            &tx.shared_input_objects().collect::<Vec<_>>(),
             &previously_deferred_tx_digests,
             &ConsensusCommitInfo::new_for_congestion_test(
                 10,
@@ -701,6 +708,7 @@ mod object_cost_tests {
             if let Some((_, congested_objects)) = shared_object_congestion_tracker
                 .should_defer_due_to_object_congestion(
                     &tx,
+                    &tx.shared_input_objects().collect::<Vec<_>>(),
                     &HashMap::new(),
                     &ConsensusCommitInfo::new_for_congestion_test(
                         0,
@@ -723,6 +731,7 @@ mod object_cost_tests {
                 shared_object_congestion_tracker
                     .should_defer_due_to_object_congestion(
                         &tx,
+                        &tx.shared_input_objects().collect::<Vec<_>>(),
                         &HashMap::new(),
                         &ConsensusCommitInfo::new_for_congestion_test(
                             0,
@@ -744,6 +753,7 @@ mod object_cost_tests {
                 if let Some((_, congested_objects)) = shared_object_congestion_tracker
                     .should_defer_due_to_object_congestion(
                         &tx,
+                        &tx.shared_input_objects().collect::<Vec<_>>(),
                         &HashMap::new(),
                         &ConsensusCommitInfo::new_for_congestion_test(
                             0,
@@ -797,6 +807,7 @@ mod object_cost_tests {
             if let Some((_, congested_objects)) = shared_object_congestion_tracker
                 .should_defer_due_to_object_congestion(
                     &tx,
+                    &tx.shared_input_objects().collect::<Vec<_>>(),
                     &HashMap::new(),
                     &ConsensusCommitInfo::new_for_congestion_test(
                         0,
@@ -820,6 +831,7 @@ mod object_cost_tests {
                 shared_object_congestion_tracker
                     .should_defer_due_to_object_congestion(
                         &tx,
+                        &tx.shared_input_objects().collect::<Vec<_>>(),
                         &HashMap::new(),
                         &ConsensusCommitInfo::new_for_congestion_test(
                             0,
@@ -841,6 +853,7 @@ mod object_cost_tests {
                 if let Some((_, congested_objects)) = shared_object_congestion_tracker
                     .should_defer_due_to_object_congestion(
                         &tx,
+                        &tx.shared_input_objects().collect::<Vec<_>>(),
                         &HashMap::new(),
                         &ConsensusCommitInfo::new_for_congestion_test(
                             0,
@@ -886,6 +899,7 @@ mod object_cost_tests {
                 &mut IndirectStateObserver::new(),
             ),
             &cert,
+            &cert.shared_input_objects().collect::<Vec<_>>(),
         );
         assert_eq!(
             shared_object_congestion_tracker,
@@ -907,6 +921,7 @@ mod object_cost_tests {
                 &mut IndirectStateObserver::new(),
             ),
             &cert,
+            &cert.shared_input_objects().collect::<Vec<_>>(),
         );
         // start cost (10) + tx cost (~1000 for unknown command)
         let expected_object_0_cost = 1_010;
@@ -942,6 +957,7 @@ mod object_cost_tests {
                 &mut IndirectStateObserver::new(),
             ),
             &cert,
+            &cert.shared_input_objects().collect::<Vec<_>>(),
         );
         assert_eq!(
             shared_object_congestion_tracker,
@@ -980,6 +996,7 @@ mod object_cost_tests {
                 &mut IndirectStateObserver::new(),
             ),
             &cert,
+            &cert.shared_input_objects().collect::<Vec<_>>(),
         );
         assert_eq!(
             shared_object_congestion_tracker,
@@ -1056,6 +1073,7 @@ mod object_cost_tests {
                 &mut IndirectStateObserver::new(),
             ),
             &tx,
+            &tx.shared_input_objects().collect::<Vec<_>>(),
         );
 
         let commit_info =
@@ -1103,6 +1121,7 @@ mod object_cost_tests {
                 &mut IndirectStateObserver::new(),
             ),
             &tx,
+            &tx.shared_input_objects().collect::<Vec<_>>(),
         );
 
         let commit_info =

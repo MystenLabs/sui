@@ -23,6 +23,7 @@ use sui_data_store::{
     EpochStore, ObjectKey, ObjectStore, ReadDataStore, TransactionStore, VersionQuery,
 };
 use sui_types::TypeTag;
+use sui_types::consensus_inputs::{added_input, added_input_ids_in_effects};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,
@@ -353,10 +354,23 @@ impl ReplayTransaction {
     // be computed for a `ReplayTransaction` and cached.
     pub fn get_input_objects_for_replay(&self) -> Result<InputObjects, anyhow::Error> {
         let mut resolved_input_objs = vec![];
-        let input_objects_kind = self.txn_data.input_objects().context(format!(
+        let mut input_objects_kind = self.txn_data.input_objects().context(format!(
             "Failed to get input objects from transaction {}",
             self.digest,
         ))?;
+        // Consensus may add mutable shared inputs the transaction does not declare. The effects
+        // show them, and the object cache holds every object the effects show.
+        for id in added_input_ids_in_effects(&self.txn_data, &self.effects) {
+            let initial_shared_version = self
+                .object_cache
+                .get(&id)
+                .and_then(|versions| versions.values().next())
+                .and_then(|object| object.owner().start_version())
+                .ok_or_else(|| {
+                    anyhow::anyhow!("consensus object {id} added to {} is missing", self.digest)
+                })?;
+            input_objects_kind.push(added_input(id, initial_shared_version).into());
+        }
         for kind in input_objects_kind.iter() {
             match kind {
                 InputObjectKind::MovePackage(pkg_id) => {

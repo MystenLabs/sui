@@ -70,7 +70,7 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::{
 };
 use sui_types::sui_system_state::{self, SuiSystemState};
 use sui_types::transaction::{
-    AuthenticatorStateUpdate, InputObjectKind, ProgrammableTransaction,
+    AuthenticatorStateUpdate, InputObjectKind, ProgrammableTransaction, SharedInputObject,
     StoredExecutionTimeObservations, Transaction, TransactionData, TransactionDataAPI,
     TransactionExpiration, TransactionKey, TransactionKind, TxValidityCheckContext,
     VerifiedTransaction, VerifiedTransactionWithAliases, WithAliases,
@@ -173,6 +173,7 @@ type JwkAggregator = GenericMultiStakeAggregator<(JwkId, JWK), true>;
 
 type LocalExecutionTimeData = (
     ProgrammableTransaction,
+    Vec<SharedInputObject>,
     Vec<ExecutionTiming>,
     Duration,
     u64, // gas_price
@@ -1605,12 +1606,7 @@ impl AuthorityPerEpochStore {
 
     pub fn set_local_execution_time_channels(
         &self,
-        tx_local_execution_time: mpsc::Sender<(
-            ProgrammableTransaction,
-            Vec<ExecutionTiming>,
-            Duration,
-            u64, // gas_price
-        )>,
+        tx_local_execution_time: mpsc::Sender<LocalExecutionTimeData>,
         tx_object_debts: mpsc::Sender<Vec<ObjectID>>,
     ) {
         if let Err(e) = self.tx_local_execution_time.set(tx_local_execution_time) {
@@ -1626,6 +1622,7 @@ impl AuthorityPerEpochStore {
     pub fn record_local_execution_time(
         &self,
         tx: &TransactionData,
+        shared_input_objects: Vec<SharedInputObject>,
         effects: &TransactionEffects,
         timings: Vec<ExecutionTiming>,
         total_duration: Duration,
@@ -1643,12 +1640,13 @@ impl AuthorityPerEpochStore {
         let TransactionKind::ProgrammableTransaction(ptb) = tx.kind() else {
             return;
         };
-        if !ptb.has_shared_inputs() {
+        if shared_input_objects.is_empty() {
             return;
         }
 
         if let Err(e) = tx_local_execution_time.try_send((
             ptb.clone(),
+            shared_input_objects,
             timings,
             total_duration,
             tx.gas_data().price,
@@ -2339,6 +2337,7 @@ impl AuthorityPerEpochStore {
             cache_reader,
             assignables,
             &BTreeMap::new(),
+            BTreeMap::new(),
         )?
         .assigned_versions)
     }
@@ -2433,6 +2432,7 @@ impl AuthorityPerEpochStore {
     pub(crate) fn should_defer(
         &self,
         cert: &VerifiedExecutableTransaction,
+        shared_input_objects: &[SharedInputObject],
         commit_info: &ConsensusCommitInfo,
         dkg_failed: bool,
         generating_randomness: bool,
@@ -2461,6 +2461,7 @@ impl AuthorityPerEpochStore {
         if let Some((deferral_key, congested_objects)) = shared_object_congestion_tracker
             .should_defer_due_to_object_congestion(
                 cert,
+                shared_input_objects,
                 previously_deferred_tx_digests,
                 commit_info,
             )
@@ -3202,6 +3203,7 @@ impl AuthorityPerEpochStore {
         non_randomness_transactions: impl Iterator<Item = &'a Schedulable<T>> + Clone,
         randomness_transactions: impl Iterator<Item = &'a Schedulable<T>> + Clone,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
+        sequenced_inputs: BTreeMap<TransactionDigest, Vec<SharedInputObject>>,
         output: &mut ConsensusCommitOutput,
     ) -> SuiResult<AssignedTxAndVersions>
     where
@@ -3217,6 +3219,7 @@ impl AuthorityPerEpochStore {
             cache_reader,
             all_certs,
             cancelled_txns,
+            sequenced_inputs,
         )?;
         debug!(
             "Assigned versions from consensus processing: {:?}",
@@ -3261,6 +3264,7 @@ impl AuthorityPerEpochStore {
             transactions.iter(),
             std::iter::empty(),
             &BTreeMap::new(),
+            BTreeMap::new(),
             &mut output,
         )?;
         let mut batch = self.db_batch();

@@ -617,6 +617,7 @@ pub(crate) mod checked {
             trace_builder_opt,
             timings,
         )?;
+        temporary_store.check_guardrails()?;
         charge_storage(gas_charger, temporary_store, StorageTier::AllWrites)?;
         check_effects::<Mode>(
             temporary_store,

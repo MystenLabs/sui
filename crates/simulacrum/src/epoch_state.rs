@@ -23,6 +23,7 @@ use sui_types::{
     base_types::{ObjectRef, SequenceNumber, TransactionDigest},
     coin_reservation::BorrowedCoinReservationResolver,
     committee::{Committee, EpochId},
+    consensus_inputs::input_objects_at_latest,
     digests::ChainIdentifier,
     effects::{TransactionEffects, TransactionEffectsAPI},
     error::SuiResult,
@@ -148,16 +149,22 @@ impl EpochState {
     )> {
         let tx_digest = *transaction.digest();
         let tx_data = &transaction.data().intent_message().value;
-        let input_object_kinds = tx_data.input_objects()?;
         let receiving_object_refs = tx_data.receiving_objects();
 
         sui_transaction_checks::deny::check_transaction_for_signing(
             tx_data,
             transaction.tx_signatures(),
-            &input_object_kinds,
+            &tx_data.input_objects()?,
             &receiving_object_refs,
             deny_config,
             &store,
+        )?;
+
+        let input_object_kinds = input_objects_at_latest(
+            &self.protocol_config,
+            self.epoch_start_state.epoch(),
+            tx_data,
+            |id| store.backing_store().get_object(id),
         )?;
 
         let (input_objects, receiving_objects) = store.read_objects_for_synchronous_execution(
@@ -167,7 +174,16 @@ impl EpochState {
         )?;
 
         // Run the transaction input checks that would run when submitting the txn to a validator
-        // for signing
+        // for signing. Unlike at validator signing, the inputs here include the added policy, so
+        // the guardrails check runs first: the input checks would refuse a gasless transaction for
+        // having a shared input instead of for its sender's policy.
+        sui_transaction_checks::guardrails::check_guardrails_for_signing(
+            &self.protocol_config,
+            self.epoch_start_state.epoch(),
+            tx_data,
+            &input_objects,
+            |id| store.backing_store().get_object(id),
+        )?;
         let checked_input_objects = sui_transaction_checks::check_transaction_input(
             &self.protocol_config,
             self.epoch_start_state.reference_gas_price(),

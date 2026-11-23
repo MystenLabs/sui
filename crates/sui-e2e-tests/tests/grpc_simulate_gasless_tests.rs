@@ -13,14 +13,15 @@ use sui_macros::sim_test;
 use sui_rpc::proto::sui::rpc::v2::SimulateTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::Transaction;
 use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
-use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::base_types::{ObjectRef, SuiAddress};
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::gas_coin::GAS;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
-    self, FundsWithdrawalArg, GasData, ObjectArg, TransactionData, TransactionDataV1,
-    TransactionExpiration, TransactionKind,
+    self, CallArg, FundsWithdrawalArg, GasData, ObjectArg, SharedObjectMutability, TransactionData,
+    TransactionDataV1, TransactionExpiration, TransactionKind,
 };
+use sui_types::{SUI_FRAMEWORK_PACKAGE_ID, SUI_GUARDRAILS_REGISTRY_OBJECT_ID};
 use test_cluster::addr_balance_test_env::{TestEnv, TestEnvBuilder};
 
 async fn setup_gasless_env() -> TestEnv {
@@ -395,4 +396,76 @@ async fn simulate_gasless_with_no_address_owned_inputs_succeeds() {
     assert_eq!(gas_payment.budget, Some(0));
     assert!(gas_payment.objects.is_empty());
     assert!(returned.effects().status().success());
+}
+
+/// A sender with an active guardrails policy cannot send gasless transactions, because consensus
+/// adds the policy as a shared input. Simulate must fall through to the priced flow for such a
+/// sender instead of returning the gasless simulation's error.
+#[sim_test]
+async fn simulate_falls_back_to_priced_for_policy_holder() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_gasless_for_testing();
+            cfg.set_enable_guardrails_for_testing(true);
+            cfg
+        }))
+        .build()
+        .await;
+    let sender = test_env.get_sender(1);
+    let recipient = test_env.get_sender(2);
+    let guardian = test_env.get_sender(3);
+
+    let registry = test_env
+        .cluster
+        .get_object_from_fullnode_store(&SUI_GUARDRAILS_REGISTRY_OBJECT_ID)
+        .await
+        .expect("registry is created at genesis");
+    let registry = CallArg::Object(ObjectArg::SharedObject {
+        id: SUI_GUARDRAILS_REGISTRY_OBJECT_ID,
+        initial_shared_version: registry.owner().start_version().unwrap(),
+        mutability: SharedObjectMutability::Mutable,
+    });
+    let pure = |value: u64| CallArg::Pure(bcs::to_bytes(&value).unwrap());
+    let enable = test_env
+        .tx_builder(sender)
+        .move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            "guardrails",
+            "enable",
+            vec![
+                registry,
+                CallArg::Pure(bcs::to_bytes(&guardian).unwrap()),
+                pure(1_000_000_000),
+                pure(14),
+            ],
+        )
+        .build();
+    let (_, effects) = test_env.exec_tx_directly(enable).await.unwrap();
+    assert!(effects.status().is_ok());
+    // The policy becomes active in the next epoch.
+    test_env.trigger_reconfiguration().await;
+
+    let (coin_type, coin_refs) =
+        setup_mintable_coin_env(&mut test_env, 0, &[(5_000, sender)]).await;
+    let tx = build_coin_send_funds_tx(sender, coin_refs[0], coin_type, recipient);
+
+    let response = connect(&test_env)
+        .await
+        .simulate_transaction(
+            SimulateTransactionRequest::new(to_unresolved_proto(tx, None))
+                .with_do_gas_selection(true),
+        )
+        .await
+        .unwrap()
+        .into_inner();
+
+    let returned = response.transaction();
+    let gas_payment = returned.transaction().gas_payment();
+    assert_eq!(gas_payment.price, Some(test_env.rgp));
+    assert!(
+        !gas_payment.objects.is_empty(),
+        "priced flow must have run gas selection",
+    );
+    // The policy has no limit for the coin type, so the transfer fails its outflow check.
+    assert!(!returned.effects().status().success());
 }

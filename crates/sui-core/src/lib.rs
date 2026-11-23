@@ -15,6 +15,7 @@ pub mod congestion_tracker;
 pub mod consensus_adapter;
 pub mod consensus_commit_summary;
 pub mod consensus_handler;
+pub mod consensus_inputs;
 pub mod consensus_manager;
 pub mod consensus_throughput_calculator;
 pub mod consensus_transaction_pool;

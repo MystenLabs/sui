@@ -999,6 +999,10 @@ impl From<crate::execution_status::ExecutionErrorKind> for ExecutionError {
             crate::execution_status::ExecutionErrorKind::NonExclusiveWriteInputObjectModified { id } => {
                 Self::NonExclusiveWriteInputObjectModified { object: id.into() }
             }
+            // TODO(guardrails): sui-sdk-types has no variant for this yet.
+            crate::execution_status::ExecutionErrorKind::GuardrailsViolation { .. } => {
+                Self::InvariantViolation
+            }
             // TODO: map to `Self::TransactionExpired` once sui-sdk-types has the variant. Until
             // then this conversion is lossy, which is acceptable only while the variant is
             // produced on devnet alone.

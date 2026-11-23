@@ -23,6 +23,7 @@ use sui_rpc::proto::sui::rpc::v2::SimulateTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::SimulateTransactionResponse;
 use sui_rpc::proto::sui::rpc::v2::Transaction;
 use sui_types::balance_change::derive_balance_changes_2;
+use sui_types::consensus_inputs::input_objects_at_latest;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::SuiError;
 use sui_types::error::SuiErrorKind;
@@ -75,7 +76,7 @@ pub fn simulate_transaction(
     let checks = TransactionChecks::from(request.checks());
 
     // TODO make this more efficient
-    let (reference_gas_price, protocol_config) = {
+    let (reference_gas_price, protocol_config, epoch) = {
         let system_state = service.reader.get_system_state_summary()?;
         let protocol_config = ProtocolConfig::get_for_version_if_supported(
             system_state.protocol_version.into(),
@@ -88,7 +89,11 @@ pub fn simulate_transaction(
             )
         })?;
 
-        (system_state.reference_gas_price, protocol_config)
+        (
+            system_state.reference_gas_price,
+            protocol_config,
+            system_state.epoch,
+        )
     };
     let offer_allowed_proposers =
         can_offer_allowed_proposers(&protocol_config, client_protocol_version);
@@ -134,7 +139,7 @@ pub fn simulate_transaction(
             // verified by running the tx. If that fails, we discard the gasless variant and
             // fall through to the priced flow. `payment` is already empty here, verified by
             // is_gasless_candidate.
-            if is_gasless_candidate(&request, &transaction, &protocol_config, service)? {
+            if is_gasless_candidate(&request, &transaction, &protocol_config, epoch, service)? {
                 let mut gasless_tx = transaction.clone();
                 gasless_tx.gas_data_mut().price = 0;
                 gasless_tx.gas_data_mut().budget = 0;
@@ -942,6 +947,7 @@ fn is_gasless_candidate(
     request: &SimulateTransactionRequest,
     transaction: &sui_types::transaction::TransactionData,
     protocol_config: &ProtocolConfig,
+    epoch: u64,
     service: &RpcService,
 ) -> Result<bool> {
     if !protocol_config.enable_gasless() {
@@ -973,11 +979,15 @@ fn is_gasless_candidate(
     }
 
     // Load Move object inputs so we can run the runtime input check. Packages need not be loaded
-    // since check_gasless_object_inputs skips them.
-    let input_object_kinds = match transaction.input_objects() {
-        Ok(kinds) => kinds,
-        Err(_) => return Ok(false),
-    };
+    // since check_gasless_object_inputs skips them. The shared inputs consensus would add count
+    // too.
+    let input_object_kinds =
+        match input_objects_at_latest(protocol_config, epoch, transaction, |id| {
+            service.reader.inner().get_object(id)
+        }) {
+            Ok(kinds) => kinds,
+            Err(_) => return Ok(false),
+        };
     let mut loaded = Vec::with_capacity(input_object_kinds.len());
     for kind in input_object_kinds {
         match kind {

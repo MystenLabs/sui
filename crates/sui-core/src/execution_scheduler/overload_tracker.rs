@@ -13,8 +13,7 @@ use sui_types::{
     digests::TransactionDigest,
     error::{SuiErrorKind, SuiResult},
     fp_bail, fp_ensure,
-    message_envelope::Message,
-    transaction::{SenderSignedData, TransactionDataAPI},
+    transaction::SharedInputObject,
 };
 use tokio::time::Instant;
 use tracing::info;
@@ -40,10 +39,13 @@ impl OverloadTracker {
         }
     }
 
-    pub(crate) fn add_pending_certificate(&self, tx_data: &SenderSignedData) {
-        let tx_digest = tx_data.digest();
+    pub(crate) fn add_pending_certificate(
+        &self,
+        tx_digest: TransactionDigest,
+        shared_input_objects: &[SharedInputObject],
+    ) {
         let exclusively_accessed_shared_objects =
-            Self::get_exclusively_accessed_shared_objects(tx_data);
+            Self::get_exclusively_accessed_shared_objects(shared_input_objects);
         let mut object_waiting_queue = self.object_waiting_queue.write();
         let instant = Instant::now();
         for object_id in exclusively_accessed_shared_objects {
@@ -52,13 +54,17 @@ impl OverloadTracker {
         }
     }
 
-    pub(crate) fn remove_pending_certificate(&self, tx_data: &SenderSignedData) {
+    pub(crate) fn remove_pending_certificate(
+        &self,
+        tx_digest: &TransactionDigest,
+        shared_input_objects: &[SharedInputObject],
+    ) {
         let exclusively_accessed_shared_objects =
-            Self::get_exclusively_accessed_shared_objects(tx_data);
+            Self::get_exclusively_accessed_shared_objects(shared_input_objects);
         let mut object_waiting_queue = self.object_waiting_queue.write();
         for object_id in exclusively_accessed_shared_objects {
             if let Some(entry) = object_waiting_queue.get_mut(&object_id) {
-                entry.remove(&tx_data.digest());
+                entry.remove(tx_digest);
                 if entry.is_empty() {
                     object_waiting_queue.remove(&object_id);
                 }
@@ -66,11 +72,11 @@ impl OverloadTracker {
         }
     }
 
-    fn get_exclusively_accessed_shared_objects(tx_data: &SenderSignedData) -> Vec<FullObjectID> {
-        tx_data
-            .transaction_data()
-            .shared_input_objects()
-            .into_iter()
+    fn get_exclusively_accessed_shared_objects(
+        shared_input_objects: &[SharedInputObject],
+    ) -> Vec<FullObjectID> {
+        shared_input_objects
+            .iter()
             .filter_map(|r| {
                 r.is_accessed_exclusively()
                     .then_some(FullObjectID::new(r.id, Some(r.initial_shared_version)))
@@ -81,7 +87,7 @@ impl OverloadTracker {
     pub(crate) fn check_execution_overload(
         &self,
         overload_config: &AuthorityOverloadConfig,
-        tx_data: &SenderSignedData,
+        shared_input_objects: &[SharedInputObject],
         inflight_queue_len: usize,
     ) -> SuiResult {
         // Too many transactions are pending execution.
@@ -95,7 +101,7 @@ impl OverloadTracker {
         );
 
         let exclusively_accessed_shared_objects =
-            Self::get_exclusively_accessed_shared_objects(tx_data);
+            Self::get_exclusively_accessed_shared_objects(shared_input_objects);
         let queue_len_and_age = self.objects_queue_len_and_age(exclusively_accessed_shared_objects);
         for (object_id, queue_len, txn_age) in queue_len_and_age {
             // When this occurs, most likely transactions piled up on a shared object.

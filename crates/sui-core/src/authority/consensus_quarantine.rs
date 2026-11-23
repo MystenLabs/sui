@@ -27,6 +27,7 @@ use sui_types::executable_transaction::{
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_consensus::AuthorityIndex;
+use sui_types::transaction::SharedInputObject;
 use sui_types::{
     base_types::{ConsensusObjectSequenceKey, ObjectID},
     digests::TransactionDigest,
@@ -928,12 +929,12 @@ impl ConsensusOutputQuarantine {
             .next()
     }
 
-    pub(crate) fn load_initial_object_debts(
+    pub(crate) fn load_initial_object_debts<'a>(
         &self,
         epoch_store: &AuthorityPerEpochStore,
         current_round: Round,
         for_randomness: bool,
-        transactions: &[VerifiedExecutableTransactionWithAliases],
+        shared_input_objects: impl Iterator<Item = &'a SharedInputObject>,
     ) -> impl IntoIterator<Item = (ObjectID, u64)> {
         let protocol_config = epoch_store.protocol_config();
         let tables = epoch_store.tables();
@@ -955,10 +956,7 @@ impl ConsensusOutputQuarantine {
                 default_per_commit_budget,
             )
         };
-        let mut shared_input_object_ids: Vec<_> = transactions
-            .iter()
-            .flat_map(|tx| tx.tx().shared_input_objects().map(|obj| obj.id))
-            .collect();
+        let mut shared_input_object_ids: Vec<_> = shared_input_objects.map(|obj| obj.id).collect();
         shared_input_object_ids.sort();
         shared_input_object_ids.dedup();
 

@@ -2725,6 +2725,54 @@ internal_sum
 set_as_prefix
 	public(package) fun
 	0x2::group_ops
+GuardrailsRegistry
+	public struct
+	0x2::guardrails
+PolicyKey
+	public struct
+	0x2::guardrails
+Policy
+	public struct
+	0x2::guardrails
+create
+	fun
+	0x2::guardrails
+enable
+	public fun
+	0x2::guardrails
+re_enable
+	public fun
+	0x2::guardrails
+cancel
+	public fun
+	0x2::guardrails
+disable
+	public fun
+	0x2::guardrails
+set_limit
+	public fun
+	0x2::guardrails
+remove_limit
+	public fun
+	0x2::guardrails
+set_guardian
+	public fun
+	0x2::guardrails
+request_disable
+	public fun
+	0x2::guardrails
+cancel_disable
+	public fun
+	0x2::guardrails
+is_active
+	fun
+	0x2::guardrails
+policy_address
+	public fun
+	0x2::guardrails
+assert_authorized
+	fun
+	0x2::guardrails
 blake2b256
 	public fun
 	0x2::hash
@@ -3125,6 +3173,9 @@ address_alias_state
 	public(package) fun
 	0x2::object
 forwarding_address_registry
+	public(package) fun
+	0x2::object
+guardrails_registry
 	public(package) fun
 	0x2::object
 uid_as_inner

@@ -448,6 +448,7 @@ const MAINNET_USDB: &str =
 //              windows. Add a minimum number of user transactions per consensus commit,
 //              duplicates included, that it requires.
 // Version 145: Reject secp256r1 public keys in the SEC1 compact encoding.
+//              Enable guardrails on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1230,6 +1231,11 @@ struct FeatureFlags {
     // If true, resolve forwarding addresses through the forwarding address registry.
     #[serde(skip_serializing_if = "is_false")]
     enable_forwarding_addresses: bool,
+
+    // If true, create the guardrails registry at genesis, take the guardrails policy of a
+    // transaction's sender as an implicit mutable input, and enforce it in execution.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_guardrails: bool,
 
     // Corrects signature-to-signer mapping in CheckpointContentsV2.
     // Deprecated: must always be set to `true`.
@@ -5134,6 +5140,9 @@ impl ProtocolConfig {
                 }
                 145 => {
                     cfg.feature_flags.secp256r1_strict_public_keys = true;
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_guardrails = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
