@@ -10,7 +10,7 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use sui_types::{
     base_types::{AuthorityName, ObjectID},
     error::{ErrorCategory, SuiError, SuiErrorKind},
-    messages_grpc::{SubmitTxRequest, SubmitTxResult, TxType},
+    messages_grpc::{PingType, SubmitTxRequest, SubmitTxResult, TxType},
     transaction::{MAX_UNPAID_ALLOWED_PROPOSERS, TransactionDataAPI as _},
 };
 use tokio::time::timeout;
@@ -246,7 +246,17 @@ impl TransactionSubmitter {
                             return Ok((name, result));
                         }
                         Some((name, display_name, Err(e))) => {
-                            let error_type: &str = e.categorize().into();
+                            // Each staggered-submission rejection gets its own label, so that
+                            // dashboards can tell schedule rejections from hold-quota
+                            // exhaustion, and both from other overload.
+                            let error_type = match &e {
+                                TransactionRequestError::RejectedAtValidator(error)
+                                    if is_staggered_rejection(error) =>
+                                {
+                                    error.to_variant_name()
+                                }
+                                _ => e.categorize().into(),
+                            };
                             self.metrics
                                 .validator_submit_transaction_errors
                                 .with_label_values(&[
@@ -326,18 +336,14 @@ impl TransactionSubmitter {
             TransactionRequestError::TimedOutSubmittingTransaction
         })?
         .map_err(|error| {
-            if is_staggered_rejection(&error) {
-                client_monitor.request_health_check();
-            } else if is_validator_error(&error) {
-                client_monitor.record_interaction_result(OperationFeedback {
-                    authority_name: validator,
-                    display_name: display_name.clone(),
-                    operation: OperationType::Submit,
-                    tx_class,
-                    ping_type: request.ping_type,
-                    result: Err(()),
-                });
-            }
+            record_rejection(
+                client_monitor,
+                &error,
+                validator,
+                &display_name,
+                tx_class,
+                request.ping_type,
+            );
             TransactionRequestError::RejectedAtValidator(error)
         })?;
 
@@ -351,18 +357,14 @@ impl TransactionSubmitter {
 
         // Since only one transaction is submitted, it is ok to return error when the submission is rejected.
         if let SubmitTxResult::Rejected { error } = &result {
-            if is_staggered_rejection(error) {
-                client_monitor.request_health_check();
-            } else if is_validator_error(error) {
-                client_monitor.record_interaction_result(OperationFeedback {
-                    authority_name: validator,
-                    display_name,
-                    operation: OperationType::Submit,
-                    tx_class,
-                    ping_type: request.ping_type,
-                    result: Err(()),
-                });
-            }
+            record_rejection(
+                client_monitor,
+                error,
+                validator,
+                &display_name,
+                tx_class,
+                request.ping_type,
+            );
             return Err(TransactionRequestError::RejectedAtValidator(error.clone()));
         }
 
@@ -379,37 +381,77 @@ impl TransactionSubmitter {
     }
 }
 
-/// A non-proposer declining a staggered submission. The schedule working, not a fault
-/// of that validator, so it never counts against its score — and the first such
-/// rejection is the driver's earliest sign that validators started staggering, which
-/// only its preferred few would ever tell it in-band: it asks the monitor for an
-/// immediate health round so the view flips on f+1 stake's own reports instead of
-/// waiting out the health interval.
+/// Reports a submission rejected by `validator` to the client monitor.
+///
+/// A staggered-submission rejection means the schedule is working, not that the
+/// validator is faulty: it declines a transaction for which it is not a proposer, or
+/// one it would hold while its held submissions are at capacity. These errors therefore
+/// never count against the validator. A full hold quota is a capacity limit, but it
+/// limits only transactions without a proposer list. The monitor keeps one reliability
+/// score per validator for both transaction classes, so counting the error would also
+/// lower the validator's rank for restricted transactions, which the quota protects.
+///
+/// Validators return these errors only while staggering is active, so the first such
+/// rejection is the driver's earliest sign that validators started staggering. The driver
+/// then requests a health round through `ValidatorClientMonitor::request_health_check`,
+/// and its staggering view turns on once f+1 stake reports staggering.
+fn record_rejection<A: Clone>(
+    client_monitor: &ValidatorClientMonitor<A>,
+    error: &SuiError,
+    validator: AuthorityName,
+    display_name: &str,
+    tx_class: Option<TransactionClass>,
+    ping_type: Option<PingType>,
+) {
+    if is_staggered_rejection(error) {
+        client_monitor.request_health_check();
+    } else if is_validator_error(error) {
+        client_monitor.record_interaction_result(OperationFeedback {
+            authority_name: validator,
+            display_name: display_name.to_string(),
+            operation: OperationType::Submit,
+            tx_class,
+            ping_type,
+            result: Err(()),
+        });
+    }
+}
+
 fn is_staggered_rejection(error: &SuiError) -> bool {
     matches!(
         error.as_inner(),
         SuiErrorKind::StaggeredSubmissionNotProposer
+            | SuiErrorKind::StaggeredSubmissionHoldQuotaFull
     )
 }
 
 // Whether the failure is caused by the peer validator, as opposed to the user or this node.
 fn is_validator_error(error: &SuiError) -> bool {
-    // A rejection before `min_timestamp` is caused by the client's timing.
-    if is_staggered_rejection(error)
-        || matches!(
-            error.as_inner(),
-            SuiErrorKind::TransactionNotYetValid { .. } | SuiErrorKind::OwnedObjectConflict { .. }
-        )
-    {
+    // See `record_rejection`.
+    if is_staggered_rejection(error) {
         return false;
     }
-    matches!(
-        error.categorize(),
-        ErrorCategory::Aborted
-            | ErrorCategory::Internal
-            | ErrorCategory::ValidatorOverloaded
-            | ErrorCategory::Unavailable
-    )
+    match error.as_inner() {
+        // A rejection before `min_timestamp` is caused by the client's timing.
+        SuiErrorKind::TransactionNotYetValid { .. } => false,
+        // The submitter's own transactions conflict on an owned object.
+        SuiErrorKind::OwnedObjectConflict { .. } => false,
+        // The validator suppresses a duplicate of a transaction that it handled recently or
+        // that consensus already sequenced. That is correct behavior, and the client causes
+        // the duplicate, so neither error counts against reliability, with or without
+        // staggering. Staggering makes this matter more, because it sends every copy of a
+        // transaction to the same few proposers.
+        SuiErrorKind::TransactionProcessing { .. } | SuiErrorKind::TransactionSubmitted { .. } => {
+            false
+        }
+        _ => matches!(
+            error.categorize(),
+            ErrorCategory::Aborted
+                | ErrorCategory::Internal
+                | ErrorCategory::ValidatorOverloaded
+                | ErrorCategory::Unavailable
+        ),
+    }
 }
 
 #[cfg(test)]

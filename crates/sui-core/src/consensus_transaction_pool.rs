@@ -47,6 +47,8 @@ use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 use std::sync::Weak;
 use std::time::{Duration, Instant};
+#[cfg(test)]
+use sui_config::node::DEFAULT_STAGGERED_HELD_QUOTA_PERCENT;
 use sui_macros::fail_point_if;
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef};
 use sui_types::digests::TransactionDigest;
@@ -442,6 +444,7 @@ impl ConsensusTransactionPool {
         max_user_bytes_per_second: Option<u64>,
         max_queue_age: Option<Duration>,
         max_pending_user_bytes: Option<u64>,
+        staggered_held_quota_percent: u8,
         metrics: Arc<AdmissionQueueMetrics>,
         adapter_metrics: ConsensusAdapterMetrics,
     ) -> Self {
@@ -499,6 +502,7 @@ impl ConsensusTransactionPool {
             stagger_quota: StaggerQuota::new(
                 max_pending_transactions,
                 max_pending_user_bytes,
+                staggered_held_quota_percent,
                 &metrics,
             ),
             inner: Arc::new(Mutex::new(Inner::Open(Pool {
@@ -528,6 +532,7 @@ impl ConsensusTransactionPool {
             None,
             None,
             None,
+            DEFAULT_STAGGERED_HELD_QUOTA_PERCENT,
             metrics,
             ConsensusAdapterMetrics::new_test(),
         )
@@ -1833,6 +1838,7 @@ mod tests {
             byte_budget.map(|(_, per_second)| per_second),
             max_queue_age,
             None,
+            DEFAULT_STAGGERED_HELD_QUOTA_PERCENT,
             Arc::new(AdmissionQueueMetrics::new_for_tests()),
             ConsensusAdapterMetrics::new_test(),
         ));
@@ -1932,6 +1938,7 @@ mod tests {
             None,
             None,
             Some(1),
+            DEFAULT_STAGGERED_HELD_QUOTA_PERCENT,
             Arc::new(AdmissionQueueMetrics::new_for_tests()),
             ConsensusAdapterMetrics::new_test(),
         );
@@ -1945,8 +1952,11 @@ mod tests {
             };
             assert_eq!(user.byte_capacity(), Some(max_block_bytes));
         }
-        // Held submissions may take a quarter of the raised byte capacity.
-        assert_eq!(pool.stagger_quota.byte_quota(), Some(max_block_bytes / 4));
+        // Held submissions may take their share of the raised byte capacity.
+        assert_eq!(
+            pool.stagger_quota.byte_quota(),
+            Some(max_block_bytes * u64::from(DEFAULT_STAGGERED_HELD_QUOTA_PERCENT) / 100)
+        );
         pool.close();
     }
 
