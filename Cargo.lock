@@ -5445,7 +5445,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.12"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=fdc4ffed1683aee4d75e34799c9eafd5caba54df#fdc4ffed1683aee4d75e34799c9eafd5caba54df"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=a7e5734c6078ec8cc8cfb57ace0364a591f42894#a7e5734c6078ec8cc8cfb57ace0364a591f42894"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -5509,7 +5509,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.5"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=fdc4ffed1683aee4d75e34799c9eafd5caba54df#fdc4ffed1683aee4d75e34799c9eafd5caba54df"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=a7e5734c6078ec8cc8cfb57ace0364a591f42894#a7e5734c6078ec8cc8cfb57ace0364a591f42894"
 dependencies = [
  "quote",
  "syn 2.0.117",
@@ -5518,7 +5518,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-pq"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=fdc4ffed1683aee4d75e34799c9eafd5caba54df#fdc4ffed1683aee4d75e34799c9eafd5caba54df"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=a7e5734c6078ec8cc8cfb57ace0364a591f42894#a7e5734c6078ec8cc8cfb57ace0364a591f42894"
 dependencies = [
  "bincode 1.3.3",
  "digest 0.10.7",
@@ -5535,7 +5535,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-threshold"
 version = "0.1.1"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=fdc4ffed1683aee4d75e34799c9eafd5caba54df#fdc4ffed1683aee4d75e34799c9eafd5caba54df"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=a7e5734c6078ec8cc8cfb57ace0364a591f42894#a7e5734c6078ec8cc8cfb57ace0364a591f42894"
 dependencies = [
  "bcs",
  "digest 0.10.7",
@@ -5556,7 +5556,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-vdf"
 version = "0.1.1"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=fdc4ffed1683aee4d75e34799c9eafd5caba54df#fdc4ffed1683aee4d75e34799c9eafd5caba54df"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=a7e5734c6078ec8cc8cfb57ace0364a591f42894#a7e5734c6078ec8cc8cfb57ace0364a591f42894"
 dependencies = [
  "bcs",
  "fastcrypto",
@@ -5573,7 +5573,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.5"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=fdc4ffed1683aee4d75e34799c9eafd5caba54df#fdc4ffed1683aee4d75e34799c9eafd5caba54df"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=a7e5734c6078ec8cc8cfb57ace0364a591f42894#a7e5734c6078ec8cc8cfb57ace0364a591f42894"
 dependencies = [
  "ark-bn254",
  "ark-ec",
@@ -5598,7 +5598,6 @@ dependencies = [
  "schemars 0.8.21",
  "serde",
  "serde_json",
- "serde_with",
  "tracing",
  "typenum",
 ]
@@ -7541,7 +7540,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.0",
 ]
 
 [[package]]
@@ -9586,7 +9585,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -11018,7 +11017,7 @@ version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac6c3320f9abac597dcbc668774ef006702672474aad53c6d596b62e487b40b1"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.14.0",
  "log",
  "multimap",
@@ -11255,7 +11254,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.1",
  "rustls",
- "socket2 0.5.6",
+ "socket2 0.6.3",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -11294,9 +11293,9 @@ dependencies = [
  "cfg_aliases 0.2.1",
  "libc",
  "once_cell",
- "socket2 0.5.6",
+ "socket2 0.6.3",
  "tracing",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
