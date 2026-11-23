@@ -8,8 +8,9 @@ use crate::{
         SubmitTransactionOptions, error::TransactionDriverError, metrics::TransactionDriverMetrics,
         transaction_submitter::TransactionSubmitter,
     },
-    validator_client_monitor::ValidatorClientMonitor,
+    validator_client_monitor::{OperationType, ValidatorClientMetrics, ValidatorClientMonitor},
 };
+use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use consensus_types::block::BlockRef;
 use std::{
@@ -20,6 +21,7 @@ use std::{
         atomic::{AtomicUsize, Ordering},
     },
 };
+use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_network::tonic;
 use sui_types::{
     base_types::{AuthorityName, ObjectID, random_object_ref},
@@ -44,19 +46,21 @@ use tokio::time::{Duration, sleep};
 // Mock AuthorityAPI for testing transaction submission.
 #[derive(Clone)]
 struct MockAuthority {
-    _name: AuthorityName,
+    name: AuthorityName,
     submit_responses: Arc<StdMutex<HashMap<TransactionDigest, Result<SubmitTxResult, SuiError>>>>,
     response_delays: Arc<StdMutex<Option<Duration>>>,
     submission_count: Arc<AtomicUsize>,
+    health_check_count: Arc<AtomicUsize>,
 }
 
 impl MockAuthority {
     fn new(name: AuthorityName) -> Self {
         Self {
-            _name: name,
+            name,
             submit_responses: Arc::new(StdMutex::new(HashMap::new())),
             response_delays: Arc::new(StdMutex::new(None)),
             submission_count: Arc::new(AtomicUsize::new(0)),
+            health_check_count: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -177,6 +181,7 @@ impl AuthorityAPI for MockAuthority {
         &self,
         _request: ValidatorHealthRequest,
     ) -> Result<ValidatorHealthResponse, SuiError> {
+        self.health_check_count.fetch_add(1, Ordering::Relaxed);
         Ok(ValidatorHealthResponse::default())
     }
 }
@@ -521,4 +526,242 @@ fn owned_object_conflict_is_retriable_and_not_a_validator_error() {
     assert!(!super::is_validator_error(&decoded));
     assert_eq!(decoded.categorize(), ErrorCategory::Aborted);
     assert!(decoded.categorize().is_submission_retriable());
+}
+
+/// How a mock validator returns a rejection.
+#[derive(Clone, Copy, Debug)]
+enum RejectionPath {
+    /// The submit RPC fails with the error.
+    RpcError,
+    /// The submit RPC succeeds with a per-transaction `Rejected` result.
+    RejectedResult,
+}
+
+const REJECTION_PATHS: [RejectionPath; 2] =
+    [RejectionPath::RpcError, RejectionPath::RejectedResult];
+
+/// A driver whose validators all reject one unrestricted transaction with `error`.
+struct RejectingNetwork {
+    authority_aggregator: Arc<AuthorityAggregator<MockAuthority>>,
+    mock_authorities: Vec<Arc<MockAuthority>>,
+    client_monitor: Arc<ValidatorClientMonitor<MockAuthority>>,
+    request: SubmitTxRequest,
+}
+
+impl RejectingNetwork {
+    fn new(error: SuiErrorKind, path: RejectionPath) -> Self {
+        let reference_gas_price = 1000;
+        let (authority_aggregator, mock_authorities) =
+            create_test_authority_aggregator_with_rgp(reference_gas_price);
+        let authority_aggregator = Arc::new(authority_aggregator);
+        // The health-round test assumes a 10s interval between scheduled rounds.
+        let config = ValidatorClientMonitorConfig {
+            health_check_interval: Duration::from_secs(10),
+            ..Default::default()
+        };
+        let client_monitor = ValidatorClientMonitor::new(
+            config,
+            Arc::new(ValidatorClientMetrics::new_for_tests()),
+            Arc::new(ArcSwap::new(authority_aggregator.clone())),
+        );
+        let request = create_test_submit_request(reference_gas_price);
+        let tx_digest = *request.transaction.as_ref().unwrap().digest();
+        let response = match path {
+            RejectionPath::RpcError => Err(error.into()),
+            RejectionPath::RejectedResult => Ok(SubmitTxResult::Rejected {
+                error: error.into(),
+            }),
+        };
+        for mock_authority in &mock_authorities {
+            mock_authority.set_submit_response(tx_digest, response.clone());
+        }
+        Self {
+            authority_aggregator,
+            mock_authorities,
+            client_monitor,
+            request,
+        }
+    }
+
+    async fn submit(&self) {
+        let submitter =
+            TransactionSubmitter::new(Arc::new(TransactionDriverMetrics::new_for_tests()));
+        let result = submitter
+            .submit_transaction(
+                &self.authority_aggregator,
+                &self.client_monitor,
+                TxType::SingleWriter,
+                1,
+                self.request.clone(),
+                &SubmitTransactionOptions::default(),
+            )
+            .await;
+        // Each rejection is retriable, so the driver tries every validator once and then
+        // aborts instead of treating the transaction as rejected.
+        assert!(
+            matches!(result, Err(TransactionDriverError::Aborted { .. })),
+            "{result:?}"
+        );
+        for mock_authority in &self.mock_authorities {
+            assert_eq!(mock_authority.get_submission_count(), 1);
+        }
+    }
+
+    /// The reliability of each validator the submission reached.
+    fn contacted_reliabilities(&self) -> Vec<f64> {
+        let reliabilities: Vec<_> = self
+            .mock_authorities
+            .iter()
+            .filter(|mock_authority| mock_authority.get_submission_count() > 0)
+            .map(|mock_authority| {
+                // A validator with no recorded interaction has no failure either.
+                if !self
+                    .client_monitor
+                    .has_validator_stats(&mock_authority.name)
+                {
+                    return 1.0;
+                }
+                self.client_monitor
+                    .get_client_stats_for_test(&mock_authority.name)
+                    .reliability
+                    .get()
+            })
+            .collect();
+        assert!(!reliabilities.is_empty());
+        reliabilities
+    }
+
+    /// Whether a submit interaction was recorded as a success at any validator. A success
+    /// records the latency of the submission, which a failure does not.
+    fn recorded_submit_success(&self) -> bool {
+        self.mock_authorities.iter().any(|mock_authority| {
+            self.client_monitor
+                .has_validator_stats(&mock_authority.name)
+                && self
+                    .client_monitor
+                    .get_client_stats_for_test(&mock_authority.name)
+                    .average_latencies
+                    .keys()
+                    .any(|(operation, _)| *operation == OperationType::Submit)
+        })
+    }
+
+    fn health_checks(&self) -> usize {
+        self.mock_authorities
+            .iter()
+            .map(|mock_authority| mock_authority.health_check_count.load(Ordering::Relaxed))
+            .sum()
+    }
+}
+
+fn staggering_rejections() -> [SuiErrorKind; 2] {
+    [
+        SuiErrorKind::StaggeredSubmissionNotProposer,
+        SuiErrorKind::StaggeredSubmissionHoldQuotaFull,
+    ]
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_staggering_rejections_are_not_faults() {
+    for error in staggering_rejections() {
+        for path in REJECTION_PATHS {
+            let network = RejectingNetwork::new(error.clone(), path);
+            network.submit().await;
+            for reliability in network.contacted_reliabilities() {
+                assert_eq!(reliability, 1.0, "{error} via {path:?} lowered reliability");
+            }
+            assert!(
+                !network.recorded_submit_success(),
+                "{error} via {path:?} was recorded as a success"
+            );
+        }
+    }
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_staggering_rejections_request_health_round() {
+    // The first scheduled health round runs immediately and the next one 10s later. A
+    // requested round runs 2s after the previous round.
+    let wait = Duration::from_secs(3);
+    for path in REJECTION_PATHS {
+        for error in staggering_rejections() {
+            let network = RejectingNetwork::new(error.clone(), path);
+            sleep(Duration::from_millis(100)).await;
+            let before = network.health_checks();
+            network.submit().await;
+            sleep(wait).await;
+            assert!(
+                network.health_checks() > before,
+                "{error} via {path:?} did not request a health round"
+            );
+        }
+
+        // Other rejections request no round.
+        for error in [
+            SuiErrorKind::ValidatorOverloadedRetryAfter {
+                retry_after_secs: 1,
+            },
+            SuiErrorKind::TransactionProcessing {
+                digest: TransactionDigest::random(),
+                status: "executing".to_string(),
+            },
+            SuiErrorKind::TransactionSubmitted {
+                digest: TransactionDigest::random(),
+            },
+        ] {
+            let network = RejectingNetwork::new(error.clone(), path);
+            sleep(Duration::from_millis(100)).await;
+            let before = network.health_checks();
+            network.submit().await;
+            sleep(wait).await;
+            assert_eq!(
+                network.health_checks(),
+                before,
+                "{error} via {path:?} requested a health round"
+            );
+        }
+    }
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_duplicate_suppression_is_not_a_fault() {
+    for path in REJECTION_PATHS {
+        for error in [
+            SuiErrorKind::TransactionProcessing {
+                digest: TransactionDigest::random(),
+                status: "executing".to_string(),
+            },
+            SuiErrorKind::TransactionSubmitted {
+                digest: TransactionDigest::random(),
+            },
+        ] {
+            let network = RejectingNetwork::new(error.clone(), path);
+            network.submit().await;
+            for reliability in network.contacted_reliabilities() {
+                assert_eq!(reliability, 1.0, "{error} via {path:?} lowered reliability");
+            }
+            assert!(
+                !network.recorded_submit_success(),
+                "{error} via {path:?} was recorded as a success"
+            );
+        }
+
+        // Faults still count: an overload, and an Aborted-category error, the
+        // category the duplicate-suppression errors share. A held entry can still be
+        // outbid or find the pool full, and those rejections count too.
+        for error in [
+            SuiErrorKind::ValidatorOverloadedRetryAfter {
+                retry_after_secs: 1,
+            },
+            SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: 0 },
+            SuiErrorKind::TooManyTransactionsPendingConsensus,
+            SuiErrorKind::RpcError("connection reset".to_string(), "Unknown".to_string()),
+        ] {
+            let network = RejectingNetwork::new(error.clone(), path);
+            network.submit().await;
+            for reliability in network.contacted_reliabilities() {
+                assert!(reliability < 1.0, "{error} via {path:?} did not count");
+            }
+        }
+    }
 }
