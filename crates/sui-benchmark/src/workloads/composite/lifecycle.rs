@@ -194,6 +194,15 @@ pub(super) trait Lifecycle: Send + Sync + std::fmt::Debug {
     /// of them concurrently in one batch.
     fn next_step(&mut self, ctx: &StepContext) -> Vec<LifecycleCall>;
 
+    /// An owned object whose current version must be read before another step can run.
+    fn object_to_refresh(&self) -> Option<ObjectID> {
+        None
+    }
+
+    /// Restores an owned input after an uncertain transaction outcome. The caller checks
+    /// that the object is still owned by the payload sender.
+    fn refresh_object(&mut self, _object: ObjectRef) {}
+
     /// Updates the lifecycle from the result of a tx that carried one of its calls. Sampled
     /// ops in the same PTB can abort or reject the tx, so implementations should advance from
     /// the effects on the tracked objects rather than from the tx status.

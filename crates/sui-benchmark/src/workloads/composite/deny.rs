@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use mysten_common::assert_reachable;
-use sui_types::base_types::{ObjectRef, SequenceNumber, SuiAddress};
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::transaction::{CallArg, ObjectArg};
-use tracing::debug;
+use tracing::info;
 
 use super::lifecycle::{
     Lifecycle, LifecycleCall, LifecycleStep, StepContext, find_object, pure, shared_mut,
@@ -31,6 +31,8 @@ pub(super) struct DenyLifecycle {
     start_probability: f64,
     /// `None` once the cap's version is unknown.
     cap: Option<ObjectRef>,
+    cap_id: ObjectID,
+    retry_pending: bool,
     deny_list_initial_shared_version: SequenceNumber,
     target: SuiAddress,
     denied: bool,
@@ -48,6 +50,8 @@ impl DenyLifecycle {
         Self {
             start_probability,
             cap: Some(cap),
+            cap_id: cap.0,
+            retry_pending: false,
             deny_list_initial_shared_version,
             target,
             denied: false,
@@ -62,12 +66,16 @@ impl DenyLifecycle {
 
 impl Lifecycle for DenyLifecycle {
     fn max_step_calls(&self) -> usize {
-        if self.waiting_while_denied() { 0 } else { 1 }
+        if self.cap.is_none() || self.waiting_while_denied() {
+            0
+        } else {
+            1
+        }
     }
 
     /// Each step is one tx, and the address stays denied until the undeny step.
     fn in_progress(&self) -> bool {
-        self.denied && self.cap.is_some()
+        self.denied || self.retry_pending || self.cap.is_none()
     }
 
     fn start_probability(&self) -> f64 {
@@ -79,13 +87,17 @@ impl Lifecycle for DenyLifecycle {
     }
 
     fn next_step(&mut self, _ctx: &StepContext) -> Vec<LifecycleCall> {
+        let Some(cap) = self.cap else {
+            return vec![];
+        };
         if self.waiting_while_denied() {
             self.denied_batches += 1;
+            info!(
+                batches = self.denied_batches,
+                "TEST_COIN partner remains denied"
+            );
             return vec![];
         }
-        let cap = self
-            .cap
-            .expect("a deny step starts only while the cap is known");
         let (function, op, step) = if self.denied {
             ("undeny", TEST_COIN_UNDENY, DenyStep::Undeny)
         } else {
@@ -107,6 +119,17 @@ impl Lifecycle for DenyLifecycle {
         )]
     }
 
+    fn object_to_refresh(&self) -> Option<ObjectID> {
+        self.cap.is_none().then_some(self.cap_id)
+    }
+
+    fn refresh_object(&mut self, object: ObjectRef) {
+        if self.cap.is_none() && object.0 == self.cap_id {
+            info!(cap = ?object, denied = self.denied, "recovered TEST_COIN deny cap");
+            self.cap = Some(object);
+        }
+    }
+
     fn handle_result(&mut self, step: LifecycleStep, status: &BatchedTransactionStatus) {
         let LifecycleStep::Deny(step) = step else {
             unreachable!("step {step:?} routed to the deny lifecycle");
@@ -116,11 +139,15 @@ impl Lifecycle for DenyLifecycle {
         };
         let effects = match status {
             BatchedTransactionStatus::Success { effects } => effects,
-            BatchedTransactionStatus::PermanentFailure { .. } => return,
-            BatchedTransactionStatus::RetriableFailure { .. }
+            BatchedTransactionStatus::PermanentFailure { .. }
+            | BatchedTransactionStatus::RetriableFailure { .. }
             | BatchedTransactionStatus::UnknownRejection => {
-                debug!("deny tx outcome unknown, the deny cap is lost");
+                // Even a rejection can follow an earlier, uncertain attempt that consumed
+                // this version. Read the cap again, then retry the same idempotent deny or
+                // undeny operation rather than abandoning the only deny-cap owner.
+                info!(?step, cap = ?cap, "refreshing TEST_COIN deny cap after unsuccessful submission");
                 self.cap = None;
+                self.retry_pending = true;
                 return;
             }
         };
@@ -129,15 +156,18 @@ impl Lifecycle for DenyLifecycle {
         if !effects.is_ok() {
             return;
         }
+        self.retry_pending = false;
         match step {
             DenyStep::Deny => {
                 assert_reachable!("partner address denied for TEST_COIN");
                 self.denied = true;
                 self.denied_batches = 0;
+                info!(cap = ?self.cap, "TEST_COIN partner denied; starting denied batch window");
             }
             DenyStep::Undeny => {
                 assert_reachable!("partner address undenied for TEST_COIN");
                 self.denied = false;
+                info!(cap = ?self.cap, "TEST_COIN partner undenied");
             }
         }
     }
@@ -172,6 +202,91 @@ mod tests {
         }
         assert_eq!(lifecycle.max_step_calls(), 1);
         assert_eq!(lifecycle.op_of_next_step(&ctx), Some(TEST_COIN_UNDENY));
+    }
+
+    #[test]
+    fn unsuccessful_steps_recover_the_cap_and_retry_without_advancing() {
+        for denied in [false, true] {
+            for status in [
+                BatchedTransactionStatus::UnknownRejection,
+                BatchedTransactionStatus::RetriableFailure {
+                    error: "expired".to_owned(),
+                },
+                BatchedTransactionStatus::PermanentFailure {
+                    error: "stale cap after an uncertain attempt".to_owned(),
+                },
+            ] {
+                let cap = random_object_ref();
+                let mut lifecycle = DenyLifecycle::new(
+                    0.05,
+                    cap,
+                    SequenceNumber::from_u64(1),
+                    SuiAddress::random_for_testing_only(),
+                );
+                let ctx = StepContext {
+                    sender: SuiAddress::random_for_testing_only(),
+                    partner: SuiAddress::random_for_testing_only(),
+                };
+                lifecycle.denied = denied;
+                lifecycle.denied_batches = DENIED_BATCHES;
+                let step = if denied {
+                    DenyStep::Undeny
+                } else {
+                    DenyStep::Deny
+                };
+                lifecycle.handle_result(LifecycleStep::Deny(step), &status);
+
+                assert_eq!(lifecycle.object_to_refresh(), Some(cap.0));
+                assert!(lifecycle.in_progress());
+                assert_eq!(lifecycle.max_step_calls(), 0);
+                assert!(lifecycle.next_step(&ctx).is_empty());
+                assert_eq!(lifecycle.denied, denied);
+                assert_eq!(lifecycle.denied_batches, DENIED_BATCHES);
+
+                let refreshed = (cap.0, cap.1.next(), random_object_ref().2);
+                lifecycle.refresh_object(refreshed);
+                assert_eq!(lifecycle.object_to_refresh(), None);
+                assert_eq!(lifecycle.cap, Some(refreshed));
+                assert!(lifecycle.in_progress());
+                assert_eq!(lifecycle.max_step_calls(), 1);
+                let calls = lifecycle.next_step(&ctx);
+                assert_eq!(
+                    calls[0].op,
+                    if denied {
+                        TEST_COIN_UNDENY
+                    } else {
+                        TEST_COIN_DENY
+                    }
+                );
+                let super::super::lifecycle::LifecycleCommand::MoveCall { args, .. } =
+                    &calls[0].command
+                else {
+                    panic!("deny steps must be Move calls");
+                };
+                assert!(
+                    matches!(args[1], CallArg::Object(ObjectArg::ImmOrOwnedObject(input)) if input == refreshed)
+                );
+                assert_eq!(lifecycle.denied, denied);
+            }
+        }
+    }
+
+    #[test]
+    fn recovery_rejects_an_unrelated_object() {
+        let cap = random_object_ref();
+        let mut lifecycle = DenyLifecycle::new(
+            0.05,
+            cap,
+            SequenceNumber::from_u64(1),
+            SuiAddress::random_for_testing_only(),
+        );
+        lifecycle.handle_result(
+            LifecycleStep::Deny(DenyStep::Deny),
+            &BatchedTransactionStatus::UnknownRejection,
+        );
+        lifecycle.refresh_object(random_object_ref());
+        assert_eq!(lifecycle.object_to_refresh(), Some(cap.0));
+        assert!(lifecycle.cap.is_none());
     }
 
     impl DenyLifecycle {

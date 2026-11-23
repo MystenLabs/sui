@@ -1454,6 +1454,22 @@ impl Payload for CompositePayload {
             sender,
             partner: self.partner_address,
         };
+        // Only lifecycles with an uncertain owned-input version request a read. Bound
+        // each attempt so an unavailable fullnode does not stall this payload indefinitely;
+        // a failed attempt leaves the lifecycle pending for the next batch.
+        for lifecycle in &mut self.lifecycles {
+            if let Some(id) = lifecycle.object_to_refresh()
+                && let Ok(Ok(object)) = tokio::time::timeout(
+                    std::time::Duration::from_secs(5),
+                    self.fullnode_proxies[0].get_object(id),
+                )
+                .await
+                && object.id() == id
+                && object.owner == Owner::AddressOwner(sender)
+            {
+                lifecycle.refresh_object(object.compute_object_reference());
+            }
+        }
         let mut lifecycle_calls = vec![];
         for index in choose_lifecycles(&self.lifecycles, max_normal_batch) {
             let max_calls = self.lifecycles[index].max_step_calls();
