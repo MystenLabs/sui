@@ -48,7 +48,8 @@ use sui_types::utils::{
 };
 use sui_types::{
     MOVE_STDLIB_PACKAGE_ID, SUI_CLOCK_OBJECT_ID, SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-    SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_FRAMEWORK_PACKAGE_ID, SUI_FREEZE_LIST_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_ID,
     base_types::{FullObjectRef, dbg_addr},
     crypto::{AccountKeyPair, AuthorityKeyPair},
     crypto::{Signature, get_key_pair},
@@ -2813,6 +2814,59 @@ async fn test_forwarding_registry_input_requires_feature() {
                     UserInputError::try_from(result.unwrap_err()).unwrap(),
                     UserInputError::ImmutableParameterExpectedError {
                         object_id: SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+                    },
+                );
+            }
+        }
+    }
+}
+
+#[sim_test]
+async fn test_freeze_list_input_requires_feature() {
+    for enabled in [false, true] {
+        let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+        let gas = Object::with_owner_for_testing(sender);
+        let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+        config.set_enable_coin_regulation_for_testing(enabled);
+        let authority = TestAuthorityBuilder::new()
+            .with_starting_objects(std::slice::from_ref(&gas))
+            .with_protocol_config(config)
+            .build()
+            .await;
+        let freeze_list = authority.get_object(&SUI_FREEZE_LIST_OBJECT_ID).unwrap();
+        let Owner::Shared {
+            initial_shared_version,
+        } = freeze_list.owner
+        else {
+            panic!("the freeze list must be shared");
+        };
+        for mutability in [
+            SharedObjectMutability::Mutable,
+            SharedObjectMutability::Immutable,
+        ] {
+            let mut builder = TestTransactionBuilder::new(
+                sender,
+                gas.compute_object_reference(),
+                authority.reference_gas_price_for_testing().unwrap(),
+            )
+            .transfer_sui(Some(1), dbg_addr(2));
+            builder
+                .ptb_builder_mut()
+                .obj(ObjectArg::SharedObject {
+                    id: SUI_FREEZE_LIST_OBJECT_ID,
+                    initial_shared_version,
+                    mutability,
+                })
+                .unwrap();
+            let transaction = to_sender_signed_transaction(builder.build(), &sender_key);
+            let result = handle_transaction_for_test(&authority, transaction);
+            if enabled {
+                result.unwrap();
+            } else {
+                assert_eq!(
+                    UserInputError::try_from(result.unwrap_err()).unwrap(),
+                    UserInputError::ImmutableParameterExpectedError {
+                        object_id: SUI_FREEZE_LIST_OBJECT_ID,
                     },
                 );
             }
