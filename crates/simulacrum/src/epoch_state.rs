@@ -174,9 +174,9 @@ impl EpochState {
         )?;
 
         // Run the transaction input checks that would run when submitting the txn to a validator
-        // for signing. The guardrails check runs first, as in simulation: the input checks see the
-        // added policy input and would refuse a gasless transaction for having a shared input
-        // instead of for its sender's policy.
+        // for signing. Unlike at validator signing, the inputs here include the added policy, so
+        // the guardrails check runs first: the input checks would refuse a gasless transaction for
+        // having a shared input instead of for its sender's policy.
         sui_transaction_checks::guardrails::check_guardrails_for_signing(
             &self.protocol_config,
             self.epoch_start_state.epoch(),

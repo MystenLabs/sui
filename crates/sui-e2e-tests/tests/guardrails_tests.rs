@@ -51,8 +51,6 @@ fn sui() -> TypeTag {
     GAS::type_tag()
 }
 
-/// Asserts that execution failed the transaction because `account`'s budget of `coin_type` had
-/// no room.
 /// Returns the SUI entry of a policy's limits or spend, keyed as `std::type_name` prints the type.
 fn sui_entry(map: &VecMap<String, u64>) -> u64 {
     map.get(&sui().to_canonical_string(/* with_prefix */ false))
@@ -60,6 +58,8 @@ fn sui_entry(map: &VecMap<String, u64>) -> u64 {
         .unwrap_or(0)
 }
 
+/// Asserts that execution failed the transaction because `account`'s budget of `coin_type` had
+/// no room.
 fn assert_over_budget(effects: &TransactionEffects, account: SuiAddress, coin_type: &TypeTag) {
     let ExecutionStatus::Failure(ExecutionFailure {
         error:

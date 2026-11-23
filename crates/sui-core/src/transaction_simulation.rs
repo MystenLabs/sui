@@ -175,8 +175,9 @@ pub fn simulate_transaction(
             validity_check_context.reference_gas_price,
         )?
     } else {
-        // Before the input checks, which see the added policy input and would refuse a gasless
-        // transaction for having a shared input instead of for its sender's policy.
+        // Unlike at validator signing, the inputs here include the added policy, so the guardrails
+        // check runs before the input checks, which would refuse a gasless transaction for having
+        // a shared input instead of for its sender's policy.
         check_guardrails_for_signing(
             protocol_config,
             execution_epoch_id,
