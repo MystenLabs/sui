@@ -51,6 +51,7 @@ pub mod display;
 pub mod display_registry;
 pub mod dynamic_field;
 pub mod effects;
+pub mod encrypted_bundle;
 pub mod epoch_data;
 pub mod event;
 pub mod executable_transaction;
