@@ -329,6 +329,7 @@ impl ConsensusManager {
                 ),
                 config.max_queue_age(),
                 config.max_pending_user_bytes(),
+                config.staggered_held_quota_percent(),
                 context.metrics().clone(),
                 context.adapter_metrics().clone(),
             ));

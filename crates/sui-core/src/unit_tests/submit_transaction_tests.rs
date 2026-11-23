@@ -1831,3 +1831,297 @@ async fn test_pool_mode_reports_owned_object_conflict_per_transaction() {
         other => panic!("expected the second transaction to be rejected, got: {other:?}"),
     }
 }
+
+// A submission refused because the validator's held submissions are at capacity is not recorded
+// as recently submitted, so a resubmission within the dedup window is handled afresh instead of
+// being suppressed as a duplicate.
+#[sim_test]
+async fn test_hold_quota_rejection_does_not_suppress_resubmission() {
+    use crate::consensus_adapter::consensus_tests::test_user_transaction;
+    use crate::staggered_submission::{StaggerParams, stagger_seed, stagger_slot};
+    use sui_protocol_config::ProtocolConfig;
+    use sui_types::base_types::ObjectID;
+    use sui_types::crypto::deterministic_random_account_key;
+    use sui_types::transaction::MAX_UNPAID_ALLOWED_PROPOSERS;
+
+    telemetry_subscribers::init_for_testing();
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut c| {
+        c.set_allowed_proposers_for_testing(true);
+        c
+    });
+
+    // With ten equal-stake validators, slot `MAX_UNPAID_ALLOWED_PROPOSERS` is held. Each
+    // candidate gas object lands there with odds 1/10. The test needs four such objects, and
+    // 256 candidates make a miss negligible (about 1e-8 per seed).
+    let (sender, keypair) = deterministic_random_account_key();
+    let candidates: Vec<Object> = (0..256)
+        .map(|_| Object::with_id_owner_for_testing(ObjectID::random(), sender))
+        .collect();
+    let network_config =
+        sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+            .committee_size(NonZeroUsize::new(10).unwrap())
+            .with_objects(candidates.clone())
+            .build();
+    // A long dedup window keeps the test from passing when wall-clock time expires the entry
+    // between attempts.
+    let state = TestAuthorityBuilder::new()
+        .with_network_config(&network_config, 0)
+        .with_recent_submission_dedup_window_ms(600_000)
+        .build()
+        .await;
+    let epoch_store = state.epoch_store_for_testing().clone();
+    let slot_of = |object: &Object| {
+        let seed = stagger_seed(&[object.id()], &[], epoch_store.epoch());
+        stagger_slot(
+            &seed,
+            epoch_store.committee(),
+            epoch_store.own_committee_index().unwrap(),
+        )
+    };
+    let (held, mut others): (Vec<Object>, Vec<Object>) = candidates
+        .into_iter()
+        .partition(|object| slot_of(object) == MAX_UNPAID_ALLOWED_PROPOSERS);
+    let mut held_gas = held.into_iter();
+    let free_gas_index = others
+        .iter()
+        .position(|object| slot_of(object) < MAX_UNPAID_ALLOWED_PROPOSERS)
+        .expect("no free-slot gas object");
+    let free_gas = others.swap_remove(free_gas_index);
+    let extra_input = others.pop().expect("no extra input object");
+
+    // Capacity 3 gives a held quota of 2 entries (75% of 3, rounded down).
+    let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+    let pool = Arc::new(ConsensusTransactionPool::new_for_tests(
+        epoch_store.clone(),
+        state.get_cache_writer().clone(),
+        3,
+        metrics.clone(),
+    ));
+    let context = Arc::new(TransactionPoolContext::new_for_tests(
+        metrics.clone(),
+        state.get_cache_writer().clone(),
+    ));
+    context.set_active(epoch_store.epoch(), pool.clone());
+    let service = ValidatorService::new(
+        state.clone(),
+        make_consensus_adapter_for_test(state.clone(), HashSet::new(), false, vec![]),
+        Arc::new(ValidatorServiceMetrics::new_for_tests()),
+        Some(ClientIdSource::XForwardedFor(1)),
+        UserSubmissionPath::Pool(context),
+    );
+
+    let staggered = epoch_store.staggered_submission();
+    staggered.set_params_for_testing(StaggerParams {
+        step: Duration::from_secs(60),
+        max_delay: Duration::from_secs(60),
+    });
+    staggered.set_active(true);
+
+    // Fill the held quota directly through the pool, because a held submission does not return
+    // before its delay elapses.
+    let mut receivers = Vec::new();
+    for _ in 0..2 {
+        let gas = held_gas.next().expect("not enough held-slot gas objects");
+        let tx = test_user_transaction(&state, sender, &keypair, gas, vec![]).await;
+        let consensus_tx =
+            ConsensusTransaction::new_user_transaction_v2_message(&state.name, tx.into());
+        let (receiver, _) = pool
+            .try_insert(pool.epoch(), 1, vec![consensus_tx])
+            .unwrap();
+        receivers.push(receiver);
+    }
+
+    let mut transactions: Vec<Transaction> = Vec::new();
+    for _ in 0..2 {
+        let gas = held_gas.next().expect("not enough held-slot gas objects");
+        let transaction = test_user_transaction(&state, sender, &keypair, gas, vec![])
+            .await
+            .into_tx()
+            .into_inner();
+        transactions.push(transaction);
+    }
+    let submit = |transactions: &[Transaction]| {
+        let request = RawSubmitTxRequest {
+            transactions: transactions
+                .iter()
+                .map(|transaction| bcs::to_bytes(transaction).unwrap().into())
+                .collect(),
+            ..Default::default()
+        };
+        service.handle_submit_transaction(sui_network::tonic::Request::new(request))
+    };
+
+    // A request with both transactions submits each as its own group, and both groups reach
+    // the full quota. Each transaction is then resubmitted on its own within the dedup window.
+    // Without the release, a resubmission would be suppressed with a per-transaction
+    // `TransactionSubmitted` instead of reaching the quota again. Resubmitting the second
+    // transaction covers a refused group after the first refused group of a request.
+    for (attempt, request) in [&transactions[..], &transactions[1..], &transactions[..1]]
+        .into_iter()
+        .enumerate()
+    {
+        let status = submit(request)
+            .await
+            .expect_err("a submission at the full hold quota must fail the request");
+        let error = SuiError::from(status);
+        assert!(
+            matches!(
+                error.as_inner(),
+                SuiErrorKind::StaggeredSubmissionHoldQuotaFull
+            ),
+            "attempt {attempt}: unexpected error: {error}"
+        );
+    }
+
+    // A group refused for an owned object conflict is released too, also when an earlier
+    // group of the request fails the whole request. `holder` queues the free-slot gas object
+    // at the highest priority, so `conflicting` conflicts with it on every attempt.
+    let holder = test_user_transaction(&state, sender, &keypair, free_gas.clone(), vec![]).await;
+    let (holder_receiver, _) = pool
+        .try_insert(
+            pool.epoch(),
+            u64::MAX,
+            vec![ConsensusTransaction::new_user_transaction_v2_message(
+                &state.name,
+                holder.into(),
+            )],
+        )
+        .unwrap();
+    receivers.push(holder_receiver);
+    let conflicting = test_user_transaction(&state, sender, &keypair, free_gas, vec![extra_input])
+        .await
+        .into_tx()
+        .into_inner();
+
+    let status = submit(&[transactions[0].clone(), conflicting.clone()])
+        .await
+        .expect_err("the refused first group must fail the request");
+    let error = SuiError::from(status);
+    assert!(
+        matches!(
+            error.as_inner(),
+            SuiErrorKind::StaggeredSubmissionHoldQuotaFull
+        ),
+        "unexpected error: {error}"
+    );
+
+    // Without the release, the resubmission would be suppressed with `TransactionSubmitted`.
+    let response: SubmitTxResponse = submit(&[conflicting])
+        .await
+        .unwrap()
+        .0
+        .into_inner()
+        .try_into()
+        .unwrap();
+    match &response.results[..] {
+        [SubmitTxResult::Rejected { error }] => assert!(
+            matches!(error.as_inner(), SuiErrorKind::OwnedObjectConflict { .. }),
+            "unexpected rejection: {error}"
+        ),
+        results => panic!("unexpected results: {results:?}"),
+    }
+
+    drop(receivers);
+    pool.close();
+}
+
+fn decode_submit_response(results: Vec<SubmitTxResult>) -> Vec<SubmitTxResult> {
+    let raw =
+        ValidatorService::try_from_submit_tx_response(results.into_iter().map(Some).collect())
+            .unwrap();
+    // `SubmitTxResponse` accepts one result per response, so the results are decoded one at
+    // a time, as a client decodes them.
+    raw.results
+        .into_iter()
+        .map(|result| SubmitTxResult::try_from(result).unwrap())
+        .collect()
+}
+
+fn test_consensus_position() -> ConsensusPosition {
+    ConsensusPosition {
+        epoch: 0,
+        block: BlockRef::MIN,
+        index: 1,
+    }
+}
+
+#[test]
+fn submit_response_conversion_keeps_other_results() {
+    let overloaded: SuiError = SuiErrorKind::ValidatorOverloadedRetryAfter {
+        retry_after_secs: 5,
+    }
+    .into();
+    let conflict: SuiError = SuiErrorKind::OwnedObjectConflict {
+        object_id: sui_types::base_types::ObjectID::ZERO,
+    }
+    .into();
+    let results = decode_submit_response(vec![
+        SubmitTxResult::Submitted {
+            consensus_position: test_consensus_position(),
+        },
+        SubmitTxResult::Rejected {
+            error: overloaded.clone(),
+        },
+        SubmitTxResult::Rejected {
+            error: conflict.clone(),
+        },
+    ]);
+    match &results[..] {
+        [
+            SubmitTxResult::Submitted { consensus_position },
+            SubmitTxResult::Rejected { error: first },
+            SubmitTxResult::Rejected { error: second },
+        ] => {
+            assert_eq!(*consensus_position, test_consensus_position());
+            assert_eq!(first, &overloaded);
+            assert_eq!(second, &conflict);
+        }
+        results => panic!("unexpected results: {results:?}"),
+    }
+}
+
+// In tests `debug_fatal!` panics, so a per-transaction hold-quota rejection fails the test.
+#[test]
+#[should_panic(expected = "StaggeredSubmissionHoldQuotaFull in a per-transaction rejection")]
+fn per_transaction_hold_quota_rejection_is_fatal_in_tests() {
+    decode_submit_response(vec![SubmitTxResult::Rejected {
+        error: SuiErrorKind::StaggeredSubmissionHoldQuotaFull.into(),
+    }]);
+}
+
+// Simtests can intercept `debug_fatal!`, which then behaves as in a release build: the
+// rejection is replaced with an error that released clients decode.
+#[cfg(msim)]
+#[sim_test]
+async fn per_transaction_hold_quota_rejection_is_replaced() {
+    let fired = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let fired_in_handler = fired.clone();
+    mysten_common::register_debug_fatal_handler!(
+        "StaggeredSubmissionHoldQuotaFull in a per-transaction rejection",
+        move || fired_in_handler.store(true, Ordering::Relaxed)
+    );
+    let results = decode_submit_response(vec![
+        SubmitTxResult::Submitted {
+            consensus_position: test_consensus_position(),
+        },
+        SubmitTxResult::Rejected {
+            error: SuiErrorKind::StaggeredSubmissionHoldQuotaFull.into(),
+        },
+    ]);
+    assert!(fired.load(Ordering::Relaxed));
+    match &results[..] {
+        [
+            SubmitTxResult::Submitted { consensus_position },
+            SubmitTxResult::Rejected { error },
+        ] => {
+            assert_eq!(*consensus_position, test_consensus_position());
+            assert_eq!(
+                error.as_inner(),
+                &SuiErrorKind::ValidatorOverloadedRetryAfter {
+                    retry_after_secs: 1
+                }
+            );
+        }
+        results => panic!("unexpected results: {results:?}"),
+    }
+}

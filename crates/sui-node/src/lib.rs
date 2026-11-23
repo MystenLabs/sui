@@ -501,6 +501,7 @@ impl SuiNode {
         if let Some(prober_config) = &config.address_prober {
             prober_config.validate()?;
         }
+        config.consensus_transaction_pool.validate()?;
 
         let mut config = config.clone();
         if config.supported_protocol_versions.is_none() {

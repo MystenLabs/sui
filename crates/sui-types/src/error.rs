@@ -842,8 +842,8 @@ pub enum SuiErrorKind {
     #[error("Transaction {digest} has been recently submitted to this validator.")]
     TransactionSubmitted { digest: TransactionDigest },
 
-    // Appended last: errors travel BCS-encoded in RPC status details, and older clients
-    // must keep decoding every earlier variant.
+    // Errors travel BCS-encoded in RPC status details, and older clients must keep
+    // decoding every earlier variant. New variants therefore go at the end of the enum.
     #[error(
         "This validator is outside the transaction's staggered-submission proposer set; submit to one of its proposers."
     )]
@@ -857,6 +857,17 @@ pub enum SuiErrorKind {
         "Another transaction pending at this validator uses owned object {object_id} at an equal or higher gas price."
     )]
     OwnedObjectConflict { object_id: ObjectID },
+
+    // Validators return this variant only as a whole-request error, never inside a per-transaction
+    // `SubmitTxResult::Rejected`: a client that cannot decode the variant there fails to
+    // decode the whole response and treats it as a non-retriable error. The validator's
+    // `ValidatorService::without_undecodable_rejection` enforces this. A client without the
+    // variant decodes the whole-request error as a retriable `RpcError`, whose category is
+    // `Aborted` instead of `ValidatorOverloaded`, so that client skips the overload backoff.
+    #[error(
+        "This validator would hold the transaction for staggered submission, but its held submissions are at capacity; the transaction can be retried."
+    )]
+    StaggeredSubmissionHoldQuotaFull,
 }
 
 #[repr(u64)]
@@ -1086,6 +1097,7 @@ impl SuiErrorKind {
 
             // Retriable at another validator: one of the transaction's proposers.
             SuiErrorKind::StaggeredSubmissionNotProposer => true,
+            SuiErrorKind::StaggeredSubmissionHoldQuotaFull => true,
 
             // The transaction becomes valid at its `min_timestamp`.
             SuiErrorKind::TransactionNotYetValid { .. } => true,
@@ -1190,9 +1202,10 @@ impl SuiErrorKind {
             | SuiErrorKind::TooOldTransactionPendingOnObject { .. }
             | SuiErrorKind::TooManyTransactionsPendingConsensus
             | SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { .. }
-            | SuiErrorKind::ValidatorOverloadedRetryAfter { .. } => {
-                ErrorCategory::ValidatorOverloaded
-            }
+            | SuiErrorKind::ValidatorOverloadedRetryAfter { .. }
+            // The validator's held submissions are at capacity. A full hold quota is a
+            // capacity limit, so clients back off as from an overloaded validator.
+            | SuiErrorKind::StaggeredSubmissionHoldQuotaFull => ErrorCategory::ValidatorOverloaded,
 
             SuiErrorKind::TimeoutError => ErrorCategory::Unavailable,
 
@@ -1533,5 +1546,99 @@ impl ErrorCategory {
                 | ErrorCategory::ValidatorOverloaded
                 | ErrorCategory::Unavailable
         )
+    }
+}
+
+#[cfg(test)]
+mod staggered_submission_error_tests {
+    use super::*;
+
+    #[test]
+    fn hold_quota_full_is_a_retriable_overload() {
+        let error: SuiError = SuiErrorKind::StaggeredSubmissionHoldQuotaFull.into();
+        assert!(error.is_retryable().0);
+        assert_eq!(error.categorize(), ErrorCategory::ValidatorOverloaded);
+    }
+
+    #[test]
+    fn staggering_errors_round_trip_through_status() {
+        for kind in [
+            SuiErrorKind::StaggeredSubmissionNotProposer,
+            SuiErrorKind::StaggeredSubmissionHoldQuotaFull,
+        ] {
+            let status = Status::from(kind.clone());
+            assert_eq!(SuiError::from(status).into_inner(), kind);
+        }
+    }
+
+    /// Clients decode these errors by variant index and field layout, so neither may change.
+    /// A new variant goes after them. Each expected encoding is the variant index followed by
+    /// the encoding of each field in order, so adding, removing, reordering or retyping a
+    /// field fails the test.
+    #[test]
+    fn staggering_error_encodings_are_stable() {
+        fn encoding(index: u8, fields: &[Vec<u8>]) -> Vec<u8> {
+            let mut bytes = vec![index];
+            for field in fields {
+                bytes.extend_from_slice(field);
+            }
+            bytes
+        }
+        let digest = TransactionDigest::new([7; 32]);
+        let object_id = ObjectID::new([9; 32]);
+        let cases = [
+            // The driver exempts these duplicate-suppression errors, which validators send
+            // inside per-transaction results.
+            (
+                SuiErrorKind::TransactionProcessing {
+                    digest,
+                    status: "status".to_string(),
+                },
+                encoding(
+                    112,
+                    &[
+                        bcs::to_bytes(&digest).unwrap(),
+                        bcs::to_bytes("status").unwrap(),
+                    ],
+                ),
+            ),
+            (
+                SuiErrorKind::TransactionSubmitted { digest },
+                encoding(113, &[bcs::to_bytes(&digest).unwrap()]),
+            ),
+            (
+                SuiErrorKind::StaggeredSubmissionNotProposer,
+                encoding(114, &[]),
+            ),
+            (
+                SuiErrorKind::TransactionNotYetValid { min_timestamp: 42 },
+                encoding(115, &[bcs::to_bytes(&42u64).unwrap()]),
+            ),
+            (
+                SuiErrorKind::OwnedObjectConflict { object_id },
+                encoding(116, &[bcs::to_bytes(&object_id).unwrap()]),
+            ),
+            (
+                SuiErrorKind::StaggeredSubmissionHoldQuotaFull,
+                encoding(117, &[]),
+            ),
+        ];
+        for (kind, expected) in cases {
+            assert_eq!(bcs::to_bytes(&kind).unwrap(), expected, "{kind:?}");
+        }
+    }
+
+    /// A client that predates an error variant decodes it as a retriable RPC error.
+    #[test]
+    fn unknown_error_variant_decodes_as_retriable_rpc_error() {
+        // The ULEB128 encoding of 65535 is a variant index past every variant of `SuiErrorKind`.
+        let details = vec![0xff, 0xff, 0x03];
+        let status = Status::with_details(tonic::Code::Internal, "unknown", details.into());
+        let error = SuiError::from(status);
+        assert!(matches!(error.as_inner(), SuiErrorKind::RpcError(..)));
+        assert!(error.is_retryable().0);
+        // The transaction driver decides retriability from the category.
+        assert_eq!(error.categorize(), ErrorCategory::Aborted);
+        assert!(error.categorize().is_submission_retriable());
     }
 }
