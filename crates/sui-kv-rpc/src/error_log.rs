@@ -7,13 +7,18 @@
 //! response (how a handler's `Err` is sent before any message), and from the trailers at the end of
 //! the body (how a streaming handler reports an error after its first message, which
 //! `rpc_requests` counts as `ok` because it only looks at the headers). Codes the client caused or
-//! chose (`Cancelled`, `NotFound`, `InvalidArgument`, ...) are not logged.
+//! chose (`Cancelled`, `NotFound`, `InvalidArgument`, ...) are not logged. Errors returned after
+//! a transport failure while reading the inbound request body (e.g. an HTTP/2 stream reset before
+//! tonic finishes decoding the request) are logged at `debug` instead of `warn` without consuming
+//! [`LOG_BUDGET`].
 //!
 //! Lines are rate-limited per process to [`MAX_LINES_PER_SECOND`]. A line dropped by the limit is
 //! counted in the `suppressed` field of the next line that is logged, so counting lines plus
 //! `suppressed` still gives the number of failed requests.
 
+use std::sync::Arc;
 use std::sync::LazyLock;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Instant;
@@ -23,6 +28,7 @@ use http::HeaderName;
 use http::request;
 use http::response;
 use sui_http::middleware::callback::MakeCallbackHandler;
+use sui_http::middleware::callback::RequestHandler;
 use sui_http::middleware::callback::ResponseHandler;
 use tonic::Code;
 use tonic::Status;
@@ -43,16 +49,35 @@ static PROCESS_START: LazyLock<Instant> = LazyLock::new(Instant::now);
 pub(crate) struct MakeServerErrorLog;
 
 impl MakeCallbackHandler for MakeServerErrorLog {
-    type RequestHandler = ();
+    type RequestHandler = ServerErrorLogRequest;
     type ResponseHandler = ServerErrorLog;
 
-    fn make_handler(&self, request: &request::Parts) -> ((), ServerErrorLog) {
-        let handler = ServerErrorLog {
+    fn make_handler(&self, request: &request::Parts) -> (ServerErrorLogRequest, ServerErrorLog) {
+        let request_body_errored = Arc::new(AtomicBool::new(false));
+        let req_handler = ServerErrorLogRequest {
+            request_body_errored: request_body_errored.clone(),
+        };
+        let resp_handler = ServerErrorLog {
             uri: request.uri.clone(),
             start: Instant::now(),
             messages_sent: 0,
+            request_body_errored,
         };
-        ((), handler)
+        (req_handler, resp_handler)
+    }
+}
+
+/// Records whether polling the inbound request body failed at the transport layer.
+pub(crate) struct ServerErrorLogRequest {
+    request_body_errored: Arc<AtomicBool>,
+}
+
+impl RequestHandler for ServerErrorLogRequest {
+    fn on_body_error<E>(&mut self, _error: &E)
+    where
+        E: std::fmt::Display + 'static,
+    {
+        self.request_body_errored.store(true, Ordering::Release);
     }
 }
 
@@ -63,6 +88,8 @@ pub(crate) struct ServerErrorLog {
     start: Instant,
     /// Response body data frames sent before the response ended.
     messages_sent: u64,
+    /// Whether polling the inbound request body yielded a transport error.
+    request_body_errored: Arc<AtomicBool>,
 }
 
 impl ServerErrorLog {
@@ -81,12 +108,29 @@ impl ServerErrorLog {
             "request failed with a server error",
         );
     }
+
+    fn log_status(&self, ended_in: &'static str, status: &Status) {
+        if self.request_body_errored.load(Ordering::Acquire) {
+            let message = status.message();
+            tracing::debug!(
+                method = self.uri.path(),
+                code = ?status.code(),
+                ended_in,
+                messages_sent = self.messages_sent,
+                elapsed_ms = self.start.elapsed().as_millis() as u64,
+                error = &message[..message.floor_char_boundary(MAX_MESSAGE_BYTES)],
+                "request failed while reading request body",
+            );
+            return;
+        }
+        self.log(ended_in, status.code(), status.message());
+    }
 }
 
 impl ResponseHandler for ServerErrorLog {
     fn on_response(&mut self, response: &response::Parts) {
         if let Some(status) = server_error(&response.headers) {
-            self.log("headers", status.code(), status.message());
+            self.log_status("headers", &status);
         }
     }
 
@@ -106,7 +150,7 @@ impl ResponseHandler for ServerErrorLog {
 
     fn on_end_of_stream(&mut self, trailers: Option<&HeaderMap>) {
         if let Some(status) = trailers.and_then(server_error) {
-            self.log("trailers", status.code(), status.message());
+            self.log_status("trailers", &status);
         }
     }
 
@@ -228,5 +272,115 @@ mod tests {
         assert_eq!(budget.take(6), Some(2));
         assert_eq!(budget.take(6), Some(0));
         assert_eq!(budget.take(6), None);
+    }
+
+    struct LevelCounter {
+        warns: Arc<AtomicU64>,
+        debugs: Arc<AtomicU64>,
+    }
+
+    impl tracing::Subscriber for LevelCounter {
+        fn enabled(&self, _metadata: &tracing::Metadata<'_>) -> bool {
+            true
+        }
+
+        fn new_span(&self, _span: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+            tracing::span::Id::from_u64(1)
+        }
+
+        fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
+
+        fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
+
+        fn event(&self, event: &tracing::Event<'_>) {
+            if event.metadata().target() != module_path!().trim_end_matches("::tests") {
+                return;
+            }
+            match *event.metadata().level() {
+                tracing::Level::WARN => {
+                    self.warns.fetch_add(1, Ordering::Relaxed);
+                }
+                tracing::Level::DEBUG => {
+                    self.debugs.fetch_add(1, Ordering::Relaxed);
+                }
+                _ => {}
+            }
+        }
+
+        fn enter(&self, _span: &tracing::span::Id) {}
+        fn exit(&self, _span: &tracing::span::Id) {}
+    }
+
+    #[tokio::test]
+    async fn inbound_request_body_error_is_downgraded_to_debug_not_warn() {
+        use sui_http::middleware::callback::CallbackLayer;
+        use tower::{Layer, Service, ServiceExt};
+
+        struct FailingUnaryHandler;
+
+        impl tonic::server::UnaryService<()> for FailingUnaryHandler {
+            type Response = ();
+            type Future = std::future::Ready<Result<tonic::Response<()>, Status>>;
+
+            fn call(&mut self, _req: tonic::Request<()>) -> Self::Future {
+                std::future::ready(Err(Status::internal("BigTable read failed")))
+            }
+        }
+
+        let warns = Arc::new(AtomicU64::new(0));
+        let debugs = Arc::new(AtomicU64::new(0));
+        let subscriber = LevelCounter {
+            warns: warns.clone(),
+            debugs: debugs.clone(),
+        };
+        let _guard = tracing::subscriber::set_default(subscriber);
+
+        let inner = tower::service_fn(|req: http::Request<_>| async move {
+            let mut grpc = tonic::server::Grpc::new(tonic_prost::ProstCodec::<(), ()>::default());
+            Ok::<_, std::convert::Infallible>(grpc.unary(FailingUnaryHandler, req).await)
+        });
+        let mut svc = CallbackLayer::new(MakeServerErrorLog).layer(inner);
+
+        let make_req = |body: axum::body::Body| {
+            http::Request::builder()
+                .uri("/sui.rpc.v2.LedgerService/GetCheckpoint")
+                .header(
+                    http::header::CONTENT_TYPE,
+                    tonic::metadata::GRPC_CONTENT_TYPE,
+                )
+                .body(body)
+                .unwrap()
+        };
+
+        // Inbound request-body failure must log at debug, not warn.
+        let failing_body = axum::body::Body::from_stream(futures::stream::once(async {
+            Err::<bytes::Bytes, _>(Status::internal(
+                "h2 protocol error: error reading a body from connection",
+            ))
+        }));
+        let resp = svc
+            .ready()
+            .await
+            .unwrap()
+            .call(make_req(failing_body))
+            .await
+            .unwrap();
+        assert_eq!(resp.headers().get(GRPC_STATUS).unwrap(), "13");
+        assert_eq!(warns.load(Ordering::Relaxed), 0);
+        assert_eq!(debugs.load(Ordering::Relaxed), 1);
+
+        // A genuine handler Internal error after a clean request body still logs at warn.
+        let resp = svc
+            .ready()
+            .await
+            .unwrap()
+            .call(make_req(axum::body::Body::from(bytes::Bytes::from_static(
+                &[0, 0, 0, 0, 0],
+            ))))
+            .await
+            .unwrap();
+        assert_eq!(resp.headers().get(GRPC_STATUS).unwrap(), "13");
+        assert_eq!(warns.load(Ordering::Relaxed), 1);
+        assert_eq!(debugs.load(Ordering::Relaxed), 1);
     }
 }

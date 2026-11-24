@@ -5,7 +5,10 @@ use axum::http;
 use std::{
     borrow::Cow,
     collections::HashSet,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -16,7 +19,7 @@ use prometheus::{
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
 use prost::Message;
-use sui_http::middleware::callback::{MakeCallbackHandler, ResponseHandler};
+use sui_http::middleware::callback::{MakeCallbackHandler, RequestHandler, ResponseHandler};
 
 #[derive(Clone)]
 pub struct RpcMetrics {
@@ -287,7 +290,7 @@ impl RpcMetricsMakeCallbackHandler {
 }
 
 impl MakeCallbackHandler for RpcMetricsMakeCallbackHandler {
-    type RequestHandler = ();
+    type RequestHandler = RpcMetricsRequestHandler;
     type ResponseHandler = RpcMetricsCallbackHandler;
 
     fn make_handler(
@@ -318,16 +321,35 @@ impl MakeCallbackHandler for RpcMetricsMakeCallbackHandler {
             .with_label_values(&[path.as_ref()])
             .inc();
 
+        let request_body_errored = Arc::new(AtomicBool::new(false));
+
         (
-            (),
+            RpcMetricsRequestHandler {
+                request_body_errored: request_body_errored.clone(),
+            },
             RpcMetricsCallbackHandler {
                 metrics,
                 path,
                 start,
                 counted_response: false,
                 counted_first_chunk: false,
+                request_body_errored,
             },
         )
+    }
+}
+
+/// Records whether polling the inbound request body yielded a transport error.
+pub struct RpcMetricsRequestHandler {
+    request_body_errored: Arc<AtomicBool>,
+}
+
+impl RequestHandler for RpcMetricsRequestHandler {
+    fn on_body_error<E>(&mut self, _error: &E)
+    where
+        E: std::fmt::Display + 'static,
+    {
+        self.request_body_errored.store(true, Ordering::Release);
     }
 }
 
@@ -358,6 +380,10 @@ fn is_grpc_content_type(content_type: &http::HeaderValue) -> bool {
         .starts_with(tonic::metadata::GRPC_CONTENT_TYPE.as_bytes())
 }
 
+/// `status` label recorded when the response error was triggered by a transport failure while
+/// reading the inbound request body (e.g. an HTTP/2 stream reset before the request decoded).
+const REQUEST_BODY_ERROR_STATUS: &str = "request-body-error";
+
 pub struct RpcMetricsCallbackHandler {
     metrics: Arc<RpcMetrics>,
     path: Cow<'static, str>,
@@ -366,21 +392,15 @@ pub struct RpcMetricsCallbackHandler {
     // prematurely canceled this will remain false
     counted_response: bool,
     counted_first_chunk: bool,
+    request_body_errored: Arc<AtomicBool>,
 }
 
 impl ResponseHandler for RpcMetricsCallbackHandler {
     fn on_response(&mut self, response: &http::response::Parts) {
         const GRPC_STATUS: http::HeaderName = http::HeaderName::from_static("grpc-status");
 
-        // Unlike `request_latency` (observed in `Drop`, after the response
-        // body finished streaming), this fires as soon as the handler
-        // produced a response, so it excludes client-side network latency.
-        self.metrics
-            .request_handler_latency
-            .with_label_values(&[self.path.as_ref()])
-            .observe(self.start.elapsed().as_secs_f64());
-
-        let status = if response
+        let request_body_errored = self.request_body_errored.load(Ordering::Acquire);
+        let (status, is_request_body_error) = if response
             .headers
             .get(&http::header::CONTENT_TYPE)
             .is_some_and(is_grpc_content_type)
@@ -392,10 +412,27 @@ impl ResponseHandler for RpcMetricsCallbackHandler {
                 .map(tonic::Code::from_bytes)
                 .unwrap_or(tonic::Code::Ok);
 
-            code_as_str(code)
+            if request_body_errored && code != tonic::Code::Ok {
+                (REQUEST_BODY_ERROR_STATUS, true)
+            } else {
+                (code_as_str(code), false)
+            }
+        } else if request_body_errored && !response.status.is_success() {
+            (REQUEST_BODY_ERROR_STATUS, true)
         } else {
-            response.status.as_str()
+            (response.status.as_str(), false)
         };
+
+        // Unlike `request_latency` (observed in `Drop`, after the response
+        // body finished streaming), this fires as soon as the handler
+        // produced a response, so it excludes client-side network latency.
+        // Skip when the inbound request body failed before the handler could run.
+        if !is_request_body_error {
+            self.metrics
+                .request_handler_latency
+                .with_label_values(&[self.path.as_ref()])
+                .observe(self.start.elapsed().as_secs_f64());
+        }
 
         self.metrics
             .num_requests
@@ -874,11 +911,12 @@ mod tests {
 
     /// Builds a handler for a request with no matched path, so all metric
     /// observations land on the "unknown" label.
-    fn make_test_handler(metrics: &Arc<RpcMetrics>) -> RpcMetricsCallbackHandler {
+    fn make_test_handler(
+        metrics: &Arc<RpcMetrics>,
+    ) -> (RpcMetricsRequestHandler, RpcMetricsCallbackHandler) {
         let make = RpcMetricsMakeCallbackHandler::new(metrics.clone());
         let (parts, _) = http::Request::new(()).into_parts();
-        let ((), handler) = make.make_handler(&parts);
-        handler
+        make.make_handler(&parts)
     }
 
     // The handler latency is observed as soon as the handler produces a
@@ -887,7 +925,7 @@ mod tests {
     #[test]
     fn handler_latency_observed_on_response_and_total_latency_on_drop() {
         let metrics = Arc::new(RpcMetrics::new(&Registry::new()));
-        let mut handler = make_test_handler(&metrics);
+        let (_req_handler, mut handler) = make_test_handler(&metrics);
 
         let handler_latency = metrics
             .request_handler_latency
@@ -911,7 +949,7 @@ mod tests {
     #[test]
     fn first_chunk_latency_observed_once_on_first_body_chunk() {
         let metrics = Arc::new(RpcMetrics::new(&Registry::new()));
-        let mut handler = make_test_handler(&metrics);
+        let (_req_handler, mut handler) = make_test_handler(&metrics);
         let first_chunk_latency = metrics.first_chunk_latency.with_label_values(&["unknown"]);
 
         let (parts, _) = http::Response::new(()).into_parts();
@@ -931,7 +969,7 @@ mod tests {
     #[test]
     fn handler_latency_not_observed_for_canceled_requests() {
         let metrics = Arc::new(RpcMetrics::new(&Registry::new()));
-        let handler = make_test_handler(&metrics);
+        let (_req_handler, handler) = make_test_handler(&metrics);
 
         drop(handler);
 
@@ -960,6 +998,231 @@ mod tests {
             metrics
                 .num_requests
                 .with_label_values(&["unknown", "canceled"])
+                .get(),
+            1
+        );
+    }
+
+    fn grpc_error_response(code: tonic::Code) -> http::response::Parts {
+        let mut response = http::Response::new(());
+        response.headers_mut().insert(
+            http::header::CONTENT_TYPE,
+            tonic::metadata::GRPC_CONTENT_TYPE,
+        );
+        response.headers_mut().insert(
+            http::HeaderName::from_static("grpc-status"),
+            (code as i32).to_string().parse().unwrap(),
+        );
+        response.into_parts().0
+    }
+
+    #[test]
+    fn inbound_request_body_error_is_isolated_from_internal_status() {
+        let metrics = Arc::new(RpcMetrics::new(&Registry::new()));
+        let (mut req_handler, mut resp_handler) = make_test_handler(&metrics);
+
+        req_handler.on_body_error(&"h2 protocol error: error reading a body from connection");
+        resp_handler.on_response(&grpc_error_response(tonic::Code::Internal));
+        drop(resp_handler);
+
+        assert_eq!(
+            metrics
+                .num_requests
+                .with_label_values(&["unknown", REQUEST_BODY_ERROR_STATUS])
+                .get(),
+            1
+        );
+        assert_eq!(
+            metrics
+                .num_requests
+                .with_label_values(&["unknown", "internal"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            metrics
+                .request_handler_latency
+                .with_label_values(&["unknown"])
+                .get_sample_count(),
+            0
+        );
+        assert_eq!(
+            metrics
+                .request_latency
+                .with_label_values(&["unknown"])
+                .get_sample_count(),
+            1
+        );
+        assert_eq!(
+            metrics
+                .inflight_requests
+                .with_label_values(&["unknown"])
+                .get(),
+            0
+        );
+    }
+
+    #[test]
+    fn handler_internal_error_without_request_body_error_stays_internal() {
+        let metrics = Arc::new(RpcMetrics::new(&Registry::new()));
+        let (_req_handler, mut resp_handler) = make_test_handler(&metrics);
+
+        resp_handler.on_response(&grpc_error_response(tonic::Code::Internal));
+        drop(resp_handler);
+
+        assert_eq!(
+            metrics
+                .num_requests
+                .with_label_values(&["unknown", "internal"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            metrics
+                .num_requests
+                .with_label_values(&["unknown", REQUEST_BODY_ERROR_STATUS])
+                .get(),
+            0
+        );
+        assert_eq!(
+            metrics
+                .request_handler_latency
+                .with_label_values(&["unknown"])
+                .get_sample_count(),
+            1
+        );
+    }
+
+    #[test]
+    fn non_grpc_http_error_after_request_body_error_is_isolated() {
+        let metrics = Arc::new(RpcMetrics::new(&Registry::new()));
+        let (mut req_handler, mut resp_handler) = make_test_handler(&metrics);
+
+        let mut response = http::Response::new(());
+        *response.status_mut() = http::StatusCode::INTERNAL_SERVER_ERROR;
+        req_handler.on_body_error(&"connection reset");
+        resp_handler.on_response(&response.into_parts().0);
+        drop(resp_handler);
+
+        assert_eq!(
+            metrics
+                .num_requests
+                .with_label_values(&["unknown", REQUEST_BODY_ERROR_STATUS])
+                .get(),
+            1
+        );
+        assert_eq!(
+            metrics
+                .num_requests
+                .with_label_values(&["unknown", "500"])
+                .get(),
+            0
+        );
+        assert_eq!(
+            metrics
+                .request_handler_latency
+                .with_label_values(&["unknown"])
+                .get_sample_count(),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn callback_layer_isolates_tonic_unary_request_body_error() {
+        use sui_http::middleware::callback::CallbackLayer;
+        use tower::{Layer, Service, ServiceExt};
+
+        struct FailingUnaryHandler;
+
+        impl tonic::server::UnaryService<()> for FailingUnaryHandler {
+            type Response = ();
+            type Future = std::future::Ready<Result<tonic::Response<()>, tonic::Status>>;
+
+            fn call(&mut self, _req: tonic::Request<()>) -> Self::Future {
+                std::future::ready(Err(tonic::Status::internal("handler failure")))
+            }
+        }
+
+        let method = "/sui.rpc.v2.LedgerService/GetCheckpoint";
+        let metrics = Arc::new(RpcMetrics::new(&Registry::new()));
+        let allowlist = Arc::new(HashSet::from([method.to_owned()]));
+        let inner = tower::service_fn(|req: http::Request<_>| async move {
+            let mut grpc = tonic::server::Grpc::new(tonic_prost::ProstCodec::<(), ()>::default());
+            Ok::<_, std::convert::Infallible>(grpc.unary(FailingUnaryHandler, req).await)
+        });
+        let mut svc = CallbackLayer::new(
+            RpcMetricsMakeCallbackHandler::with_grpc_method_allowlist(metrics.clone(), allowlist),
+        )
+        .layer(inner);
+
+        let make_req = |body: axum::body::Body| {
+            http::Request::builder()
+                .uri(method)
+                .header(
+                    http::header::CONTENT_TYPE,
+                    tonic::metadata::GRPC_CONTENT_TYPE,
+                )
+                .body(body)
+                .unwrap()
+        };
+
+        // Inbound transport failure during tonic's request-body read produces grpc-status=Internal
+        // on the wire, but metrics must isolate it under `request-body-error`.
+        let failing_body = axum::body::Body::from_stream(futures::stream::once(async {
+            Err::<bytes::Bytes, _>(tonic::Status::internal(
+                "h2 protocol error: error reading a body from connection",
+            ))
+        }));
+        let resp = svc
+            .ready()
+            .await
+            .unwrap()
+            .call(make_req(failing_body))
+            .await
+            .unwrap();
+        assert_eq!(resp.headers().get("grpc-status").unwrap(), "13");
+        drop(resp);
+
+        assert_eq!(
+            metrics
+                .num_requests
+                .with_label_values(&[method, REQUEST_BODY_ERROR_STATUS])
+                .get(),
+            1
+        );
+        assert_eq!(
+            metrics
+                .num_requests
+                .with_label_values(&[method, "internal"])
+                .get(),
+            0
+        );
+
+        // A valid empty gRPC frame (5-byte header: uncompressed, length 0) reaches the handler,
+        // whose own `Status::internal` must still be counted under `internal`.
+        let resp = svc
+            .ready()
+            .await
+            .unwrap()
+            .call(make_req(axum::body::Body::from(bytes::Bytes::from_static(
+                &[0, 0, 0, 0, 0],
+            ))))
+            .await
+            .unwrap();
+        assert_eq!(resp.headers().get("grpc-status").unwrap(), "13");
+        drop(resp);
+
+        assert_eq!(
+            metrics
+                .num_requests
+                .with_label_values(&[method, "internal"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            metrics
+                .num_requests
+                .with_label_values(&[method, REQUEST_BODY_ERROR_STATUS])
                 .get(),
             1
         );
