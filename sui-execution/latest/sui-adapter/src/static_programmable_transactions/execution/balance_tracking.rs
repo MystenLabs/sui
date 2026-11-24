@@ -68,14 +68,14 @@ pub(crate) fn finish(
     let mut packages = BTreeSet::new();
     for (id, owner) in &inputs {
         addresses.insert((*id).into());
-        add_owner_addresses(&mut addresses, owner);
+        addresses.extend(owner.owner_addresses());
     }
     for (id, object) in &results.written_objects {
         if object.is_package() {
             packages.insert(SuiAddress::from(*id));
         }
         addresses.insert((*id).into());
-        add_owner_addresses(&mut addresses, &object.owner);
+        addresses.extend(object.owner.owner_addresses());
     }
     let ids = contained_uids
         .iter()
@@ -121,17 +121,4 @@ pub(crate) fn add_accumulator_events<'a>(
             .map_err(ExecutionError::invariant_violation)?;
     }
     Ok(())
-}
-
-/// Adds the addresses that own an object: a parent object's ID, or every member of a party.
-fn add_owner_addresses(addresses: &mut BTreeSet<SuiAddress>, owner: &Owner) {
-    match owner {
-        Owner::AddressOwner(address)
-        | Owner::ObjectOwner(address)
-        | Owner::ConsensusAddressOwner { owner: address, .. } => {
-            addresses.insert(*address);
-        }
-        Owner::Party { permissions, .. } => addresses.extend(permissions.members()),
-        Owner::Shared { .. } | Owner::Immutable => (),
-    }
 }

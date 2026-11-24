@@ -189,7 +189,10 @@ pub use crate::checkpoints::checkpoint_executor::utils::{
     CheckpointTimeoutConfig, init_checkpoint_timeout_config,
 };
 
-use sui_types::coin_regulation::{coin_type_name, has_latest_coin_type_state};
+use sui_types::coin_regulation::{
+    coin_type_name, get_latest_coin_type_state, has_latest_coin_type_state,
+    is_latest_address_frozen,
+};
 #[cfg(msim)]
 use sui_types::committee::CommitteeTrait;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_signing;
@@ -225,6 +228,10 @@ mod batch_verification_tests;
 #[cfg(test)]
 #[path = "unit_tests/coin_deny_list_tests.rs"]
 mod coin_deny_list_tests;
+
+#[cfg(test)]
+#[path = "unit_tests/coin_regulation_tests.rs"]
+mod coin_regulation_tests;
 
 #[cfg(test)]
 #[path = "unit_tests/auth_unit_test_utils.rs"]
@@ -1183,10 +1190,24 @@ impl AuthorityState {
             &self.config.verifier_signing_config,
         )?;
 
+        let declared_withdrawals = tx_data.process_funds_withdrawals_for_signing(
+            self.chain_identifier,
+            self.coin_reservation_resolver.as_ref(),
+        )?;
+
         self.handle_coin_deny_list_checks(
             tx_data,
             &checked_input_objects,
             &receiving_objects,
+            &declared_withdrawals,
+            epoch_store,
+        )?;
+
+        self.handle_coin_regulation_checks(
+            tx_data,
+            &checked_input_objects,
+            &receiving_objects,
+            &declared_withdrawals,
             epoch_store,
         )?;
 
@@ -1198,14 +1219,10 @@ impl AuthorityState {
         tx_data: &TransactionData,
         checked_input_objects: &CheckedInputObjects,
         receiving_objects: &ReceivingObjects,
+        declared_withdrawals: &BTreeMap<AccumulatorObjId, (u64, TypeTag, SuiAddress)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<()> {
         use sui_types::balance::Balance;
-
-        let declared_withdrawals = tx_data.process_funds_withdrawals_for_signing(
-            self.chain_identifier,
-            self.coin_reservation_resolver.as_ref(),
-        )?;
 
         let funds_withdrawals = declared_withdrawals
             .values()
@@ -1258,6 +1275,94 @@ impl AuthorityState {
             )?;
         }
 
+        Ok(())
+    }
+
+    /// Rejects what the FreezeList execution check would, for the coin types and addresses the
+    /// inputs prove the transaction touches; execution remains authoritative.
+    fn handle_coin_regulation_checks(
+        &self,
+        tx_data: &TransactionData,
+        checked_input_objects: &CheckedInputObjects,
+        receiving_objects: &ReceivingObjects,
+        declared_withdrawals: &BTreeMap<AccumulatorObjId, (u64, TypeTag, SuiAddress)>,
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> SuiResult<()> {
+        use sui_types::balance::Balance;
+        use sui_types::gas_coin::GAS;
+
+        if !epoch_store.protocol_config().enable_coin_regulation()
+            || !epoch_store.freeze_list_exists()
+        {
+            return Ok(());
+        }
+
+        let mut coin_types = BTreeSet::new();
+        let mut addresses = BTreeSet::from([tx_data.sender(), tx_data.gas_owner()]);
+        for object in checked_input_objects.inner().iter_objects() {
+            if object.is_package() {
+                continue;
+            }
+            addresses.insert(object.id().into());
+            addresses.extend(object.owner().owner_addresses());
+        }
+        // As with the deny list, only top-level coins and withdrawals name coin types.
+        coin_types.extend(
+            checked_input_objects
+                .inner()
+                .iter_objects()
+                .chain(receiving_objects.iter_objects())
+                .filter_map(|object| object.coin_type_maybe()),
+        );
+        for (_, balance_type, funder) in declared_withdrawals.values() {
+            addresses.insert(*funder);
+            coin_types.extend(Balance::maybe_get_balance_type_param(balance_type));
+        }
+        coin_types.retain(|coin_type| !GAS::is_gas_type(coin_type));
+        // Freezing a system object blocks nothing.
+        addresses.retain(|a| !ObjectID::from(*a).is_system_object());
+        if coin_types.is_empty() {
+            return Ok(());
+        }
+
+        let object_store = self.get_object_store();
+        let mut with_frozen_addresses = vec![];
+        for coin_type in coin_types {
+            let Some(state) = get_latest_coin_type_state(object_store.as_ref(), &coin_type)? else {
+                continue;
+            };
+            if state.paused {
+                return Err(UserInputError::CoinTypeGlobalPause {
+                    coin_type: coin_type_name(&coin_type),
+                }
+                .into());
+            }
+            if state.num_frozen_addresses > 0 {
+                with_frozen_addresses.push(coin_type);
+            }
+        }
+        let reads = with_frozen_addresses.len() as u64 * addresses.len() as u64;
+        let max_reads = epoch_store
+            .protocol_config()
+            .max_freeze_list_address_reads();
+        if !with_frozen_addresses.is_empty() && reads >= max_reads {
+            return Err(UserInputError::SizeLimitExceeded {
+                limit: "maximum FreezeList address reads in a transaction".to_string(),
+                value: max_reads.to_string(),
+            }
+            .into());
+        }
+        for coin_type in with_frozen_addresses {
+            for address in &addresses {
+                if is_latest_address_frozen(object_store.as_ref(), &coin_type, *address)? {
+                    return Err(UserInputError::AddressDeniedForCoin {
+                        address: *address,
+                        coin_type: coin_type_name(&coin_type),
+                    }
+                    .into());
+                }
+            }
+        }
         Ok(())
     }
 

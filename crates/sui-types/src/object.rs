@@ -996,6 +996,17 @@ impl Owner {
         }
     }
 
+    /// The addresses that own the object: a parent object's ID, or every member of a party.
+    pub fn owner_addresses(&self) -> Vec<SuiAddress> {
+        match self {
+            Self::AddressOwner(address)
+            | Self::ObjectOwner(address)
+            | Self::ConsensusAddressOwner { owner: address, .. } => vec![*address],
+            Self::Party { permissions, .. } => permissions.members().copied().collect(),
+            Self::Shared { .. } | Self::Immutable => vec![],
+        }
+    }
+
     // Returns initial_shared_version for Shared objects, and start_version
     // for ConsensusAddressOwner and Party objects.
     pub fn start_version(&self) -> Option<SequenceNumber> {
