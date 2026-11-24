@@ -11,7 +11,7 @@ use tonic::codegen::BoxStream;
 use crate::RpcError;
 use crate::grpc::deadline::with_deadline;
 
-pub(super) async fn serve_list_stream<T, Fut>(
+pub(crate) async fn serve_list_stream<T, Fut>(
     operation: &'static str,
     timeout: Duration,
     stream: Fut,

@@ -104,13 +104,11 @@ impl PinnedStateRead {
 
 /// Resolved index target for a `StateService` call: either current live state or a snapshot
 /// pinned to a specific checkpoint.
-#[allow(dead_code)]
 pub(super) enum StateReadTarget<'a> {
     Current(&'a dyn RpcIndexes),
     Pinned(PinnedStateRead),
 }
 
-#[allow(dead_code)]
 impl StateReadTarget<'_> {
     pub(super) fn indexes(&self) -> &dyn RpcIndexes {
         match self {
@@ -147,7 +145,6 @@ pub(super) fn pruning_race(message: impl Into<String>) -> RpcError {
 /// Always checks that rpc indexes are enabled first (`NOT_SERVED_HERE` / `no_rpc_indexes`). When
 /// `pin` is `true`, acquires a snapshot handle once and maps any missing handle to the proto's
 /// refusal codes; never falls back to current state.
-#[allow(dead_code)]
 pub(super) fn resolve_state_read(
     service: &RpcService,
     checkpoint: Option<u64>,

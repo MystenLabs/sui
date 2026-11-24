@@ -51,7 +51,7 @@ pub use get_epoch::{protocol_config_from_parts, protocol_config_to_proto, set_ep
 pub use get_object::ObjectSelector;
 pub use get_object::validate_get_object_requests;
 
-use stream::serve_list_stream;
+pub(crate) use stream::serve_list_stream;
 
 #[tonic::async_trait]
 impl LedgerService for RpcService {

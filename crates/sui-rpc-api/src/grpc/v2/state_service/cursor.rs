@@ -274,7 +274,6 @@ fn decode_object_id(bytes: Option<&[u8]>, field: &str) -> Result<ObjectID> {
 
 /// Validated `QueryOptions` for a checkpoint-pinned `StateService` listing.
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
 pub(super) struct StateQueryOptions<K> {
     pub(super) limit: usize,
     pub(super) descending: bool,
@@ -286,7 +285,6 @@ pub(super) struct StateQueryOptions<K> {
     pub(super) pin_source: PinSource,
 }
 
-#[allow(dead_code)]
 impl<K> StateQueryOptions<K> {
     pub(super) fn bounds(&self) -> (Bound<K>, Bound<K>)
     where
@@ -320,7 +318,6 @@ impl<K> StateQueryOptions<K> {
 }
 
 /// Reject legacy `page_size` / `page_token` when `options` is set.
-#[allow(dead_code)]
 pub(super) fn reject_legacy_paging_with_options(
     page_size: Option<u32>,
     page_token: Option<&[u8]>,
@@ -342,7 +339,6 @@ pub(super) fn reject_legacy_paging_with_options(
 
 /// Parse and validate `QueryOptions` together with an optional `at_checkpoint` for a listing
 /// whose scope is verified by `extract_key`.
-#[allow(dead_code)]
 pub(super) fn parse_query_options<K, F>(
     options: Option<&ProtoQueryOptions>,
     at_checkpoint: Option<u64>,
@@ -439,7 +435,6 @@ where
 /// Decoded legacy `page_token`: either a bare-BCS unpinned token (current state, inclusive seek)
 /// or a checkpoint-pinned `CursorToken` (pinned snapshot, exclusive seek strictly after the
 /// previous page's last item).
-#[allow(dead_code)]
 pub(super) enum DecodedPageToken<L, K> {
     Legacy(L),
     Pinned { checkpoint: u64, key: K },
@@ -451,7 +446,6 @@ pub(super) enum DecodedPageToken<L, K> {
 /// byte) succeeds AND `legacy_matches` accepts the decoded owner/parent. Anything else must
 /// decode as a `CursorToken` carrying a `StatePosition` with its checkpoint set and matching the
 /// listing's scope and `at_checkpoint`, or `INVALID_ARGUMENT`.
-#[allow(dead_code)]
 pub(super) fn decode_page_token<L, K, LegacyMatches, ExtractKey>(
     bytes: &[u8],
     at_checkpoint: Option<u64>,
