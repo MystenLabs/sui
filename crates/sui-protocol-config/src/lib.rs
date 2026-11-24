@@ -1366,10 +1366,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     share_transaction_deny_config_in_consensus: bool,
 
-    // If true, validators accept `EncryptedBundle` consensus messages. Prototype only. It is
-    // not enabled in any protocol version.
+    // If true, validators accept encrypted transactions. Prototype only. It is not enabled in
+    // any protocol version.
     #[serde(skip_serializing_if = "is_false")]
-    encrypted_bundles: bool,
+    encrypted_transactions: bool,
 
     // Enables more granular post-execution checks.
     #[serde(skip_serializing_if = "is_false")]
@@ -2403,14 +2403,13 @@ pub struct ProtocolConfig {
     staggered_submission_signal_band2_enter_ratio_bps: Option<u64>,
     staggered_submission_signal_band2_exit_ratio_bps: Option<u64>,
 
-    /// Maximum number of encrypted bundles accepted per consensus commit. Each bundle stalls
-    /// the consensus handler until its key is derived.
-    encrypted_bundle_max_per_commit: Option<u64>,
-    /// Maximum number of transactions in one decrypted bundle.
-    encrypted_bundle_max_transactions: Option<u64>,
-    /// Fixed fee in MIST that a validator pays for each encrypted bundle. The fee transaction's
-    /// minimum computation charge must cover it.
-    encrypted_bundle_fee: Option<u64>,
+    /// Maximum number of encrypted transactions accepted per consensus commit. A commit with
+    /// encrypted transactions stalls the consensus handler until their keys are derived.
+    encrypted_transaction_max_per_commit: Option<u64>,
+    /// Inclusion fee in MIST for an encrypted transaction. It pays for the key derivation. The
+    /// transaction's gas price must be high enough that the minimum computation charge covers
+    /// it.
+    encrypted_transaction_fee: Option<u64>,
 
     /// DEPRECATED: this was an ephemeral feature flag only used in per-epoch tables, which has now
     /// been deployed everywhere.
@@ -3343,9 +3342,8 @@ impl ProtocolConfig {
             staggered_submission_signal_band1_exit_ratio_bps: None,
             staggered_submission_signal_band2_enter_ratio_bps: None,
             staggered_submission_signal_band2_exit_ratio_bps: None,
-            encrypted_bundle_max_per_commit: None,
-            encrypted_bundle_max_transactions: None,
-            encrypted_bundle_fee: None,
+            encrypted_transaction_max_per_commit: None,
+            encrypted_transaction_fee: None,
 
             use_object_per_epoch_marker_table_v2: None,
 

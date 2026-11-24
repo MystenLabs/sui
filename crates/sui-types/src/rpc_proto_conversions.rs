@@ -2525,6 +2525,8 @@ impl From<crate::transaction::TransactionKind> for TransactionKind {
             K::ProgrammableSystemTransaction(ptb) => message
                 .with_programmable_transaction(ptb)
                 .with_kind(Kind::ProgrammableSystemTransaction),
+            // The proto schema has no encrypted transaction kind yet.
+            K::EncryptedTransaction(_) => message.with_kind(Kind::Unknown),
         }
     }
 }
@@ -2632,7 +2634,12 @@ impl From<crate::messages_consensus::ConsensusDeterminedVersionAssignments>
                     .collect();
                 1
             }
-            A::CancelledTransactionsV2(canceled_transactions) => {
+            A::CancelledTransactionsV2(canceled_transactions)
+            // The proto message has no field for encrypted transaction keys.
+            | A::CancelledAndEncryptedTransactions {
+                cancelled_transactions: canceled_transactions,
+                ..
+            } => {
                 message.canceled_transactions = canceled_transactions
                     .into_iter()
                     .map(|(tx_digest, assignments)| {

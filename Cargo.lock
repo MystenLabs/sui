@@ -14452,7 +14452,6 @@ dependencies = [
  "shared-crypto",
  "sui-config",
  "sui-core",
- "sui-encrypted-bundle-enclave",
  "sui-framework",
  "sui-framework-snapshot",
  "sui-keys",
@@ -14483,29 +14482,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
-]
-
-[[package]]
-name = "sui-encrypted-bundle-enclave"
-version = "1.86.0"
-dependencies = [
- "anyhow",
- "axum 0.8.3",
- "bcs",
- "clap",
- "fastcrypto",
- "fastcrypto-threshold",
- "http-body-util",
- "parking_lot 0.12.3",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "sui-types",
- "telemetry-subscribers",
- "thiserror 1.0.69",
- "tokio",
- "tower 0.5.3",
- "tracing",
 ]
 
 [[package]]

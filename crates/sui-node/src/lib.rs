@@ -39,7 +39,7 @@ use sui_core::authority::execution_time_estimator::ExecutionTimeObserver;
 use sui_core::consensus_adapter::ConsensusClient;
 use sui_core::consensus_manager::UpdatableConsensusClient;
 use sui_core::consensus_transaction_pool::TransactionPoolContext;
-use sui_core::encrypted_bundles::NetworkBundleKeys;
+use sui_core::encrypted_transactions::NetworkEncryptedTransactionKeys;
 use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::build_execution_cache;
 use sui_core::randomness_round_receiver::{RandomnessRoundReceiver, RandomnessRoundReceiverHandle};
@@ -1632,11 +1632,13 @@ impl SuiNode {
                     .set_randomness_manager(randomness_manager)
                     .await?;
             }
-            if epoch_store.protocol_config().encrypted_bundles() {
-                epoch_store.set_encrypted_bundle_keys(Arc::new(NetworkBundleKeys::new(
-                    randomness_handle,
-                    randomness_receiver_handle.clone(),
-                )));
+            if epoch_store.protocol_config().encrypted_transactions() {
+                epoch_store.set_encrypted_transaction_keys(Arc::new(
+                    NetworkEncryptedTransactionKeys::new(
+                        randomness_handle,
+                        randomness_receiver_handle.clone(),
+                    ),
+                ));
             }
         }
 
@@ -1903,79 +1905,6 @@ impl SuiNode {
     /// components running. The Arc is cloned out and the lock is released immediately
     /// so callers never hold the `validator_components` mutex across consensus
     /// submission.
-    /// Submits an encrypted bundle and its fee transaction to consensus in one batch, so both
-    /// land in the same block. Returns the bundle id and the fee transaction digest.
-    pub async fn submit_encrypted_bundle(
-        &self,
-        submission: sui_types::encrypted_bundle::EncryptedBundleSubmission,
-    ) -> anyhow::Result<(
-        sui_types::encrypted_bundle::EncryptedBundleId,
-        sui_types::digests::TransactionDigest,
-    )> {
-        use sui_types::messages_consensus::{ConsensusTransaction, EncryptedBundleMessage};
-        use sui_types::transaction::TransactionDataAPI;
-
-        let sui_types::encrypted_bundle::EncryptedBundleSubmission { bundle, fee_tx } = submission;
-        let state = self.state();
-        let epoch_store = state.load_epoch_store_one_call_per_task();
-        anyhow::ensure!(
-            epoch_store.protocol_config().encrypted_bundles(),
-            "encrypted_bundles protocol flag is not enabled"
-        );
-        anyhow::ensure!(
-            bundle.author == state.name,
-            "bundle author is not this validator"
-        );
-        anyhow::ensure!(
-            bundle.epoch == epoch_store.epoch(),
-            "bundle epoch {} is not the current epoch {}",
-            bundle.epoch,
-            epoch_store.epoch()
-        );
-        bundle.verify_signature()?;
-        let fee_tx = epoch_store
-            .verify_transaction_with_current_aliases(fee_tx)
-            .map_err(|e| anyhow::anyhow!("invalid fee transaction: {e}"))?;
-        let fee_tx_digest = *fee_tx.tx().digest();
-        let gas_price = fee_tx.tx().data().transaction_data().gas_price();
-        let bundle_id = bundle.id();
-        let (consensus_adapter, transaction_pool) = self
-            .validator_components
-            .lock()
-            .await
-            .as_ref()
-            .map(|c| {
-                (
-                    c.consensus_adapter.clone(),
-                    c.transaction_pool_context.clone(),
-                )
-            })
-            .ok_or_else(|| anyhow::anyhow!("validator components are not running"))?;
-        let transactions = vec![
-            ConsensusTransaction::new_user_transaction_v2_message(&state.name, fee_tx.into()),
-            ConsensusTransaction::new_encrypted_bundle(EncryptedBundleMessage {
-                bundle,
-                fee_tx_digest,
-            }),
-        ];
-        match transaction_pool {
-            // In pool mode user transactions enter through `try_insert`. One entry is
-            // proposed in one block, so the fee transaction and the bundle stay together.
-            Some(pool) => {
-                let (position, _) = pool
-                    .try_insert(epoch_store.epoch(), gas_price, transactions)
-                    .await?;
-                tokio::spawn(async move {
-                    let _ = position.await;
-                });
-            }
-            None => {
-                consensus_adapter.submit_batch(&transactions, None, &epoch_store, None, None)?;
-            }
-        }
-        Ok((bundle_id, fee_tx_digest))
-    }
-
     pub async fn consensus_adapter(&self) -> Option<Arc<ConsensusAdapter>> {
         self.validator_components
             .lock()

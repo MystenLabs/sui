@@ -205,6 +205,14 @@ pub struct CheckpointExecutor {
     /// checkpoint before this node builds it, or when this node builds none (outside the
     /// committee).
     locally_built_checkpoint_publisher: Option<LocallyBuiltCheckpointPublisher>,
+    /// Keys of encrypted transactions from commit prologues whose transactions are not loaded
+    /// yet.
+    encrypted_transaction_resolutions: Mutex<
+        std::collections::HashMap<
+            sui_types::base_types::TransactionDigest,
+            sui_types::encrypted_transaction::EncryptedTransactionResolution,
+        >,
+    >,
 }
 
 impl CheckpointExecutor {
@@ -235,6 +243,7 @@ impl CheckpointExecutor {
             tps_estimator: Mutex::new(TPSEstimator::default()),
             subscription_service_checkpoint_sender,
             locally_built_checkpoint_publisher,
+            encrypted_transaction_resolutions: Mutex::new(Default::default()),
         }
     }
 
@@ -833,6 +842,10 @@ impl CheckpointExecutor {
                     fx_digests.push(fx_digest);
                 });
 
+            let transactions = crate::encrypted_transactions::decrypt_checkpoint_transactions(
+                transactions,
+                &mut self.encrypted_transaction_resolutions.lock(),
+            );
             let executed_fx_digests = self
                 .transaction_cache_reader
                 .multi_get_executed_effects_digests(&tx_digests);
@@ -881,6 +894,10 @@ impl CheckpointExecutor {
                 })
                 .collect();
 
+            let transactions = crate::encrypted_transactions::decrypt_checkpoint_transactions(
+                transactions,
+                &mut self.encrypted_transaction_resolutions.lock(),
+            );
             let executed_fx_digests = self
                 .transaction_cache_reader
                 .multi_get_executed_effects_digests(&tx_digests);

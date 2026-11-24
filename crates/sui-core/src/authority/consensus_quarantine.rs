@@ -20,7 +20,6 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque, hash_map};
 use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{AuthorityName, ObjectRef, SequenceNumber};
 use sui_types::crypto::RandomnessRound;
-use sui_types::encrypted_bundle::EncryptedBundle;
 use sui_types::error::SuiResult;
 use sui_types::executable_transaction::{
     TrustedExecutableTransactionWithAliases, VerifiedExecutableTransactionWithAliases,
@@ -83,8 +82,8 @@ pub(crate) struct ConsensusCommitOutput {
     dkg_own_confirmation: Option<VersionedDkgConfirmation>,
     dkg_output: Option<Option<dkg_v1::Output<PkG, EncG>>>,
 
-    // encrypted bundle state
-    pending_encrypted_bundles: Option<Vec<EncryptedBundle>>,
+    // encrypted transaction state
+    pending_encrypted_transactions: Option<Vec<VerifiedExecutableTransactionWithAliases>>,
 
     // jwk state
     pending_jwks: BTreeSet<(AuthorityName, JwkId, JWK)>,
@@ -250,8 +249,11 @@ impl ConsensusCommitOutput {
         self.dkg_own_confirmation = Some(conf);
     }
 
-    pub fn set_pending_encrypted_bundles(&mut self, bundles: Vec<EncryptedBundle>) {
-        self.pending_encrypted_bundles = Some(bundles);
+    pub fn set_pending_encrypted_transactions(
+        &mut self,
+        transactions: Vec<VerifiedExecutableTransactionWithAliases>,
+    ) {
+        self.pending_encrypted_transactions = Some(transactions);
     }
 
     pub fn set_dkg_output(&mut self, output: Option<dkg_v1::Output<PkG, EncG>>) {
@@ -381,10 +383,14 @@ impl ConsensusCommitOutput {
                 .into_iter()
                 .map(|conf| (SINGLETON_KEY, conf)),
         )?;
-        if let Some(bundles) = self.pending_encrypted_bundles {
+        if let Some(transactions) = self.pending_encrypted_transactions {
+            let transactions: Vec<_> = transactions
+                .into_iter()
+                .map(|tx| tx.serializable())
+                .collect();
             batch.insert_batch(
-                &tables.pending_encrypted_bundles,
-                [(SINGLETON_KEY, bundles)],
+                &tables.pending_encrypted_transactions,
+                [(SINGLETON_KEY, transactions)],
             )?;
         }
 

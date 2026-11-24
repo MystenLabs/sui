@@ -35,7 +35,7 @@ use tracing::{debug, error, info, instrument, warn};
 
 mod auth;
 mod builder;
-mod bundle_keys;
+mod encrypted_transaction_keys;
 #[allow(clippy::result_large_err)]
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/sui.Randomness.rs"));
@@ -46,7 +46,7 @@ mod server;
 mod tests;
 
 pub use builder::{Builder, UnstartedRandomness};
-pub use bundle_keys::SendBundleKeySharesRequest;
+pub use encrypted_transaction_keys::SendEncryptedTransactionKeySharesRequest;
 pub use generated::{
     randomness_client::RandomnessClient,
     randomness_server::{Randomness, RandomnessServer},
@@ -158,23 +158,28 @@ impl Handle {
             .expect("RandomnessEventLoop mailbox should not overflow or be closed")
     }
 
-    /// Starts deriving the key of an encrypted bundle. The caller must call this only after
-    /// the commit that holds the bundle is processed, because it releases this node's shares.
-    pub fn request_bundle_key(&self, epoch: EpochId, id_message: Vec<u8>) {
+    /// Starts deriving the key of an encrypted transaction. The caller must call this only
+    /// after the commit that holds the transaction is processed, because it releases this
+    /// node's shares.
+    pub fn request_encrypted_transaction_key(&self, epoch: EpochId, id_message: Vec<u8>) {
         self.sender
-            .try_send(RandomnessMessage::RequestBundleKey(epoch, id_message))
+            .try_send(RandomnessMessage::RequestEncryptedTransactionKey(
+                epoch, id_message,
+            ))
             .expect("RandomnessEventLoop mailbox should not overflow or be closed")
     }
 
-    /// Returns a receiver that yields the verified key of an encrypted bundle.
-    pub fn wait_bundle_key(
+    /// Returns a receiver that yields the verified key of an encrypted transaction.
+    pub fn wait_encrypted_transaction_key(
         &self,
         epoch: EpochId,
         id_message: Vec<u8>,
     ) -> oneshot::Receiver<RandomnessSignature> {
         let (sender, receiver) = oneshot::channel();
         self.sender
-            .try_send(RandomnessMessage::WaitBundleKey(epoch, id_message, sender))
+            .try_send(RandomnessMessage::WaitEncryptedTransactionKey(
+                epoch, id_message, sender,
+            ))
             .expect("RandomnessEventLoop mailbox should not overflow or be closed");
         receiver
     }
@@ -229,9 +234,9 @@ enum RandomnessMessage {
         RandomnessSignature,
         oneshot::Sender<Result<()>>,
     ),
-    RequestBundleKey(EpochId, Vec<u8>),
-    WaitBundleKey(EpochId, Vec<u8>, oneshot::Sender<RandomnessSignature>),
-    ReceiveBundleKeyShares(PeerId, SendBundleKeySharesRequest),
+    RequestEncryptedTransactionKey(EpochId, Vec<u8>),
+    WaitEncryptedTransactionKey(EpochId, Vec<u8>, oneshot::Sender<RandomnessSignature>),
+    ReceiveEncryptedTransactionKeyShares(PeerId, SendEncryptedTransactionKeySharesRequest),
 }
 
 struct RandomnessEventLoop {
@@ -264,7 +269,7 @@ struct RandomnessEventLoop {
     received_partial_sigs: BTreeMap<(RandomnessRound, PeerId), Vec<RandomnessPartialSignature>>,
     completed_sigs: BTreeMap<RandomnessRound, RandomnessSignature>,
     highest_completed_round: BTreeMap<EpochId, RandomnessRound>,
-    bundle_keys: bundle_keys::BundleKeys,
+    encrypted_transaction_keys: encrypted_transaction_keys::EncryptedTransactionKeyState,
 }
 
 impl RandomnessEventLoop {
@@ -339,14 +344,14 @@ impl RandomnessEventLoop {
             RandomnessMessage::AdminInjectFullSignature(round, sig, result_channel) => {
                 let _ = result_channel.send(self.admin_inject_full_signature(round, sig));
             }
-            RandomnessMessage::RequestBundleKey(epoch, id_message) => {
-                self.request_bundle_key(epoch, id_message)
+            RandomnessMessage::RequestEncryptedTransactionKey(epoch, id_message) => {
+                self.request_encrypted_transaction_key(epoch, id_message)
             }
-            RandomnessMessage::WaitBundleKey(epoch, id_message, sender) => {
-                self.wait_bundle_key(epoch, id_message, sender)
+            RandomnessMessage::WaitEncryptedTransactionKey(epoch, id_message, sender) => {
+                self.wait_encrypted_transaction_key(epoch, id_message, sender)
             }
-            RandomnessMessage::ReceiveBundleKeyShares(peer_id, request) => {
-                self.receive_bundle_key_shares(peer_id, request)
+            RandomnessMessage::ReceiveEncryptedTransactionKeyShares(peer_id, request) => {
+                self.receive_encrypted_transaction_key_shares(peer_id, request)
             }
         }
     }
@@ -423,9 +428,9 @@ impl RandomnessEventLoop {
             self.maybe_aggregate_partial_signatures(new_epoch, round);
         }
 
-        self.bundle_keys.update_epoch(new_epoch);
-        for (epoch, id_message) in self.bundle_keys.take_deferred_requests() {
-            self.request_bundle_key(epoch, id_message);
+        self.encrypted_transaction_keys.update_epoch(new_epoch);
+        for (epoch, id_message) in self.encrypted_transaction_keys.take_deferred_requests() {
+            self.request_encrypted_transaction_key(epoch, id_message);
         }
 
         Ok(())

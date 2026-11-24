@@ -1696,6 +1696,9 @@ pub(crate) mod checked {
                 pt,
                 trace_builder_opt,
             ),
+            TransactionKind::EncryptedTransaction(_) => {
+                panic!("EncryptedTransaction should not exist in execution layer v4");
+            }
             TransactionKind::ProgrammableSystemTransaction(pt) => {
                 accumulator_settlement::execute::<Mode::Error>(
                     protocol_config,

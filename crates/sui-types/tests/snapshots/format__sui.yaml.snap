@@ -424,6 +424,22 @@ ConsensusDeterminedVersionAssignments:
                         - TYPENAME: ObjectID
                         - TYPENAME: SequenceNumber
                     - TYPENAME: SequenceNumber
+    2:
+      CancelledAndEncryptedTransactions:
+        STRUCT:
+          - cancelled_transactions:
+              SEQ:
+                TUPLE:
+                  - TYPENAME: TransactionDigest
+                  - SEQ:
+                      TUPLE:
+                        - TUPLE:
+                            - TYPENAME: ObjectID
+                            - TYPENAME: SequenceNumber
+                        - TYPENAME: SequenceNumber
+          - encrypted_transactions:
+              SEQ:
+                TYPENAME: EncryptedTransactionResolution
 Data:
   ENUM:
     0:
@@ -465,6 +481,22 @@ EffectsObjectChange:
         TYPENAME: IDOperation
 EmptySignInfo:
   STRUCT: []
+EncryptedTransaction:
+  STRUCT:
+    - epoch: U64
+    - salt:
+        SEQ: U8
+    - nonce:
+        SEQ: U8
+    - ciphertext:
+        SEQ: U8
+EncryptedTransactionResolution:
+  STRUCT:
+    - transaction_digest:
+        TYPENAME: TransactionDigest
+    - key:
+        SEQ: U8
+    - executes: BOOL
 EndOfEpochData:
   STRUCT:
     - nextEpochCommittee:
@@ -1392,6 +1424,10 @@ TransactionKind:
       ProgrammableSystemTransaction:
         NEWTYPE:
           TYPENAME: ProgrammableTransaction
+    11:
+      EncryptedTransaction:
+        NEWTYPE:
+          TYPENAME: EncryptedTransaction
 TypeArgumentError:
   ENUM:
     0:

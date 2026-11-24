@@ -6816,6 +6816,9 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
                         ]
             }));
         }
+        ConsensusDeterminedVersionAssignments::CancelledAndEncryptedTransactions { .. } => {
+            panic!("the test schedules no encrypted transaction")
+        }
     }
 }
 

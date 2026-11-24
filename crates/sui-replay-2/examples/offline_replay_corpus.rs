@@ -342,6 +342,7 @@ fn transaction_shape(transaction_data: &TransactionData) -> String {
         TransactionKind::ProgrammableSystemTransaction(_) => {
             "`ProgrammableSystemTransaction`".to_owned()
         }
+        TransactionKind::EncryptedTransaction(_) => "`EncryptedTransaction`".to_owned(),
     }
 }
 

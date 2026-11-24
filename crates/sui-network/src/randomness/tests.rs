@@ -508,7 +508,7 @@ fn node_from_committee(
 }
 
 #[sim_test]
-async fn test_bundle_key_derivation() {
+async fn test_encrypted_transaction_key_derivation() {
     telemetry_subscribers::init_for_testing();
     let committee_fixture = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
     let committee = committee_fixture.committee();
@@ -553,26 +553,35 @@ async fn test_bundle_key_derivation() {
     let public_key = public_key.unwrap();
 
     let id_message = [
-        sui_types::encrypted_bundle::ID_TAG,
+        sui_types::encrypted_transaction::ID_TAG,
         b"test identity".as_slice(),
     ]
     .concat();
 
     // Only one node requests the key. Its shares alone are below the threshold, and the other
     // nodes do not release theirs, so no key is derived.
-    handles[0].1.request_bundle_key(0, id_message.clone());
-    let waiter = handles[0].1.wait_bundle_key(0, id_message.clone());
+    handles[0]
+        .1
+        .request_encrypted_transaction_key(0, id_message.clone());
+    let waiter = handles[0]
+        .1
+        .wait_encrypted_transaction_key(0, id_message.clone());
     tokio::time::sleep(Duration::from_secs(2)).await;
     let mut waiter = waiter;
     assert!(waiter.try_recv().is_err());
 
     // Once every node processed the commit, all nodes derive the same verified key.
     for (_, handle) in handles.iter().skip(1) {
-        handle.request_bundle_key(0, id_message.clone());
+        handle.request_encrypted_transaction_key(0, id_message.clone());
     }
     let mut keys = vec![waiter.await.unwrap()];
     for (_, handle) in handles.iter().skip(1) {
-        keys.push(handle.wait_bundle_key(0, id_message.clone()).await.unwrap());
+        keys.push(
+            handle
+                .wait_encrypted_transaction_key(0, id_message.clone())
+                .await
+                .unwrap(),
+        );
     }
     for key in &keys {
         assert_eq!(key, &keys[0]);
@@ -582,9 +591,11 @@ async fn test_bundle_key_derivation() {
     // A malformed identity is refused, so the beacon's round messages cannot be signed.
     let round_message = RandomnessRound(5).signature_message();
     for (_, handle) in handles.iter() {
-        handle.request_bundle_key(0, round_message.clone());
+        handle.request_encrypted_transaction_key(0, round_message.clone());
     }
-    let mut waiter = handles[0].1.wait_bundle_key(0, round_message);
+    let mut waiter = handles[0]
+        .1
+        .wait_encrypted_transaction_key(0, round_message);
     tokio::time::sleep(Duration::from_secs(2)).await;
     assert!(waiter.try_recv().is_err());
 }

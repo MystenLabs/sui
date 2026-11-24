@@ -48,7 +48,6 @@ use sui_types::crypto::{AuthoritySignInfo, RandomnessRound};
 use sui_types::digests::{ChainIdentifier, TransactionEffectsDigest};
 use sui_types::dynamic_field::get_dynamic_field_from_store;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
-use sui_types::encrypted_bundle::EncryptedBundle;
 use sui_types::error::{SuiError, SuiErrorKind, SuiResult, UserInputError};
 use sui_types::executable_transaction::{
     TrustedExecutableTransactionWithAliases, VerifiedExecutableTransaction,
@@ -116,7 +115,7 @@ use crate::consensus_handler::{
     ConsensusCommitInfo, SequencedConsensusTransaction, SequencedConsensusTransactionKey,
     SequencedConsensusTransactionKind, VerifiedSequencedConsensusTransaction,
 };
-use crate::encrypted_bundles::EncryptedBundleKeys;
+use crate::encrypted_transactions::EncryptedTransactionKeys;
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::randomness::{
     RandomnessManager, RandomnessReporter, SINGLETON_KEY, VersionedProcessedMessage,
@@ -410,8 +409,8 @@ pub struct AuthorityPerEpochStore {
     pub(crate) randomness_manager: OnceCell<tokio::sync::Mutex<RandomnessManager>>,
     randomness_reporter: OnceCell<RandomnessReporter>,
 
-    /// Derives encrypted bundle keys. Set by the node when it starts the epoch.
-    encrypted_bundle_keys: OnceCell<Arc<dyn EncryptedBundleKeys>>,
+    /// Derives encrypted transaction keys. Set by the node when it starts the epoch.
+    encrypted_transaction_keys: OnceCell<Arc<dyn EncryptedTransactionKeys>>,
 
     /// Manages recording execution time observations and generating estimates.
     pub(crate) execution_time_estimator: tokio::sync::Mutex<ExecutionTimeEstimator>,
@@ -567,9 +566,10 @@ pub struct AuthorityEpochTables {
     /// any local private shares. `None` indicates DKG completed as a failure.
     pub(crate) dkg_output_v2: DBMap<u64, Option<dkg_v1::Output<PkG, EncG>>>,
 
-    /// Encrypted bundles accepted in the last processed commit whose transactions are not
-    /// scheduled yet.
-    pub(crate) pending_encrypted_bundles: DBMap<u64, Vec<EncryptedBundle>>,
+    /// Encrypted transactions accepted in the last processed commit that are not scheduled
+    /// yet.
+    pub(crate) pending_encrypted_transactions:
+        DBMap<u64, Vec<TrustedExecutableTransactionWithAliases>>,
 }
 
 #[cfg(not(tidehunter))]
@@ -786,7 +786,7 @@ impl AuthorityEpochTables {
                 ThConfig::new(8, 1, KeyType::uniform(1)),
             ),
             (
-                "pending_encrypted_bundles".to_string(),
+                "pending_encrypted_transactions".to_string(),
                 ThConfig::new(8, 1, KeyType::uniform(1)),
             ),
         ];
@@ -1095,7 +1095,7 @@ impl AuthorityPerEpochStore {
             jwk_aggregator,
             randomness_manager: OnceCell::new(),
             randomness_reporter: OnceCell::new(),
-            encrypted_bundle_keys: OnceCell::new(),
+            encrypted_transaction_keys: OnceCell::new(),
             execution_time_estimator: tokio::sync::Mutex::new(execution_time_estimator),
             tx_local_execution_time: OnceCell::new(),
             tx_object_debts: OnceCell::new(),
@@ -1140,23 +1140,28 @@ impl AuthorityPerEpochStore {
             .is_some()
     }
 
-    pub fn set_encrypted_bundle_keys(&self, keys: Arc<dyn EncryptedBundleKeys>) {
-        if self.encrypted_bundle_keys.set(keys).is_err() {
-            debug_fatal!("BUG: `set_encrypted_bundle_keys` called more than once");
+    pub fn set_encrypted_transaction_keys(&self, keys: Arc<dyn EncryptedTransactionKeys>) {
+        if self.encrypted_transaction_keys.set(keys).is_err() {
+            debug_fatal!("BUG: `set_encrypted_transaction_keys` called more than once");
         }
     }
 
-    pub fn encrypted_bundle_keys(&self) -> Option<Arc<dyn EncryptedBundleKeys>> {
-        self.encrypted_bundle_keys.get().cloned()
+    pub fn encrypted_transaction_keys(&self) -> Option<Arc<dyn EncryptedTransactionKeys>> {
+        self.encrypted_transaction_keys.get().cloned()
     }
 
-    /// Reads the pending encrypted bundles at startup, when the quarantine is empty.
-    pub(crate) fn get_pending_encrypted_bundles(&self) -> SuiResult<Vec<EncryptedBundle>> {
+    /// Reads the pending encrypted transactions at startup, when the quarantine is empty.
+    pub(crate) fn get_pending_encrypted_transactions(
+        &self,
+    ) -> SuiResult<Vec<VerifiedExecutableTransactionWithAliases>> {
         Ok(self
             .tables()
-            .pending_encrypted_bundles
+            .pending_encrypted_transactions
             .get(&SINGLETON_KEY)?
-            .unwrap_or_default())
+            .unwrap_or_default()
+            .into_iter()
+            .map(Into::into)
+            .collect())
     }
 
     pub fn randomness_reporter(&self) -> Option<RandomnessReporter> {
@@ -3217,18 +3222,6 @@ impl AuthorityPerEpochStore {
                 // Validity is enforced in SuiTxValidator; author authentication and
                 // generation checks happen in TransactionDenyConfigManager::apply_updates
                 // when the commit handler applies the update.
-            }
-            SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::EncryptedBundle(msg),
-                ..
-            }) => {
-                if transaction.sender_authority() != msg.bundle.author {
-                    warn!(
-                        "EncryptedBundle author {} does not match its author from consensus {}",
-                        msg.bundle.author, transaction.certificate_author_index
-                    );
-                    return None;
-                }
             }
             SequencedConsensusTransactionKind::System(_) => {}
         }

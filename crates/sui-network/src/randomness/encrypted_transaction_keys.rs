@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Derivation of encrypted bundle keys from the random beacon's key shares.
+//! Derivation of encrypted transaction keys from the random beacon's key shares.
 //!
-//! The key of a bundle is the threshold BLS signature on its identity message. A validator
-//! sends its partial signatures for an identity only after its consensus handler requests the
-//! key, which happens once the commit that contains the bundle is processed. Partial
-//! signatures from peers are kept until the local request arrives.
+//! The key of an encrypted transaction is the threshold BLS signature on its identity message.
+//! A validator sends its partial signatures for an identity only after its consensus handler
+//! requests the key, which happens once the commit that contains the transaction is processed.
+//! Partial signatures from peers are kept until the local request arrives.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::EpochId;
 use sui_types::crypto::{RandomnessPartialSignature, RandomnessSignature};
-use sui_types::encrypted_bundle::ID_TAG;
+use sui_types::encrypted_transaction::ID_TAG;
 use tokio::sync::{OnceCell, oneshot};
 use tracing::{debug, warn};
 
@@ -36,7 +36,7 @@ const MAX_UNREQUESTED_IDS: usize = 1_000;
 const SENDS_AFTER_KEY: usize = 2;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SendBundleKeySharesRequest {
+pub struct SendEncryptedTransactionKeySharesRequest {
     pub(super) epoch: EpochId,
     pub(super) id_message: Vec<u8>,
     // BCS-serialized `RandomnessPartialSignature` values, ordered by share index.
@@ -45,14 +45,14 @@ pub struct SendBundleKeySharesRequest {
     pub(super) key: Option<RandomnessSignature>,
 }
 
-type BundleKeyId = (EpochId, Vec<u8>);
+type KeyId = (EpochId, Vec<u8>);
 
 #[derive(Default)]
-pub(super) struct BundleKeys {
-    requested: HashMap<BundleKeyId, RequestedKey>,
-    unrequested: HashMap<BundleKeyId, HashMap<PeerId, Vec<RandomnessPartialSignature>>>,
+pub(super) struct EncryptedTransactionKeyState {
+    requested: HashMap<KeyId, RequestedKey>,
+    unrequested: HashMap<KeyId, HashMap<PeerId, Vec<RandomnessPartialSignature>>>,
     /// Requests for an epoch whose DKG output the event loop does not have yet.
-    deferred_requests: Vec<BundleKeyId>,
+    deferred_requests: Vec<KeyId>,
 }
 
 struct RequestedKey {
@@ -73,7 +73,7 @@ impl RequestedKey {
     }
 }
 
-impl BundleKeys {
+impl EncryptedTransactionKeyState {
     /// Drops the state of earlier epochs.
     pub(super) fn update_epoch(&mut self, epoch: EpochId) {
         self.requested.retain(|(e, _), state| {
@@ -87,19 +87,23 @@ impl BundleKeys {
         self.unrequested.retain(|(e, _), _| *e >= epoch);
     }
 
-    pub(super) fn take_deferred_requests(&mut self) -> Vec<BundleKeyId> {
+    pub(super) fn take_deferred_requests(&mut self) -> Vec<KeyId> {
         std::mem::take(&mut self.deferred_requests)
     }
 }
 
 impl RandomnessEventLoop {
-    pub(super) fn request_bundle_key(&mut self, epoch: EpochId, id_message: Vec<u8>) {
+    pub(super) fn request_encrypted_transaction_key(
+        &mut self,
+        epoch: EpochId,
+        id_message: Vec<u8>,
+    ) {
         if !id_message.starts_with(ID_TAG) || id_message.len() > MAX_ID_MESSAGE_LEN {
-            warn!("BUG: refusing to derive a bundle key for a malformed identity");
+            warn!("BUG: refusing to derive an encrypted transaction key for a malformed identity");
             return;
         }
         if epoch < self.epoch {
-            debug!("ignoring bundle key request for past epoch {epoch}");
+            debug!("ignoring encrypted transaction key request for past epoch {epoch}");
             return;
         }
         let Some(shares) = self
@@ -108,21 +112,29 @@ impl RandomnessEventLoop {
             .filter(|_| epoch == self.epoch)
             .and_then(|output| output.shares.clone())
         else {
-            debug!("deferring bundle key request until DKG output for epoch {epoch} is available");
-            self.bundle_keys.deferred_requests.push((epoch, id_message));
+            debug!(
+                "deferring encrypted transaction key request until DKG output for epoch {epoch} is available"
+            );
+            self.encrypted_transaction_keys
+                .deferred_requests
+                .push((epoch, id_message));
             return;
         };
 
         let id = (epoch, id_message.clone());
         if self
-            .bundle_keys
+            .encrypted_transaction_keys
             .requested
             .get(&id)
             .is_some_and(|state| state.send_task.is_some())
         {
             return;
         }
-        let early_partials = self.bundle_keys.unrequested.remove(&id).unwrap_or_default();
+        let early_partials = self
+            .encrypted_transaction_keys
+            .unrequested
+            .remove(&id)
+            .unwrap_or_default();
         let own_partials = ThresholdBls12381MinSig::partial_sign_batch(shares.iter(), &id_message);
         let own_peer_id = self.network.peer_id();
         let name = self.name;
@@ -131,13 +143,13 @@ impl RandomnessEventLoop {
         let authority_info = self.authority_info.clone();
 
         let state = self
-            .bundle_keys
+            .encrypted_transaction_keys
             .requested
             .entry(id.clone())
             .or_insert_with(RequestedKey::new);
         state.partials.extend(early_partials);
         state.partials.insert(own_peer_id, own_partials.clone());
-        let task = send_bundle_key_shares_task(
+        let task = send_encrypted_transaction_key_shares_task(
             name,
             network,
             retry_interval,
@@ -148,18 +160,18 @@ impl RandomnessEventLoop {
             state.key.clone(),
         );
         state.send_task = Some(spawn_monitored_task!(task));
-        debug!("sending bundle key shares");
-        self.maybe_aggregate_bundle_key(&id);
+        debug!("sending encrypted transaction key shares");
+        self.maybe_aggregate_encrypted_transaction_key(&id);
     }
 
-    pub(super) fn wait_bundle_key(
+    pub(super) fn wait_encrypted_transaction_key(
         &mut self,
         epoch: EpochId,
         id_message: Vec<u8>,
         sender: oneshot::Sender<RandomnessSignature>,
     ) {
         let state = self
-            .bundle_keys
+            .encrypted_transaction_keys
             .requested
             .entry((epoch, id_message))
             .or_insert_with(RequestedKey::new);
@@ -171,12 +183,12 @@ impl RandomnessEventLoop {
         }
     }
 
-    pub(super) fn receive_bundle_key_shares(
+    pub(super) fn receive_encrypted_transaction_key_shares(
         &mut self,
         peer_id: PeerId,
-        request: SendBundleKeySharesRequest,
+        request: SendEncryptedTransactionKeySharesRequest,
     ) {
-        let SendBundleKeySharesRequest {
+        let SendEncryptedTransactionKeySharesRequest {
             epoch,
             id_message,
             partial_sigs,
@@ -186,7 +198,9 @@ impl RandomnessEventLoop {
             || !id_message.starts_with(ID_TAG)
             || id_message.len() > MAX_ID_MESSAGE_LEN
         {
-            debug!("ignoring bundle key shares for epoch {epoch} or malformed identity");
+            debug!(
+                "ignoring encrypted transaction key shares for epoch {epoch} or malformed identity"
+            );
             return;
         }
         let Some(vss_pk) = self.dkg_output.as_ref().map(|output| output.vss_pk.c0()) else {
@@ -196,10 +210,10 @@ impl RandomnessEventLoop {
 
         if let Some(key) = key {
             if ThresholdBls12381MinSig::verify(&vss_pk, &id.1, &key).is_err() {
-                warn!("received invalid bundle key from peer {peer_id}");
+                warn!("received invalid encrypted transaction key from peer {peer_id}");
                 return;
             }
-            self.complete_bundle_key(&id, key);
+            self.complete_encrypted_transaction_key(&id, key);
             return;
         }
 
@@ -208,7 +222,7 @@ impl RandomnessEventLoop {
             .as_ref()
             .and_then(|ids| ids.get(&peer_id))
         else {
-            debug!("received bundle key shares from unknown peer {peer_id}");
+            debug!("received encrypted transaction key shares from unknown peer {peer_id}");
             return;
         };
         let Ok(partials) = partial_sigs
@@ -216,7 +230,7 @@ impl RandomnessEventLoop {
             .map(|bytes| bcs::from_bytes::<RandomnessPartialSignature>(bytes))
             .collect::<Result<Vec<_>, _>>()
         else {
-            warn!("failed to deserialize bundle key shares from peer {peer_id}");
+            warn!("failed to deserialize encrypted transaction key shares from peer {peer_id}");
             return;
         };
         if partials.len() != expected_share_ids.len()
@@ -225,26 +239,33 @@ impl RandomnessEventLoop {
                 .map(|partial| partial.index)
                 .ne(expected_share_ids.iter().copied())
         {
-            warn!("received bundle key shares with unexpected share ids from peer {peer_id}");
+            warn!(
+                "received encrypted transaction key shares with unexpected share ids from peer {peer_id}"
+            );
             return;
         }
 
-        if let Some(state) = self.bundle_keys.requested.get_mut(&id) {
+        if let Some(state) = self.encrypted_transaction_keys.requested.get_mut(&id) {
             if let Some(key) = state.key.get().copied() {
                 // The peer does not have the key yet, for example after a restart.
-                send_bundle_key_once(&self.network, peer_id, id, key);
+                send_encrypted_transaction_key_once(&self.network, peer_id, id, key);
                 return;
             }
             state.partials.insert(peer_id, partials);
-            self.maybe_aggregate_bundle_key(&id);
+            self.maybe_aggregate_encrypted_transaction_key(&id);
         } else {
-            if !self.bundle_keys.unrequested.contains_key(&id)
-                && self.bundle_keys.unrequested.len() >= MAX_UNREQUESTED_IDS
+            if !self
+                .encrypted_transaction_keys
+                .unrequested
+                .contains_key(&id)
+                && self.encrypted_transaction_keys.unrequested.len() >= MAX_UNREQUESTED_IDS
             {
-                debug!("dropping bundle key shares for an unrequested identity: buffer is full");
+                debug!(
+                    "dropping encrypted transaction key shares for an unrequested identity: buffer is full"
+                );
                 return;
             }
-            self.bundle_keys
+            self.encrypted_transaction_keys
                 .unrequested
                 .entry(id)
                 .or_default()
@@ -252,16 +273,16 @@ impl RandomnessEventLoop {
         }
     }
 
-    fn maybe_aggregate_bundle_key(&mut self, id: &BundleKeyId) {
+    fn maybe_aggregate_encrypted_transaction_key(&mut self, id: &KeyId) {
         let Some(vss_pk) = self.dkg_output.as_ref().map(|output| output.vss_pk.clone()) else {
             return;
         };
         let threshold = self.aggregation_threshold;
-        let Some(state) = self.bundle_keys.requested.get_mut(id) else {
+        let Some(state) = self.encrypted_transaction_keys.requested.get_mut(id) else {
             return;
         };
         // Only a locally requested identity is aggregated. The request is the point at which
-        // the bundle is known to be committed.
+        // the transaction is known to be committed.
         if state.send_task.is_none() || state.key.initialized() {
             return;
         }
@@ -281,7 +302,7 @@ impl RandomnessEventLoop {
                 )
                 .is_ok();
                 if !valid {
-                    warn!("received invalid bundle key shares from peer {peer_id}");
+                    warn!("received invalid encrypted transaction key shares from peer {peer_id}");
                 }
                 valid
             });
@@ -289,17 +310,17 @@ impl RandomnessEventLoop {
                 return;
             };
             if ThresholdBls12381MinSig::verify(&vss_pk.c0(), &id.1, &retried).is_err() {
-                warn!("bundle key does not verify after removing invalid shares");
+                warn!("encrypted transaction key does not verify after removing invalid shares");
                 return;
             }
             key = retried;
         }
-        self.complete_bundle_key(id, key);
+        self.complete_encrypted_transaction_key(id, key);
     }
 
-    fn complete_bundle_key(&mut self, id: &BundleKeyId, key: RandomnessSignature) {
+    fn complete_encrypted_transaction_key(&mut self, id: &KeyId, key: RandomnessSignature) {
         let state = self
-            .bundle_keys
+            .encrypted_transaction_keys
             .requested
             .entry(id.clone())
             .or_insert_with(RequestedKey::new);
@@ -310,7 +331,7 @@ impl RandomnessEventLoop {
         for waiter in state.waiters.drain(..) {
             let _ = waiter.send(key);
         }
-        debug!("derived bundle key");
+        debug!("derived encrypted transaction key");
     }
 }
 
@@ -319,7 +340,7 @@ const SEND_TIMEOUT: Duration = Duration::from_secs(10);
 /// Sends this node's partial signatures to every peer until the key is known, then sends the
 /// key for a few more rounds so that peers that are behind can complete.
 #[allow(clippy::too_many_arguments)]
-async fn send_bundle_key_shares_task(
+async fn send_encrypted_transaction_key_shares_task(
     name: AuthorityName,
     network: anemo::Network,
     retry_interval: Duration,
@@ -343,7 +364,7 @@ async fn send_bundle_key_shares_task(
         let known_key = key.get().copied();
         let requests = peers.iter().map(|peer| {
             let mut client = RandomnessClient::new(peer.clone());
-            let request = anemo::Request::new(SendBundleKeySharesRequest {
+            let request = anemo::Request::new(SendEncryptedTransactionKeySharesRequest {
                 epoch,
                 id_message: id_message.clone(),
                 partial_sigs: if known_key.is_none() {
@@ -355,8 +376,12 @@ async fn send_bundle_key_shares_task(
             })
             .with_timeout(SEND_TIMEOUT);
             async move {
-                if client.send_bundle_key_shares(request).await.is_err() {
-                    debug!("failed to send bundle key shares");
+                if client
+                    .send_encrypted_transaction_key_shares(request)
+                    .await
+                    .is_err()
+                {
+                    debug!("failed to send encrypted transaction key shares");
                 }
             }
         });
@@ -371,24 +396,28 @@ async fn send_bundle_key_shares_task(
     }
 }
 
-fn send_bundle_key_once(
+fn send_encrypted_transaction_key_once(
     network: &anemo::Network,
     peer_id: PeerId,
-    (epoch, id_message): BundleKeyId,
+    (epoch, id_message): KeyId,
     key: RandomnessSignature,
 ) {
     let peer = network.waiting_peer(peer_id);
     spawn_monitored_task!(async move {
         let mut client = RandomnessClient::new(peer);
-        let request = anemo::Request::new(SendBundleKeySharesRequest {
+        let request = anemo::Request::new(SendEncryptedTransactionKeySharesRequest {
             epoch,
             id_message,
             partial_sigs: vec![],
             key: Some(key),
         })
         .with_timeout(SEND_TIMEOUT);
-        if client.send_bundle_key_shares(request).await.is_err() {
-            debug!("failed to send bundle key to peer {peer_id}");
+        if client
+            .send_encrypted_transaction_key_shares(request)
+            .await
+            .is_err()
+        {
+            debug!("failed to send encrypted transaction key to peer {peer_id}");
         }
     });
 }

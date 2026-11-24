@@ -663,6 +663,9 @@ mod checked {
             TransactionKind::RandomnessStateUpdate(_) => {
                 panic!("RandomnessStateUpdate should not exist in v1");
             }
+            TransactionKind::EncryptedTransaction(_) => {
+                panic!("EncryptedTransaction should not exist in execution layer v1");
+            }
             TransactionKind::ProgrammableSystemTransaction(_) => {
                 panic!("ProgrammableSystemTransaction should not exist in execution layer v1");
             }

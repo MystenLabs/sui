@@ -359,14 +359,7 @@ impl ConsensusAdapter {
         tx_consensus_position: Option<oneshot::Sender<SuiResult<Vec<ConsensusPosition>>>>,
         submitter_client_addr: Option<IpAddr>,
     ) -> SuiResult<JoinHandle<()>> {
-        // An encrypted bundle travels with the user transaction that pays its fee, so both
-        // land in the same block.
-        let is_encrypted_bundle_with_fee = matches!(
-            transactions,
-            [fee, bundle] if fee.is_user_transaction()
-                && matches!(bundle.kind, ConsensusTransactionKind::EncryptedBundle(_))
-        );
-        if transactions.len() > 1 && !is_encrypted_bundle_with_fee {
+        if transactions.len() > 1 {
             // Soft bundles must contain only UserTransactionV2 transactions.
             for transaction in transactions {
                 fp_ensure!(

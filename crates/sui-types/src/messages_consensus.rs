@@ -5,7 +5,7 @@ use crate::base_types::{AuthorityName, ConsensusObjectSequenceKey, ObjectRef, Tr
 use crate::base_types::{ConciseableName, ObjectID, SequenceNumber};
 use crate::committee::EpochId;
 use crate::digests::{AdditionalConsensusStateDigest, ConsensusCommitDigest};
-use crate::encrypted_bundle::{EncryptedBundle, EncryptedBundleId};
+use crate::encrypted_transaction::EncryptedTransactionResolution;
 use crate::error::{SuiError, SuiErrorKind};
 use crate::execution::ExecutionTimeObservationKey;
 use crate::messages_checkpoint::{
@@ -19,7 +19,6 @@ use crate::transaction_deny_rules::TransactionDenyRules;
 use byteorder::{BigEndian, ReadBytesExt};
 use bytes::Bytes;
 use consensus_types::block::{BlockRef, PING_TRANSACTION_INDEX, TransactionIndex};
-use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
 use fastcrypto_threshold::dkg_v1;
@@ -139,6 +138,16 @@ pub enum ConsensusDeterminedVersionAssignments {
             Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
         )>,
     ),
+    /// Cancelled transaction version assignments, plus the keys of the encrypted transactions
+    /// that the commit schedules. Nodes that replay checkpoints decrypt the transactions with
+    /// these keys.
+    CancelledAndEncryptedTransactions {
+        cancelled_transactions: Vec<(
+            TransactionDigest,
+            Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
+        )>,
+        encrypted_transactions: Vec<EncryptedTransactionResolution>,
+    },
 }
 
 impl ConsensusDeterminedVersionAssignments {
@@ -243,13 +252,6 @@ impl ConsensusTransaction {
                     msg.generation()
                 )
             }
-            ConsensusTransactionKind::EncryptedBundle(msg) => {
-                format!(
-                    "EncryptedBundle({}, {})",
-                    msg.bundle.author.concise(),
-                    Hex::encode(msg.bundle.id())
-                )
-            }
         }
     }
 }
@@ -274,7 +276,6 @@ pub enum ConsensusTransactionKey {
     RandomnessStateUpdate,
     /// `(authority, generation)` — supersede by strictly-increasing generation.
     UpdateTransactionDenyConfig(AuthorityName, u64),
-    EncryptedBundle(EncryptedBundleId),
 }
 
 impl Debug for ConsensusTransactionKey {
@@ -329,7 +330,6 @@ impl Debug for ConsensusTransactionKey {
                 "UpdateTransactionDenyConfig({:?}, {generation:?})",
                 name.concise()
             ),
-            Self::EncryptedBundle(id) => write!(f, "EncryptedBundle({})", Hex::encode(id)),
         }
     }
 }
@@ -535,19 +535,6 @@ pub enum ConsensusTransactionKind {
     /// Recommended `TransactionDenyConfig` settings broadcast by an authority for peers
     /// to use. Application of recommended rules by receiving validators is opt-in.
     UpdateTransactionDenyConfig(Box<SharedTransactionDenyConfig>),
-
-    /// An encrypted transaction bundle. Validators release the bundle's key only after the
-    /// message is committed. Gated by the `encrypted_bundles` protocol flag.
-    EncryptedBundle(Box<EncryptedBundleMessage>),
-}
-
-/// An encrypted bundle and the transaction that pays its fee.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct EncryptedBundleMessage {
-    pub bundle: EncryptedBundle,
-    /// A user transaction in the same commit whose minimum computation charge covers the
-    /// bundle fee. The validator sets it outside the enclave.
-    pub fee_tx_digest: TransactionDigest,
 }
 
 impl ConsensusTransactionKind {
@@ -759,16 +746,6 @@ impl ConsensusTransaction {
         }
     }
 
-    pub fn new_encrypted_bundle(msg: EncryptedBundleMessage) -> Self {
-        let id = msg.bundle.id();
-        let mut tracking_id = [0u8; 8];
-        tracking_id.copy_from_slice(&id[..8]);
-        Self {
-            tracking_id,
-            kind: ConsensusTransactionKind::EncryptedBundle(Box::new(msg)),
-        }
-    }
-
     pub fn get_tracking_id(&self) -> u64 {
         (&self.tracking_id[..])
             .read_u64::<BigEndian>()
@@ -841,9 +818,6 @@ impl ConsensusTransaction {
                     msg.authority(),
                     msg.generation(),
                 )
-            }
-            ConsensusTransactionKind::EncryptedBundle(msg) => {
-                ConsensusTransactionKey::EncryptedBundle(msg.bundle.id())
             }
         }
     }

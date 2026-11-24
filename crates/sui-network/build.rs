@@ -255,9 +255,9 @@ fn build_anemo_services(out_dir: &Path) {
         )
         .method(
             anemo_build::manual::Method::builder()
-                .name("send_bundle_key_shares")
-                .route_name("SendBundleKeyShares")
-                .request_type("crate::randomness::SendBundleKeySharesRequest")
+                .name("send_encrypted_transaction_key_shares")
+                .route_name("SendEncryptedTransactionKeyShares")
+                .request_type("crate::randomness::SendEncryptedTransactionKeySharesRequest")
                 .response_type("()")
                 .codec_path(codec_path)
                 .build(),
