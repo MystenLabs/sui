@@ -95,11 +95,15 @@ pub fn list_dynamic_fields(
     let mut iter = indexes.dynamic_field_iter(
         parent.into(),
         filter.as_ref(),
-        page_token.map(|t| DynamicFieldKey {
-            parent: parent.into(),
-            field_id: t.field_id.into(),
-            object_type: t.object_type,
+        page_token.map_or(std::ops::Bound::Unbounded, |t| {
+            std::ops::Bound::Included(DynamicFieldKey {
+                parent: parent.into(),
+                field_id: t.field_id.into(),
+                object_type: t.object_type,
+            })
         }),
+        std::ops::Bound::Unbounded,
+        false,
     )?;
     let mut dynamic_fields = Vec::with_capacity(page_size);
     let render_context = RenderContext::empty(service.reader.inner());

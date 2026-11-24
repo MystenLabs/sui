@@ -102,8 +102,19 @@ pub fn list_owned_objects(
     };
 
     let should_load_object = should_load_object(&read_mask);
-    let mut iter =
-        indexes.owned_objects_iter(owner.into(), filter.as_ref(), page_token.map(|t| t.inner))?;
+    let mut iter = indexes.owned_objects_iter(
+        sui_types::storage::OwnedObjectOwner::Address(owner.into()),
+        filter.as_ref(),
+        page_token.map_or(std::ops::Bound::Unbounded, |t| {
+            std::ops::Bound::Included(sui_types::storage::OwnedObjectKey {
+                object_type: t.inner.object_type,
+                balance: t.inner.balance,
+                object_id: t.inner.object_id,
+            })
+        }),
+        std::ops::Bound::Unbounded,
+        false,
+    )?;
     let mut objects = Vec::with_capacity(page_size);
     let render_context = RenderContext::empty(service.reader.inner());
     let mut size_bytes = 0;

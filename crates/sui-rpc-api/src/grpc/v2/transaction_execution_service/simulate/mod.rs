@@ -700,11 +700,13 @@ fn select_gas(
             .indexes()
             .ok_or_else(RpcError::not_found)?
             .owned_objects_iter(
-                owner,
+                sui_types::storage::OwnedObjectOwner::Address(owner),
                 Some(&sui_types::storage::OwnedObjectFilter::object_type(
                     GasCoin::type_(),
                 )),
-                None,
+                std::ops::Bound::Unbounded,
+                std::ops::Bound::Unbounded,
+                false,
             )?
             .filter_ok(|info| !input_objects.contains(&info.object_id))
             .filter_map_ok(|info| reader.inner().get_object(&info.object_id))

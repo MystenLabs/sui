@@ -60,7 +60,11 @@ pub fn list_balances(
     let mut balances = indexes
         .balance_iter(
             &owner.into(),
-            page_token.map(|t| (owner.into(), t.coin_type)),
+            page_token.map_or(std::ops::Bound::Unbounded, |t| {
+                std::ops::Bound::Included(t.coin_type)
+            }),
+            std::ops::Bound::Unbounded,
+            false,
         )?
         .take(page_size + 1)
         .map(|result| result.map_err(|err| RpcError::new(tonic::Code::Internal, err.to_string())))

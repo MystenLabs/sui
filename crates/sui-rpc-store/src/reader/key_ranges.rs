@@ -16,8 +16,10 @@ use std::ops::Bound;
 
 use move_core_types::language_storage::StructTag;
 use sui_consistent_store::DbMap;
+use sui_consistent_store::Decode;
 use sui_consistent_store::Encode;
 use sui_consistent_store::Iter;
+use sui_consistent_store::RevIter;
 use sui_consistent_store::error::EncodeError;
 use sui_consistent_store::error::Error;
 use sui_consistent_store::iter::next_prefix;
@@ -33,9 +35,7 @@ use sui_types::storage::DynamicFieldPredicate;
 use sui_types::storage::NameTypePattern;
 use sui_types::storage::OwnedObjectFilter;
 
-use crate::schema::object_by_owner::Key;
 use crate::schema::object_by_owner::OwnerKind;
-use crate::schema::object_by_owner::Value;
 use crate::schema::type_filter::TypeFilter;
 
 /// BCS variant index of `TypeTag::Struct`.
@@ -67,14 +67,50 @@ fn end_at_or_before(a: &Option<Vec<u8>>, b: &Option<Vec<u8>>) -> bool {
 }
 
 impl KeyRanges {
-    fn empty() -> Self {
+    pub(crate) fn empty() -> Self {
         Self(Vec::new())
     }
 
+    /// The entire key space.
+    pub(crate) fn all() -> Self {
+        Self(vec![KeyRange {
+            start: Vec::new(),
+            end: None,
+        }])
+    }
+
     /// Every key that starts with `prefix`.
-    fn prefix(prefix: Vec<u8>) -> Self {
+    pub(crate) fn prefix(prefix: Vec<u8>) -> Self {
         let end = next_prefix(&prefix);
         Self(vec![KeyRange { start: prefix, end }])
+    }
+
+    /// Restrict this set to keys within the byte interval `(lower, upper)`.
+    pub(crate) fn restrict(&self, lower: Bound<&[u8]>, upper: Bound<&[u8]>) -> Self {
+        let start = match lower {
+            Bound::Unbounded => Vec::new(),
+            Bound::Included(bytes) => bytes.to_vec(),
+            Bound::Excluded(bytes) => {
+                let mut next = Vec::with_capacity(bytes.len() + 1);
+                next.extend_from_slice(bytes);
+                next.push(0);
+                next
+            }
+        };
+        let end = match upper {
+            Bound::Unbounded => None,
+            Bound::Excluded(bytes) => Some(bytes.to_vec()),
+            Bound::Included(bytes) => {
+                let mut next = Vec::with_capacity(bytes.len() + 1);
+                next.extend_from_slice(bytes);
+                next.push(0);
+                Some(next)
+            }
+        };
+        if !before_end(&start, &end) {
+            return Self::empty();
+        }
+        self.intersection(&Self(vec![KeyRange { start, end }]))
     }
 
     fn union(self, other: Self) -> Self {
@@ -169,6 +205,20 @@ pub(crate) fn owned_object_ranges(
         Ok(KeyRanges::prefix(
             (kind, TypeFilter::from(pattern)).encode()?,
         ))
+    })
+}
+
+/// The keys in `object_by_type` that `filter` selects (every live Move struct object when
+/// `filter` is `None`).
+pub(crate) fn object_by_type_ranges(
+    filter: Option<&OwnedObjectFilter>,
+) -> Result<KeyRanges, EncodeError> {
+    let all = KeyRanges::all();
+    let Some(filter) = filter else {
+        return Ok(all);
+    };
+    dnf_ranges(all, filter, |pattern| {
+        Ok(KeyRanges::prefix(TypeFilter::from(pattern).encode()?))
     })
 }
 
@@ -271,41 +321,71 @@ fn wrapper_struct_tag() -> StructTag {
     }
 }
 
-/// The rows of an `object_by_owner` scan whose keys lie in a [`KeyRanges`],
-/// reached by seeking over the gaps between ranges.
-pub(crate) struct FilteredScan<'d> {
-    /// `None` when no range lies at or after the cursor.
-    rows: Option<Iter<'d, Key, Value>>,
+enum ScanRows<'d, K, V> {
+    Fwd(Iter<'d, K, V>),
+    Rev(RevIter<'d, K, V>),
+}
+
+/// The rows of a column family whose keys lie in a [`KeyRanges`], reached by seeking over the
+/// gaps between ranges in either forward or reverse key order.
+pub(crate) struct FilteredScan<'d, K, V> {
+    /// `None` when no range lies within the requested bounds.
+    rows: Option<ScanRows<'d, K, V>>,
     ranges: Vec<KeyRange>,
-    /// The first range that ends after the last key seen.
+    /// The index of the current range in `ranges` (increasing forward, decreasing in reverse).
     current: usize,
 }
 
-impl<'d> FilteredScan<'d> {
-    /// Scans the rows of `map` in `ranges`, starting at `from` (inclusive).
+fn encode_bound<K: Encode>(bound: Bound<&K>) -> Result<Bound<Vec<u8>>, EncodeError> {
+    match bound {
+        Bound::Unbounded => Ok(Bound::Unbounded),
+        Bound::Included(k) => Ok(Bound::Included(k.encode()?)),
+        Bound::Excluded(k) => Ok(Bound::Excluded(k.encode()?)),
+    }
+}
+
+impl<'d, K, V> FilteredScan<'d, K, V> {
+    /// Scans the rows of `map` in `ranges` intersected with `(lower, upper)`, in ascending key
+    /// order or reverse when `descending` is set.
     pub(crate) fn open<R: Reader>(
-        map: &'d DbMap<Key, Value, R>,
+        map: &'d DbMap<K, V, R>,
         ranges: KeyRanges,
-        from: Option<&Key>,
-    ) -> Result<Self, Error> {
-        let from = from.map(Encode::encode).transpose()?;
-        let mut ranges = ranges.0;
-        if let Some(from) = &from {
-            ranges.retain(|range| before_end(from, &range.end));
-        }
+        lower: Bound<&K>,
+        upper: Bound<&K>,
+        descending: bool,
+    ) -> Result<Self, Error>
+    where
+        K: Encode + Decode,
+        V: Decode,
+    {
+        let lower_bytes = encode_bound(lower)?;
+        let upper_bytes = encode_bound(upper)?;
+        let ranges = ranges
+            .restrict(
+                lower_bytes.as_ref().map(Vec::as_slice),
+                upper_bytes.as_ref().map(Vec::as_slice),
+            )
+            .0;
         let (Some(first), Some(last)) = (ranges.first(), ranges.last()) else {
             return Ok(Self::empty());
         };
-        let lower = match from {
-            Some(from) if from > first.start => from,
-            _ => first.start.clone(),
+        let iter_lower = if first.start.is_empty() {
+            Bound::Unbounded
+        } else {
+            Bound::Included(first.start.clone())
         };
-        let upper = last.end.clone().map_or(Bound::Unbounded, Bound::Excluded);
-        let rows = map.iter_with::<Vec<u8>>((Bound::Included(lower), upper))?;
+        let iter_upper = last.end.clone().map_or(Bound::Unbounded, Bound::Excluded);
+        let (rows, current) = if descending {
+            let rev = map.iter_rev_with::<Vec<u8>>((iter_lower, iter_upper))?;
+            (ScanRows::Rev(rev), ranges.len() - 1)
+        } else {
+            let fwd = map.iter_with::<Vec<u8>>((iter_lower, iter_upper))?;
+            (ScanRows::Fwd(fwd), 0)
+        };
         Ok(Self {
             rows: Some(rows),
             ranges,
-            current: 0,
+            current,
         })
     }
 
@@ -318,28 +398,54 @@ impl<'d> FilteredScan<'d> {
     }
 }
 
-impl Iterator for FilteredScan<'_> {
-    type Item = Result<(Key, Value), Error>;
+impl<K, V> Iterator for FilteredScan<'_, K, V>
+where
+    K: Decode,
+    V: Decode,
+{
+    type Item = Result<(K, V), Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let rows = self.rows.as_mut()?;
-        loop {
-            let Some(key) = rows.raw_key() else {
-                // Exhausted or failed; `next` reports which.
-                return rows.next();
-            };
-            while self
-                .ranges
-                .get(self.current)
-                .is_some_and(|range| !before_end(key, &range.end))
-            {
-                self.current += 1;
-            }
-            let range = self.ranges.get(self.current)?;
-            if range.start.as_slice() <= key {
-                return rows.next();
-            }
-            rows.seek(&range.start);
+        match self.rows.as_mut()? {
+            ScanRows::Fwd(rows) => loop {
+                let Some(key) = rows.raw_key() else {
+                    // Exhausted or failed; `next` reports which.
+                    return rows.next();
+                };
+                while self
+                    .ranges
+                    .get(self.current)
+                    .is_some_and(|range| !before_end(key, &range.end))
+                {
+                    self.current += 1;
+                }
+                let range = self.ranges.get(self.current)?;
+                if range.start.as_slice() <= key {
+                    return rows.next();
+                }
+                rows.seek(&range.start);
+            },
+            ScanRows::Rev(rows) => loop {
+                let Some(key) = rows.raw_key() else {
+                    // Exhausted or failed; `next` reports which.
+                    return rows.next();
+                };
+                while key < self.ranges[self.current].start.as_slice() {
+                    if self.current == 0 {
+                        return None;
+                    }
+                    self.current -= 1;
+                }
+                let range = &self.ranges[self.current];
+                if before_end(key, &range.end) {
+                    return rows.next();
+                }
+                let end = range
+                    .end
+                    .as_deref()
+                    .expect("before_end is true when end is None");
+                rows.skip_past(end);
+            },
         }
     }
 }
@@ -353,6 +459,7 @@ mod tests {
     use sui_types::storage::FilterLiteral;
     use sui_types::storage::StructTypePattern;
 
+    use crate::schema::object_by_owner::Key;
     use super::*;
 
     fn type_tag(s: &str) -> TypeTag {
