@@ -459,8 +459,8 @@ mod tests {
     use sui_types::storage::FilterLiteral;
     use sui_types::storage::StructTypePattern;
 
-    use crate::schema::object_by_owner::Key;
     use super::*;
+    use crate::schema::object_by_owner::Key;
 
     fn type_tag(s: &str) -> TypeTag {
         sui_types::parse_sui_type_tag(s).unwrap()

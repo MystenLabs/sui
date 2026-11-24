@@ -94,10 +94,20 @@ pub(super) async fn list_objects(
         let checkpoint = opts.checkpoint;
         let pin_source = opts.pin_source;
         tokio::task::spawn_blocking(move || {
-            resolve_pinned(service.reader.inner().as_ref(), checkpoint, pin_source, true)
+            resolve_pinned(
+                service.reader.inner().as_ref(),
+                checkpoint,
+                pin_source,
+                true,
+            )
         })
         .await
-        .map_err(|e| RpcError::new(tonic::Code::Internal, format!("list_objects task failed: {e}")))??
+        .map_err(|e| {
+            RpcError::new(
+                tonic::Code::Internal,
+                format!("list_objects task failed: {e}"),
+            )
+        })??
     };
     let pinned = Arc::new(pinned);
 
@@ -116,7 +126,7 @@ pub(super) async fn list_objects(
             let chunk_lower = lower.clone();
             let chunk_upper = upper.clone();
 
-            let (items, last_key) = tokio::task::spawn_blocking(move || {
+            let ObjectsChunk { items, last_key } = tokio::task::spawn_blocking(move || {
                 read_chunk(
                     &chunk_service,
                     &chunk_pinned,
@@ -176,6 +186,11 @@ pub(super) async fn list_objects(
     Ok(stream.boxed())
 }
 
+struct ObjectsChunk {
+    items: Vec<(Object, Bytes)>,
+    last_key: Option<ObjectByTypeKey>,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn read_chunk(
     service: &RpcService,
@@ -187,7 +202,7 @@ fn read_chunk(
     upper: Bound<ObjectByTypeKey>,
     descending: bool,
     chunk_limit: usize,
-) -> Result<(Vec<(Object, Bytes)>, Option<ObjectByTypeKey>)> {
+) -> Result<ObjectsChunk> {
     let reader = service.reader.inner();
     let render_context = RenderContext::empty(reader);
     let mut iter = pinned
@@ -234,7 +249,7 @@ fn read_chunk(
     // Re-check the object pruning floor before releasing any frame from this chunk.
     pinned.check_object_floor(reader.as_ref())?;
 
-    Ok((items, last_key))
+    Ok(ObjectsChunk { items, last_key })
 }
 
 fn should_load_object_by_type(mask: &FieldMaskTree) -> bool {
@@ -274,13 +289,13 @@ mod tests {
     use sui_types::storage::OwnedObjectOwner;
 
     use super::*;
-    use crate::reader::assert_refusal;
     use crate::grpc::v2::state_service::test_support::TestStateStore;
     use crate::grpc::v2::state_service::test_support::dummy_struct_bytes;
     use crate::grpc::v2::state_service::test_support::make_struct_object;
     use crate::grpc::v2::state_service::test_support::struct_tag;
     use crate::grpc::v2::state_service::test_support::test_address;
     use crate::grpc::v2::state_service::test_support::test_object_id;
+    use crate::reader::assert_refusal;
 
     fn type_filter(object_type: &str, negated: bool) -> ObjectFilter {
         let mut tf = ObjectTypeFilter::default();

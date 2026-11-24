@@ -24,8 +24,8 @@
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 
-use sui_consistent_store::SnapshotLookup;
 use sui_consistent_store::FrameworkSchema;
+use sui_consistent_store::SnapshotLookup;
 use sui_consistent_store::reader::Reader;
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::CheckpointDigest;

@@ -778,11 +778,11 @@ mod tests {
     use sui_types::base_types::SequenceNumber;
     use sui_types::base_types::SuiAddress;
     use sui_types::storage::DynamicFieldEntry;
+    use sui_types::storage::IndexedPackageVersion;
     use sui_types::storage::OwnedObjectFilter;
     use sui_types::storage::OwnedObjectInfo;
     use sui_types::storage::OwnedObjectKey;
     use sui_types::storage::OwnedObjectOwner;
-    use sui_types::storage::IndexedPackageVersion;
     use sui_types::storage::PackagePublishKey;
     use sui_types::storage::RpcIndexes;
 
@@ -1253,13 +1253,15 @@ mod tests {
         // Bounded so a non-advancing cursor surfaces as a failed assertion
         // rather than an infinite loop.
         for _ in 0..ids.len() + 2 {
-            let lower = cursor.take().map_or(Bound::Unbounded, |c: OwnedObjectInfo| {
-                Bound::Included(OwnedObjectKey {
-                    object_type: c.object_type,
-                    balance: c.balance,
-                    object_id: c.object_id,
-                })
-            });
+            let lower = cursor
+                .take()
+                .map_or(Bound::Unbounded, |c: OwnedObjectInfo| {
+                    Bound::Included(OwnedObjectKey {
+                        object_type: c.object_type,
+                        balance: c.balance,
+                        object_id: c.object_id,
+                    })
+                });
             let mut iter = reader
                 .owned_objects_iter(
                     OwnedObjectOwner::Address(owner),
@@ -1355,13 +1357,15 @@ mod tests {
         let mut seen = Vec::new();
         let mut cursor = None;
         for _ in 0..100 {
-            let lower = cursor.take().map_or(Bound::Unbounded, |c: OwnedObjectInfo| {
-                Bound::Included(OwnedObjectKey {
-                    object_type: c.object_type,
-                    balance: c.balance,
-                    object_id: c.object_id,
-                })
-            });
+            let lower = cursor
+                .take()
+                .map_or(Bound::Unbounded, |c: OwnedObjectInfo| {
+                    Bound::Included(OwnedObjectKey {
+                        object_type: c.object_type,
+                        balance: c.balance,
+                        object_id: c.object_id,
+                    })
+                });
             let mut iter = reader
                 .owned_objects_iter(
                     OwnedObjectOwner::Address(owner),
@@ -1558,7 +1562,9 @@ mod tests {
             let mut seen = Vec::new();
             let mut cursor: Option<DynamicFieldEntry> = None;
             for _ in 0..100 {
-                let lower = cursor.take().map_or(Bound::Unbounded, |c| Bound::Included(c.key()));
+                let lower = cursor
+                    .take()
+                    .map_or(Bound::Unbounded, |c| Bound::Included(c.key()));
                 let mut iter = reader
                     .dynamic_field_iter(parent, Some(filter), lower, Bound::Unbounded, false)
                     .unwrap();
@@ -2023,7 +2029,13 @@ mod tests {
         put(OwnerKind::AddressOwner(addr), "0x3::c::C", None, 3, 12);
         put(OwnerKind::AddressOwner(addr), "0x4::d::D", None, 4, 13);
         // Object-owned, shared, immutable.
-        put(OwnerKind::ObjectOwner(parent.into()), "0x1::a::A", None, 5, 20);
+        put(
+            OwnerKind::ObjectOwner(parent.into()),
+            "0x1::a::A",
+            None,
+            5,
+            20,
+        );
         put(OwnerKind::Shared, "0x1::a::A", None, 6, 30);
         put(OwnerKind::Shared, "0x2::b::B", None, 7, 31);
         put(OwnerKind::Immutable, "0x1::a::A", None, 8, 40);

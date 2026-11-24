@@ -399,14 +399,9 @@ fn load_dynamic_field_pinned(
     message: &mut DynamicField,
     render_context: &RenderContext,
 ) -> Result<()> {
-    let Some(child_id) = populate_field_object(
-        service,
-        field_object,
-        read_mask,
-        message,
-        render_context,
-    )
-    .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+    let Some(child_id) =
+        populate_field_object(service, field_object, read_mask, message, render_context)
+            .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
     else {
         return Ok(());
     };
@@ -604,7 +599,6 @@ mod tests {
     use sui_types::storage::OwnedObjectKey;
 
     use super::*;
-    use crate::reader::assert_refusal;
     use crate::grpc::v2::state_service::test_support::TestStateStore;
     use crate::grpc::v2::state_service::test_support::dummy_struct_bytes;
     use crate::grpc::v2::state_service::test_support::make_dynamic_field_u64;
@@ -612,6 +606,7 @@ mod tests {
     use crate::grpc::v2::state_service::test_support::make_struct_object;
     use crate::grpc::v2::state_service::test_support::struct_tag;
     use crate::grpc::v2::state_service::test_support::test_object_id;
+    use crate::reader::assert_refusal;
 
     #[test]
     fn pinned_read_loads_exact_field_and_child_versions_at_checkpoint() {
@@ -665,7 +660,10 @@ mod tests {
         let resp10 = list_dynamic_fields(&service, req10).unwrap();
         assert_eq!(resp10.dynamic_fields.len(), 2);
         assert_eq!(resp10.cursors.len(), 2);
-        assert_eq!(resp10.end.unwrap().reason(), QueryEndReason::CheckpointBound);
+        assert_eq!(
+            resp10.end.unwrap().reason(),
+            QueryEndReason::CheckpointBound
+        );
 
         let inline_10 = resp10
             .dynamic_fields
@@ -741,8 +739,14 @@ mod tests {
         req_desc.at_checkpoint = Some(10);
         req_desc.options = Some(desc_opts);
         let resp_desc = list_dynamic_fields(&service, req_desc).unwrap();
-        assert_eq!(resp_desc.dynamic_fields[0].field_id(), resp10.dynamic_fields[1].field_id());
-        assert_eq!(resp_desc.dynamic_fields[1].field_id(), resp10.dynamic_fields[0].field_id());
+        assert_eq!(
+            resp_desc.dynamic_fields[0].field_id(),
+            resp10.dynamic_fields[1].field_id()
+        );
+        assert_eq!(
+            resp_desc.dynamic_fields[1].field_id(),
+            resp10.dynamic_fields[0].field_id()
+        );
 
         // Reject a ListOwnedObjects(OBJECT, parent) cursor passed to ListDynamicFields.
         let owned_cursor = StateCursor {

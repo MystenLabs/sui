@@ -117,7 +117,6 @@ impl TestStateStore {
         self.apply_object_change(Some(old), Some(new));
     }
 
-
     fn apply_object_change(&self, old: Option<&Object>, new: Option<Object>) {
         let mut batch = self.db.batch();
         if let Some(old) = old {
@@ -164,7 +163,8 @@ impl TestStateStore {
         coin: i128,
         address: i128,
     ) {
-        let (key, value) = balance_schema::delta(owner, TypeTag::Struct(Box::new(coin_type)), coin, address);
+        let (key, value) =
+            balance_schema::delta(owner, TypeTag::Struct(Box::new(coin_type)), coin, address);
         let mut batch = self.db.batch();
         batch
             .merge(&self.store.schema().balance, &key, &value)

@@ -264,10 +264,13 @@ pub fn list_owned_objects(
 
     let target = resolve_state_read(service, checkpoint, pin, pin_source, true)?;
 
-    let mut iter =
-        target
-            .indexes()
-            .owned_objects_iter(owner, filter.as_ref(), lower, Bound::Unbounded, false)?;
+    let mut iter = target.indexes().owned_objects_iter(
+        owner,
+        filter.as_ref(),
+        lower,
+        Bound::Unbounded,
+        false,
+    )?;
     let mut objects = Vec::with_capacity(page_size);
     let render_context = RenderContext::empty(reader);
     let mut size_bytes = 0;
@@ -474,8 +477,6 @@ mod tests {
     use sui_types::object::Owner;
 
     use super::*;
-    use crate::ledger_history::query_options::assert_below_serving_floor_error;
-    use crate::reader::assert_refusal;
     use crate::grpc::v2::state_service::test_support::TestStateStore;
     use crate::grpc::v2::state_service::test_support::dummy_struct_bytes;
     use crate::grpc::v2::state_service::test_support::make_coin_object;
@@ -483,6 +484,8 @@ mod tests {
     use crate::grpc::v2::state_service::test_support::struct_tag;
     use crate::grpc::v2::state_service::test_support::test_address;
     use crate::grpc::v2::state_service::test_support::test_object_id;
+    use crate::ledger_history::query_options::assert_below_serving_floor_error;
+    use crate::reader::assert_refusal;
 
     #[test]
     fn owner_kinds_and_type_filter_levels() {
@@ -599,7 +602,11 @@ mod tests {
         }
 
         // OWNER_KIND_UNKNOWN and CONSENSUS_ADDRESS -> INVALID_ARGUMENT.
-        for invalid_kind in [OwnerKind::Unknown as i32, OwnerKind::ConsensusAddress as i32, 99] {
+        for invalid_kind in [
+            OwnerKind::Unknown as i32,
+            OwnerKind::ConsensusAddress as i32,
+            99,
+        ] {
             let mut bad = ListOwnedObjectsRequest::default();
             bad.owner_kind = Some(invalid_kind);
             bad.owner = Some(alice.to_string());
@@ -636,7 +643,10 @@ mod tests {
         let asc_resp = list_owned_objects(&service, asc).unwrap();
         let asc_bals: Vec<_> = asc_resp.objects.iter().map(|o| o.balance()).collect();
         assert_eq!(asc_bals, vec![500, 200, 100]);
-        assert_eq!(asc_resp.end.unwrap().reason(), QueryEndReason::CheckpointBound);
+        assert_eq!(
+            asc_resp.end.unwrap().reason(),
+            QueryEndReason::CheckpointBound
+        );
 
         // Descending order reverses it: 100, 200, 500.
         let mut desc_opts = QueryOptions::default();
@@ -681,11 +691,23 @@ mod tests {
         let (_dir, store, service) = TestStateStore::open(5);
         let alice = test_address(0x10);
         let id = test_object_id(1);
-        let v1 = make_coin_object(id, 1, Owner::AddressOwner(alice), struct_tag("0x2::sui::SUI"), 50);
+        let v1 = make_coin_object(
+            id,
+            1,
+            Owner::AddressOwner(alice),
+            struct_tag("0x2::sui::SUI"),
+            50,
+        );
         store.put_object(v1.clone());
         store.take_snapshot(5);
 
-        let v2 = make_coin_object(id, 2, Owner::AddressOwner(alice), struct_tag("0x2::sui::SUI"), 99);
+        let v2 = make_coin_object(
+            id,
+            2,
+            Owner::AddressOwner(alice),
+            struct_tag("0x2::sui::SUI"),
+            99,
+        );
         store.replace_object(&v1, v2);
         store.take_snapshot(6);
 

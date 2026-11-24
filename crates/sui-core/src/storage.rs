@@ -1276,7 +1276,9 @@ impl RpcIndexes for RpcStoreReadStore {
         upper: std::ops::Bound<sui_types::storage::ObjectByTypeKey>,
         descending: bool,
     ) -> Result<
-        Box<dyn Iterator<Item = Result<sui_types::storage::ObjectByTypeInfo, TypedStoreError>> + '_>,
+        Box<
+            dyn Iterator<Item = Result<sui_types::storage::ObjectByTypeInfo, TypedStoreError>> + '_,
+        >,
     > {
         self.reader
             .objects_by_type_iter(filter, lower, upper, descending)

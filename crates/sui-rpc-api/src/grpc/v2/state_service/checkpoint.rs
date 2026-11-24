@@ -361,7 +361,10 @@ mod tests {
             self.store.get_lowest_available_checkpoint()
         }
 
-        fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
+        fn get_checkpoint_by_digest(
+            &self,
+            digest: &CheckpointDigest,
+        ) -> Option<VerifiedCheckpoint> {
             self.store.get_checkpoint_by_digest(digest)
         }
 
@@ -388,11 +391,17 @@ mod tests {
                 .get_checkpoint_contents_by_sequence_number(sequence_number)
         }
 
-        fn get_transaction(&self, tx_digest: &TransactionDigest) -> Option<Arc<VerifiedTransaction>> {
+        fn get_transaction(
+            &self,
+            tx_digest: &TransactionDigest,
+        ) -> Option<Arc<VerifiedTransaction>> {
             self.store.get_transaction(tx_digest)
         }
 
-        fn get_transaction_effects(&self, tx_digest: &TransactionDigest) -> Option<TransactionEffects> {
+        fn get_transaction_effects(
+            &self,
+            tx_digest: &TransactionDigest,
+        ) -> Option<TransactionEffects> {
             self.store.get_transaction_effects(tx_digest)
         }
 
@@ -439,10 +448,7 @@ mod tests {
             self.store.indexes()
         }
 
-        fn indexes_at_checkpoint(
-            &self,
-            checkpoint: CheckpointSequenceNumber,
-        ) -> CheckpointIndexes {
+        fn indexes_at_checkpoint(&self, checkpoint: CheckpointSequenceNumber) -> CheckpointIndexes {
             self.store.indexes_at_checkpoint(checkpoint)
         }
 

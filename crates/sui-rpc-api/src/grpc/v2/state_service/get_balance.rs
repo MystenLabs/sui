@@ -203,13 +203,13 @@ mod tests {
     use sui_rpc::proto::sui::rpc::v2::GetBalanceRequest;
 
     use super::*;
+    use crate::grpc::v2::state_service::test_support::TestStateStore;
+    use crate::grpc::v2::state_service::test_support::struct_tag;
+    use crate::grpc::v2::state_service::test_support::test_address;
     use crate::ledger_history::query_options::assert_above_latest_available_error;
     use crate::ledger_history::query_options::assert_below_serving_floor_error;
     use crate::reader::NotServedHereCause;
     use crate::reader::assert_not_served_here;
-    use crate::grpc::v2::state_service::test_support::TestStateStore;
-    use crate::grpc::v2::state_service::test_support::struct_tag;
-    use crate::grpc::v2::state_service::test_support::test_address;
 
     fn req(owner: SuiAddress, coin_type: &str, at_checkpoint: Option<u64>) -> GetBalanceRequest {
         let mut r = GetBalanceRequest::default();
@@ -278,11 +278,7 @@ mod tests {
             req(alice, &usdc.to_canonical_string(true), Some(3)),
         ];
         let resp = batch_get_balances(&service, batch).unwrap();
-        let totals: Vec<u64> = resp
-            .balances
-            .iter()
-            .map(|b| b.balance.unwrap())
-            .collect();
+        let totals: Vec<u64> = resp.balances.iter().map(|b| b.balance.unwrap()).collect();
         assert_eq!(totals, vec![35, 0, 65, 105, 0]);
 
         // Accepts 200+ items.

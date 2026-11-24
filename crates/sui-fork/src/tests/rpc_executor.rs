@@ -455,9 +455,9 @@ async fn test_indexer_populates_derived_indexes_for_local_execution() {
         std::ops::Bound::Unbounded,
         false,
     )
-        .expect("owned-object iterator should build")
-        .map(|result| result.expect("owned-object entry should decode"))
-        .collect();
+    .expect("owned-object iterator should build")
+    .map(|result| result.expect("owned-object entry should decode"))
+    .collect();
     assert_eq!(recipient_infos.len(), 1);
     assert_eq!(recipient_infos[0].owner, recipient);
     assert_eq!(recipient_infos[0].balance, Some(transfer_amount));
@@ -477,9 +477,9 @@ async fn test_indexer_populates_derived_indexes_for_local_execution() {
         std::ops::Bound::Unbounded,
         false,
     )
-        .expect("owned-object iterator should build")
-        .map(|result| result.expect("owned-object entry should decode"))
-        .collect();
+    .expect("owned-object iterator should build")
+    .map(|result| result.expect("owned-object entry should decode"))
+    .collect();
     let gas_info = sender_infos
         .iter()
         .find(|info| info.object_id == harness.gas_object.id())

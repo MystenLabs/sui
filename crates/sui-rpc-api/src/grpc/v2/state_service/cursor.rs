@@ -88,7 +88,9 @@ impl StateCursor {
                     listing: grpc::StateListing::OwnedObjects as i32,
                     owner_kind: owner_kind as i32,
                     owner: owner_bytes,
-                    move_type: Some(bcs::to_bytes(&key.object_type).expect("StructTag BCS encodes")),
+                    move_type: Some(
+                        bcs::to_bytes(&key.object_type).expect("StructTag BCS encodes"),
+                    ),
                     balance: key.balance,
                     object_id: Some(key.object_id.to_vec()),
                 }
@@ -290,10 +292,7 @@ impl<K> StateQueryOptions<K> {
     where
         K: Clone,
     {
-        let lower = self
-            .after
-            .clone()
-            .map_or(Bound::Unbounded, Bound::Excluded);
+        let lower = self.after.clone().map_or(Bound::Unbounded, Bound::Excluded);
         let upper = self
             .before
             .clone()
@@ -598,7 +597,9 @@ mod tests {
     fn rejects_empty_missing_checkpoint_and_ledger_cursors() {
         // Empty protobuf message has no position and no kind.
         assert_eq!(
-            StateCursor::decode("options.after", &[]).unwrap_err().code(),
+            StateCursor::decode("options.after", &[])
+                .unwrap_err()
+                .code(),
             tonic::Code::InvalidArgument
         );
 
@@ -625,7 +626,8 @@ mod tests {
         );
 
         // Ledger-history cursor must be rejected.
-        let ledger = LedgerCursorToken::item(LedgerPosition::Checkpoints { checkpoint: 5 }).encode();
+        let ledger =
+            LedgerCursorToken::item(LedgerPosition::Checkpoints { checkpoint: 5 }).encode();
         assert_eq!(
             StateCursor::decode("options.after", &ledger)
                 .unwrap_err()

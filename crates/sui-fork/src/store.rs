@@ -1339,7 +1339,9 @@ impl RpcIndexes for ForkStore {
         upper: std::ops::Bound<sui_types::storage::ObjectByTypeKey>,
         descending: bool,
     ) -> StorageResult<
-        Box<dyn Iterator<Item = Result<sui_types::storage::ObjectByTypeInfo, TypedStoreError>> + '_>,
+        Box<
+            dyn Iterator<Item = Result<sui_types::storage::ObjectByTypeInfo, TypedStoreError>> + '_,
+        >,
     > {
         self.stock_reader()
             .objects_by_type_iter(filter, lower, upper, descending)

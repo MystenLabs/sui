@@ -412,18 +412,17 @@ async fn test_index_reads_are_seed_bounded_and_never_scan_the_remote() {
 
     // A seeded owner has the full derived surface: owner index, balance, and
     // balance iteration.
-    let infos: Vec<_> =
-        RpcIndexes::owned_objects_iter(
-            &reader,
-            sui_types::storage::OwnedObjectOwner::Address(seeded_owner),
-            Some(&gas_coins()),
-            std::ops::Bound::Unbounded,
-            std::ops::Bound::Unbounded,
-            false,
-        )
-            .expect("owned-object iterator should read the seeded index")
-            .map(|result| result.expect("owned-object entry should decode"))
-            .collect();
+    let infos: Vec<_> = RpcIndexes::owned_objects_iter(
+        &reader,
+        sui_types::storage::OwnedObjectOwner::Address(seeded_owner),
+        Some(&gas_coins()),
+        std::ops::Bound::Unbounded,
+        std::ops::Bound::Unbounded,
+        false,
+    )
+    .expect("owned-object iterator should read the seeded index")
+    .map(|result| result.expect("owned-object entry should decode"))
+    .collect();
     assert_eq!(infos.len(), 1);
     assert_eq!(infos[0].owner, seeded_owner);
     assert_eq!(infos[0].object_id, object_id);
@@ -443,9 +442,9 @@ async fn test_index_reads_are_seed_bounded_and_never_scan_the_remote() {
         std::ops::Bound::Unbounded,
         false,
     )
-        .expect("balance iteration should read the seeded index")
-        .map(|entry| entry.expect("balance row should decode"))
-        .collect();
+    .expect("balance iteration should read the seeded index")
+    .map(|entry| entry.expect("balance row should decode"))
+    .collect();
     assert_eq!(balances.len(), 1);
     assert_eq!(balances[0].0, GAS::type_());
     assert_eq!(balances[0].1.coin_balance, 1_000_000);
@@ -462,8 +461,8 @@ async fn test_index_reads_are_seed_bounded_and_never_scan_the_remote() {
             std::ops::Bound::Unbounded,
             false,
         )
-            .expect("unseeded owner read should not error")
-            .count(),
+        .expect("unseeded owner read should not error")
+        .count(),
         0,
     );
     assert!(
@@ -480,8 +479,8 @@ async fn test_index_reads_are_seed_bounded_and_never_scan_the_remote() {
             std::ops::Bound::Unbounded,
             false,
         )
-            .expect("unseeded parent read should not error")
-            .count(),
+        .expect("unseeded parent read should not error")
+        .count(),
         0,
     );
     assert!(
@@ -521,18 +520,17 @@ async fn test_seed_load_survives_restart_without_remote() {
         load_seed_objects(&store, &manifest).expect("seed load should hydrate from the remote");
 
         let reader = store.local_store().reader().clone();
-        let infos: Vec<_> =
-            RpcIndexes::owned_objects_iter(
-                &reader,
-                sui_types::storage::OwnedObjectOwner::Address(owner),
-                Some(&gas_coins()),
-                std::ops::Bound::Unbounded,
-                std::ops::Bound::Unbounded,
-                false,
-            )
-                .expect("owned-object iterator should read the seeded index")
-                .map(|result| result.expect("owned-object entry should decode"))
-                .collect();
+        let infos: Vec<_> = RpcIndexes::owned_objects_iter(
+            &reader,
+            sui_types::storage::OwnedObjectOwner::Address(owner),
+            Some(&gas_coins()),
+            std::ops::Bound::Unbounded,
+            std::ops::Bound::Unbounded,
+            false,
+        )
+        .expect("owned-object iterator should read the seeded index")
+        .map(|result| result.expect("owned-object entry should decode"))
+        .collect();
         assert_eq!(infos.len(), 1);
         let balance = RpcIndexes::get_balance(&reader, &owner, &GAS::type_())
             .expect("balance lookup should read the seeded index")
@@ -558,9 +556,9 @@ async fn test_seed_load_survives_restart_without_remote() {
         std::ops::Bound::Unbounded,
         false,
     )
-        .expect("owned-object iterator should read the reopened seed index")
-        .map(|result| result.expect("owned-object entry should decode"))
-        .collect();
+    .expect("owned-object iterator should read the reopened seed index")
+    .map(|result| result.expect("owned-object entry should decode"))
+    .collect();
     assert_eq!(infos.len(), 1);
     assert_eq!(infos[0].object_id, object_id);
     assert_eq!(
@@ -593,9 +591,9 @@ fn test_rpc_dynamic_field_iter_reads_seeded_object_owner_index() {
         std::ops::Bound::Unbounded,
         false,
     )
-        .expect("dynamic-field iterator should read the seeded object-owner index")
-        .map(|result| result.expect("dynamic-field row should decode"))
-        .collect();
+    .expect("dynamic-field iterator should read the seeded object-owner index")
+    .map(|result| result.expect("dynamic-field row should decode"))
+    .collect();
 
     assert_eq!(fields.len(), 1);
     assert_eq!(fields[0].parent, parent);
@@ -3111,9 +3109,9 @@ fn test_owned_objects_tracks_consensus_address_owner_writes() {
         std::ops::Bound::Unbounded,
         false,
     )
-        .expect("owned-object iterator should build")
-        .map(|result| result.expect("owned-object entry should decode"))
-        .collect();
+    .expect("owned-object iterator should build")
+    .map(|result| result.expect("owned-object entry should decode"))
+    .collect();
     assert_eq!(infos.len(), 1);
     assert_eq!(infos[0].owner, owner);
     assert_eq!(infos[0].object_id, object_id);
@@ -3756,9 +3754,9 @@ fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
         std::ops::Bound::Unbounded,
         false,
     )
-        .expect("owned-object iterator should build")
-        .map(|result| result.expect("owned-object entry should decode"))
-        .collect();
+    .expect("owned-object iterator should build")
+    .map(|result| result.expect("owned-object entry should decode"))
+    .collect();
     assert_eq!(infos.len(), 2);
     assert!(infos[0].object_id < infos[1].object_id);
     assert!(infos.iter().all(|info| info.owner == owner));
@@ -3775,30 +3773,29 @@ fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
             std::ops::Bound::Unbounded,
             false,
         )
-            .expect("owned-object iterator should build")
-            .count(),
+        .expect("owned-object iterator should build")
+        .count(),
         0,
     );
 
     // The rpc-store cursor is inclusive: it carries the full sort position of
     // the first *unread* object, and the resumed scan seeks straight to it. So
     // resuming from `infos[1]` yields exactly that trailing object.
-    let page_from_cursor: Vec<_> =
-        RpcIndexes::owned_objects_iter(
-            &reader,
-            sui_types::storage::OwnedObjectOwner::Address(owner),
-            Some(&gas_coins()),
-            std::ops::Bound::Included(sui_types::storage::OwnedObjectKey {
-                object_type: infos[1].object_type.clone(),
-                balance: infos[1].balance,
-                object_id: infos[1].object_id,
-            }),
-            std::ops::Bound::Unbounded,
-            false,
-        )
-            .expect("owned-object iterator should build")
-            .map(|result| result.expect("owned-object entry should decode"))
-            .collect();
+    let page_from_cursor: Vec<_> = RpcIndexes::owned_objects_iter(
+        &reader,
+        sui_types::storage::OwnedObjectOwner::Address(owner),
+        Some(&gas_coins()),
+        std::ops::Bound::Included(sui_types::storage::OwnedObjectKey {
+            object_type: infos[1].object_type.clone(),
+            balance: infos[1].balance,
+            object_id: infos[1].object_id,
+        }),
+        std::ops::Bound::Unbounded,
+        false,
+    )
+    .expect("owned-object iterator should build")
+    .map(|result| result.expect("owned-object entry should decode"))
+    .collect();
     assert_eq!(page_from_cursor.len(), 1);
     assert_eq!(page_from_cursor[0].object_id, infos[1].object_id);
 }
@@ -3822,10 +3819,17 @@ fn test_cloned_store_shares_owned_object_snapshot_guard() {
     drop(local_snapshot_guard);
 
     let reader = cloned_store.local_store().reader().clone();
-    let infos: Vec<_> = RpcIndexes::owned_objects_iter(&reader, owner, Some(&gas_coins()), None)
-        .expect("owned-object iterator should build")
-        .map(|result| result.expect("owned-object entry should decode"))
-        .collect();
+    let infos: Vec<_> = RpcIndexes::owned_objects_iter(
+        &reader,
+        sui_types::storage::OwnedObjectOwner::Address(owner),
+        Some(&gas_coins()),
+        std::ops::Bound::Unbounded,
+        std::ops::Bound::Unbounded,
+        false,
+    )
+    .expect("owned-object iterator should build")
+    .map(|result| result.expect("owned-object entry should decode"))
+    .collect();
     assert_eq!(infos.len(), 1);
     assert_eq!(infos[0].object_id, object_id);
 }
