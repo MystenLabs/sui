@@ -225,7 +225,7 @@ async fn test_paging_across_checkpoints_stays_pinned_while_state_changes() {
     opts1.limit = Some(1);
     let mut req1 = ListOwnedObjectsRequest::default();
     req1.owner = Some(sender.to_string());
-    req1.read_mask = Some(FieldMask::from_str("object_id,version,balance"));
+    req1.read_mask = Some(FieldMask::from_str("object_id,version,balance,digest"));
     req1.options = Some(opts1);
     let page1 = client
         .state_client()
@@ -242,7 +242,7 @@ async fn test_paging_across_checkpoints_stays_pinned_while_state_changes() {
 
     let mut baseline_req = ListOwnedObjectsRequest::default();
     baseline_req.owner = Some(sender.to_string());
-    baseline_req.read_mask = Some(FieldMask::from_str("object_id,version,balance"));
+    baseline_req.read_mask = Some(FieldMask::from_str("object_id,version,balance,digest"));
     baseline_req.at_checkpoint = Some(initial_hi);
     baseline_req.options = Some(QueryOptions::default());
     let expected_objects: Vec<(String, u64, u64)> = client
@@ -288,7 +288,7 @@ async fn test_paging_across_checkpoints_stays_pinned_while_state_changes() {
         opts.after = Some(after);
         let mut req = ListOwnedObjectsRequest::default();
         req.owner = Some(sender.to_string());
-        req.read_mask = Some(FieldMask::from_str("object_id,version,balance"));
+        req.read_mask = Some(FieldMask::from_str("object_id,version,balance,digest"));
         req.options = Some(opts);
         let page = client
             .state_client()
@@ -308,6 +308,37 @@ async fn test_paging_across_checkpoints_stays_pinned_while_state_changes() {
         }
     }
     assert_eq!(paged, expected_objects);
+
+    // Pinned legacy `page_token` paging stays at `initial_hi` even when follow-up requests omit
+    // `at_checkpoint`.
+    let mut legacy_paged: Vec<(String, u64, u64)> = Vec::new();
+    let mut page_token = None;
+    loop {
+        let mut req = ListOwnedObjectsRequest::default();
+        req.owner = Some(sender.to_string());
+        req.read_mask = Some(FieldMask::from_str("object_id,version,balance,digest"));
+        req.page_size = Some(1);
+        if page_token.is_none() {
+            req.at_checkpoint = Some(initial_hi);
+        }
+        req.page_token = page_token.take();
+        let page = client
+            .state_client()
+            .list_owned_objects(req)
+            .await
+            .unwrap()
+            .into_inner();
+        assert!(page.cursors.is_empty());
+        assert!(page.end.is_none());
+        for o in &page.objects {
+            legacy_paged.push((o.object_id().to_owned(), o.version(), o.balance()));
+        }
+        match page.next_page_token {
+            Some(token) => page_token = Some(token),
+            None => break,
+        }
+    }
+    assert_eq!(legacy_paged, expected_objects);
 
     // BatchGetBalances reads pre-transfer and post-transfer balances in one batch.
     let mut before_item = GetBalanceRequest::default();
@@ -397,11 +428,38 @@ async fn test_at_checkpoint_below_and_above_window() {
         .build()
         .await;
     let snapshot_fn = spawn_snapshot_fullnode(&mut cluster, 2).await;
+    let mut client = Client::new(snapshot_fn.rpc_url.clone()).unwrap();
+    let owner = cluster.get_address_0();
 
-    // Wait until at least 4 checkpoints have been snapshotted so checkpoints 0 and 1 are evicted.
-    wait_for_snapshot_range(&snapshot_fn, |lo, hi| lo >= 2 && hi >= 3).await;
+    // Mint a cursor at an early snapshot so we can test evicted-cursor refusals once it ages out.
+    let (_, early_cp) = wait_for_snapshot_range(&snapshot_fn, |_, _| true).await;
+    let mut early_opts = QueryOptions::default();
+    early_opts.limit = Some(1);
+    let mut early_req = ListOwnedObjectsRequest::default();
+    early_req.owner = Some(owner.to_string());
+    early_req.at_checkpoint = Some(early_cp);
+    early_req.options = Some(early_opts);
+    let evicted_cursor = client
+        .state_client()
+        .list_owned_objects(early_req)
+        .await
+        .unwrap()
+        .into_inner()
+        .cursors
+        .into_iter()
+        .next()
+        .expect("genesis owner has at least one object");
 
-    // Halt validators and wait for the snapshot fullnode to finish syncing so `lo..=hi` is stable.
+    // Wait until `early_cp` and checkpoints 0..=1 have been evicted from the 2-checkpoint window.
+    wait_for_snapshot_range(&snapshot_fn, |lo, hi| lo > early_cp && lo >= 2 && hi >= 3).await;
+
+    // Halt the default fullnode and all validators so `snapshot_fn` has no remaining peer to sync
+    // newer checkpoints from, then wait for its own state to settle so `lo..=hi` is stationary.
+    let default_fn = cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.state().name);
+    cluster.stop_node(&default_fn);
     cluster.stop_all_validators().await;
     let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
     let (lo, hi) = loop {
@@ -435,9 +493,37 @@ async fn test_at_checkpoint_below_and_above_window() {
     assert!(lo >= 2);
     assert_eq!(hi - lo + 1, 2);
 
-    let mut client = Client::new(snapshot_fn.rpc_url.clone()).unwrap();
-    let owner = cluster.get_address_0();
+    // Evicted cursor returns BELOW_EARLIEST_AVAILABLE (floor = lo), and mismatched at_checkpoint
+    // returns INVALID_ARGUMENT.
+    let mut evicted_opts = QueryOptions::default();
+    evicted_opts.after = Some(evicted_cursor.clone());
+    let mut evicted_req = ListOwnedObjectsRequest::default();
+    evicted_req.owner = Some(owner.to_string());
+    evicted_req.options = Some(evicted_opts);
+    assert_below_earliest_available(
+        &client
+            .state_client()
+            .list_owned_objects(evicted_req)
+            .await
+            .unwrap_err(),
+        lo,
+    );
 
+    let mut mismatched_opts = QueryOptions::default();
+    mismatched_opts.after = Some(evicted_cursor);
+    let mut mismatched_req = ListOwnedObjectsRequest::default();
+    mismatched_req.owner = Some(owner.to_string());
+    mismatched_req.at_checkpoint = Some(hi);
+    mismatched_req.options = Some(mismatched_opts);
+    assert_eq!(
+        client
+            .state_client()
+            .list_owned_objects(mismatched_req)
+            .await
+            .unwrap_err()
+            .code(),
+        tonic::Code::InvalidArgument
+    );
     // Below window -> BELOW_EARLIEST_AVAILABLE (floor = lo).
     let mut below_bal = GetBalanceRequest::default();
     below_bal.owner = Some(owner.to_string());
@@ -463,8 +549,8 @@ async fn test_at_checkpoint_below_and_above_window() {
         lo,
     );
 
-    // Above window -> ABOVE_LATEST_AVAILABLE (bound = "at_checkpoint").
-    let above_cp = hi + 10;
+    // Exact upper boundary `hi + 1` -> ABOVE_LATEST_AVAILABLE (bound = "at_checkpoint").
+    let above_cp = hi + 1;
     let mut above_bal = GetBalanceRequest::default();
     above_bal.owner = Some(owner.to_string());
     above_bal.coin_type = Some(SUI_COIN_TYPE.to_owned());
