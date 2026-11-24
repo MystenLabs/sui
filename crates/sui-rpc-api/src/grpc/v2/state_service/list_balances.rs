@@ -372,4 +372,103 @@ mod tests {
             tonic::Code::InvalidArgument
         );
     }
+
+    #[test]
+    fn list_balances_skips_zero_sum_merged_rows_across_paging() {
+        let (store, service) = TestStateStore::open(5);
+        let owner = test_address(1);
+        let a = struct_tag("0x2::c::A");
+        let b = struct_tag("0x2::c::B");
+        let c = struct_tag("0x2::c::C");
+        let d = struct_tag("0x2::c::D");
+
+        store.add_balance(owner, a.clone(), 100, 0);
+        store.add_balance(owner, b.clone(), 50, 0);
+        store.add_balance(owner, c.clone(), 0, 200);
+        store.add_balance(owner, d.clone(), 10, 20);
+        // Net B (between A and C) and D (trailing) to zero without compacting.
+        store.add_balance(owner, b, -50, 0);
+        store.add_balance(owner, d, -10, -20);
+        store.take_snapshot(10);
+
+        // Cursor paging ascending with limit=1 skips B between pages and trailing D at end.
+        let mut opts1 = QueryOptions::default();
+        opts1.limit = Some(1);
+        let mut r1 = ListBalancesRequest::default();
+        r1.owner = Some(owner.to_string());
+        r1.at_checkpoint = Some(10);
+        r1.options = Some(opts1);
+        let p1 = list_balances(&service, r1).unwrap();
+        assert_eq!(p1.balances.len(), 1);
+        assert_eq!(p1.balances[0].coin_type(), a.to_canonical_string(true));
+        assert_eq!(p1.end.unwrap().reason(), QueryEndReason::ItemLimit);
+
+        let mut opts2 = QueryOptions::default();
+        opts2.limit = Some(1);
+        opts2.after = Some(p1.cursors[0].clone());
+        let mut r2 = ListBalancesRequest::default();
+        r2.owner = Some(owner.to_string());
+        r2.options = Some(opts2);
+        let p2 = list_balances(&service, r2).unwrap();
+        assert_eq!(p2.balances.len(), 1);
+        assert_eq!(p2.balances[0].coin_type(), c.to_canonical_string(true));
+        assert_eq!(p2.balances[0].address_balance(), 200);
+        assert_eq!(p2.end.unwrap().reason(), QueryEndReason::ItemLimit);
+
+        let mut opts3 = QueryOptions::default();
+        opts3.limit = Some(1);
+        opts3.after = Some(p2.cursors[0].clone());
+        let mut r3 = ListBalancesRequest::default();
+        r3.owner = Some(owner.to_string());
+        r3.options = Some(opts3);
+        let p3 = list_balances(&service, r3).unwrap();
+        assert!(p3.balances.is_empty());
+        assert_eq!(p3.end.unwrap().reason(), QueryEndReason::CheckpointBound);
+
+        // Descending paging skips trailing D first, then skips B on resume.
+        let mut d_opts1 = QueryOptions::default();
+        d_opts1.limit = Some(1);
+        d_opts1.ordering = Some(Ordering::Descending as i32);
+        let mut dr1 = ListBalancesRequest::default();
+        dr1.owner = Some(owner.to_string());
+        dr1.at_checkpoint = Some(10);
+        dr1.options = Some(d_opts1);
+        let dp1 = list_balances(&service, dr1).unwrap();
+        assert_eq!(dp1.balances.len(), 1);
+        assert_eq!(dp1.balances[0].coin_type(), c.to_canonical_string(true));
+        assert_eq!(dp1.end.unwrap().reason(), QueryEndReason::ItemLimit);
+
+        let mut d_opts2 = QueryOptions::default();
+        d_opts2.limit = Some(1);
+        d_opts2.ordering = Some(Ordering::Descending as i32);
+        d_opts2.before = Some(dp1.cursors[0].clone());
+        let mut dr2 = ListBalancesRequest::default();
+        dr2.owner = Some(owner.to_string());
+        dr2.options = Some(d_opts2);
+        let dp2 = list_balances(&service, dr2).unwrap();
+        assert_eq!(dp2.balances.len(), 1);
+        assert_eq!(dp2.balances[0].coin_type(), a.to_canonical_string(true));
+        assert_eq!(dp2.end.unwrap().reason(), QueryEndReason::ItemLimit);
+
+        // Legacy unpinned and pinned paging with page_size=1 skip B and omit a token for trailing D.
+        for at_cp in [None, Some(10)] {
+            let mut lr1 = ListBalancesRequest::default();
+            lr1.owner = Some(owner.to_string());
+            lr1.page_size = Some(1);
+            lr1.at_checkpoint = at_cp;
+            let lp1 = list_balances(&service, lr1).unwrap();
+            assert_eq!(lp1.balances.len(), 1);
+            assert_eq!(lp1.balances[0].coin_type(), a.to_canonical_string(true));
+            let tok = lp1.next_page_token.expect("C still remains");
+
+            let mut lr2 = ListBalancesRequest::default();
+            lr2.owner = Some(owner.to_string());
+            lr2.page_size = Some(1);
+            lr2.page_token = Some(tok);
+            let lp2 = list_balances(&service, lr2).unwrap();
+            assert_eq!(lp2.balances.len(), 1);
+            assert_eq!(lp2.balances[0].coin_type(), c.to_canonical_string(true));
+            assert!(lp2.next_page_token.is_none());
+        }
+    }
 }

@@ -1701,36 +1701,37 @@ mod tests {
         }
         cancel.commit().unwrap();
 
-        let all: Vec<_> = reader
-            .balance_iter(&owner, None)
+        let asc: Vec<_> = reader
+            .balance_iter(&owner, Bound::Unbounded, Bound::Unbounded, false)
             .unwrap()
             .map(|r| r.unwrap())
             .collect();
-        assert_eq!(all.len(), 2);
-        assert_eq!(all[0].0, a);
-        assert_eq!(all[0].1.coin_balance, 100);
-        assert_eq!(all[1].0, d);
-        assert_eq!(all[1].1.coin_balance, 200);
+        assert_eq!(asc.len(), 2);
+        assert_eq!(asc[0].0, a);
+        assert_eq!(asc[0].1.coin_balance, 100);
+        assert_eq!(asc[1].0, d);
+        assert_eq!(asc[1].1.coin_balance, 200);
 
-        // Resuming from a cursor pointing at a zero-sum row skips directly to D, and
-        // lookahead after D stops without surfacing trailing E.
-        let resumed: Vec<_> = reader
-            .balance_iter(&owner, Some((owner, b)))
+        let desc: Vec<_> = reader
+            .balance_iter(&owner, Bound::Unbounded, Bound::Unbounded, true)
             .unwrap()
             .map(|r| r.unwrap().0)
             .collect();
-        assert_eq!(resumed, vec![d.clone()]);
+        assert_eq!(desc, vec![d.clone(), a.clone()]);
 
-        let mut page1 = reader.balance_iter(&owner, None).unwrap();
-        assert_eq!(page1.next().unwrap().unwrap().0, a);
-        let next_cursor = page1.next().unwrap().unwrap().0;
-        assert_eq!(next_cursor, d);
+        let resumed_excl: Vec<_> = reader
+            .balance_iter(&owner, Bound::Excluded(a), Bound::Unbounded, false)
+            .unwrap()
+            .map(|r| r.unwrap().0)
+            .collect();
+        assert_eq!(resumed_excl, vec![d.clone()]);
 
-        let mut page2 = reader
-            .balance_iter(&owner, Some((owner, next_cursor)))
-            .unwrap();
-        assert_eq!(page2.next().unwrap().unwrap().0, d);
-        assert!(page2.next().is_none());
+        let resumed_zero: Vec<_> = reader
+            .balance_iter(&owner, Bound::Included(b), Bound::Unbounded, false)
+            .unwrap()
+            .map(|r| r.unwrap().0)
+            .collect();
+        assert_eq!(resumed_zero, vec![d]);
     }
 
     #[test]
