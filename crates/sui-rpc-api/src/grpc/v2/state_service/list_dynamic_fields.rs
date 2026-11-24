@@ -594,3 +594,225 @@ fn populate_child_object(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use sui_rpc::proto::sui::rpc::v2::Ordering;
+    use sui_rpc::proto::sui::rpc::v2::QueryOptions;
+    use sui_types::base_types::SequenceNumber;
+    use sui_types::object::Owner;
+    use sui_types::storage::OwnedObjectKey;
+
+    use super::*;
+    use crate::reader::assert_refusal;
+    use crate::grpc::v2::state_service::test_support::TestStateStore;
+    use crate::grpc::v2::state_service::test_support::dummy_struct_bytes;
+    use crate::grpc::v2::state_service::test_support::make_dynamic_field_u64;
+    use crate::grpc::v2::state_service::test_support::make_dynamic_object_field_u64;
+    use crate::grpc::v2::state_service::test_support::make_struct_object;
+    use crate::grpc::v2::state_service::test_support::struct_tag;
+    use crate::grpc::v2::state_service::test_support::test_object_id;
+
+    #[test]
+    fn pinned_read_loads_exact_field_and_child_versions_at_checkpoint() {
+        let (_dir, store, service) = TestStateStore::open(5);
+        let parent = test_object_id(0xAA);
+        let inline_field_id = test_object_id(0x01);
+        let dof_field_id = test_object_id(0x02);
+        let child_id = test_object_id(0x03);
+        let child_tag = struct_tag("0x9::item::Widget");
+
+        // Checkpoint 10: inline field (v1, value=111) + dynamic object field (v1) owning child (v1, payload=222).
+        let inline_v1 = make_dynamic_field_u64(parent, inline_field_id, 1, 7, 111);
+        let dof_v1 = make_dynamic_object_field_u64(parent, dof_field_id, 1, 8, child_id);
+        let child_v1 = make_struct_object(
+            child_id,
+            1,
+            Owner::ObjectOwner(dof_field_id.into()),
+            child_tag.clone(),
+            dummy_struct_bytes(child_id, 222),
+        );
+        store.put_object(inline_v1.clone());
+        store.put_object(dof_v1.clone());
+        store.put_object(child_v1.clone());
+        store.take_snapshot(10);
+
+        // Checkpoint 11: mutate inline field (v2, value=999), dof field (v2), AND child (v2, payload=888).
+        let inline_v2 = make_dynamic_field_u64(parent, inline_field_id, 2, 7, 999);
+        let dof_v2 = make_dynamic_object_field_u64(parent, dof_field_id, 2, 8, child_id);
+        let child_v2 = make_struct_object(
+            child_id,
+            2,
+            Owner::ObjectOwner(dof_field_id.into()),
+            child_tag,
+            dummy_struct_bytes(child_id, 888),
+        );
+        store.replace_object(&inline_v1, inline_v2);
+        store.replace_object(&dof_v1, dof_v2);
+        store.replace_object(&child_v1, child_v2);
+        store.take_snapshot(11);
+
+        let mask = FieldMask::from_str(
+            "kind,parent,field_id,name,value,value_type,child_id,field_object.version,child_object.version,child_object.contents",
+        );
+
+        // Read at checkpoint 10: MUST return v1 for both fields AND v1 (payload 222) for the child!
+        let mut req10 = ListDynamicFieldsRequest::default();
+        req10.parent = Some(parent.to_string());
+        req10.at_checkpoint = Some(10);
+        req10.read_mask = Some(mask.clone());
+        req10.options = Some(QueryOptions::default());
+        let resp10 = list_dynamic_fields(&service, req10).unwrap();
+        assert_eq!(resp10.dynamic_fields.len(), 2);
+        assert_eq!(resp10.cursors.len(), 2);
+        assert_eq!(resp10.end.unwrap().reason(), QueryEndReason::CheckpointBound);
+
+        let inline_10 = resp10
+            .dynamic_fields
+            .iter()
+            .find(|f| f.kind() == DynamicFieldKind::Field)
+            .unwrap();
+        assert_eq!(inline_10.field_object.as_ref().unwrap().version(), 1);
+        assert_eq!(
+            inline_10.value.as_ref().unwrap().value(),
+            111u64.to_le_bytes().as_slice()
+        );
+
+        let dof_10 = resp10
+            .dynamic_fields
+            .iter()
+            .find(|f| f.kind() == DynamicFieldKind::Object)
+            .unwrap();
+        assert_eq!(dof_10.field_object.as_ref().unwrap().version(), 1);
+        assert_eq!(dof_10.child_object.as_ref().unwrap().version(), 1);
+        assert_eq!(
+            dof_10
+                .child_object
+                .as_ref()
+                .unwrap()
+                .contents
+                .as_ref()
+                .unwrap()
+                .value(),
+            dummy_struct_bytes(child_id, 222).as_slice()
+        );
+
+        // Read at checkpoint 11: returns v2 for both fields and child (payload 888).
+        let mut req11 = ListDynamicFieldsRequest::default();
+        req11.parent = Some(parent.to_string());
+        req11.at_checkpoint = Some(11);
+        req11.read_mask = Some(mask);
+        req11.options = Some(QueryOptions::default());
+        let resp11 = list_dynamic_fields(&service, req11).unwrap();
+        let inline_11 = resp11
+            .dynamic_fields
+            .iter()
+            .find(|f| f.kind() == DynamicFieldKind::Field)
+            .unwrap();
+        assert_eq!(inline_11.field_object.as_ref().unwrap().version(), 2);
+        assert_eq!(
+            inline_11.value.as_ref().unwrap().value(),
+            999u64.to_le_bytes().as_slice()
+        );
+        let dof_11 = resp11
+            .dynamic_fields
+            .iter()
+            .find(|f| f.kind() == DynamicFieldKind::Object)
+            .unwrap();
+        assert_eq!(dof_11.field_object.as_ref().unwrap().version(), 2);
+        assert_eq!(dof_11.child_object.as_ref().unwrap().version(), 2);
+        assert_eq!(
+            dof_11
+                .child_object
+                .as_ref()
+                .unwrap()
+                .contents
+                .as_ref()
+                .unwrap()
+                .value(),
+            dummy_struct_bytes(child_id, 888).as_slice()
+        );
+
+        // Descending order reverses the two dynamic fields.
+        let mut desc_opts = QueryOptions::default();
+        desc_opts.ordering = Some(Ordering::Descending as i32);
+        let mut req_desc = ListDynamicFieldsRequest::default();
+        req_desc.parent = Some(parent.to_string());
+        req_desc.at_checkpoint = Some(10);
+        req_desc.options = Some(desc_opts);
+        let resp_desc = list_dynamic_fields(&service, req_desc).unwrap();
+        assert_eq!(resp_desc.dynamic_fields[0].field_id(), resp10.dynamic_fields[1].field_id());
+        assert_eq!(resp_desc.dynamic_fields[1].field_id(), resp10.dynamic_fields[0].field_id());
+
+        // Reject a ListOwnedObjects(OBJECT, parent) cursor passed to ListDynamicFields.
+        let owned_cursor = StateCursor {
+            checkpoint: 10,
+            key: StateCursorKey::OwnedObjects {
+                owner: OwnedObjectOwner::Object(parent),
+                key: OwnedObjectKey {
+                    object_type: struct_tag("0x2::dynamic_field::Field<u64, u64>"),
+                    balance: None,
+                    object_id: inline_field_id,
+                },
+            },
+        }
+        .encode();
+        let mut bad_opts = QueryOptions::default();
+        bad_opts.after = Some(owned_cursor);
+        let mut bad_req = ListDynamicFieldsRequest::default();
+        bad_req.parent = Some(parent.to_string());
+        bad_req.options = Some(bad_opts);
+        assert_eq!(
+            list_dynamic_fields(&service, bad_req).unwrap_err().code(),
+            tonic::Code::InvalidArgument
+        );
+    }
+
+    #[test]
+    fn pinned_refuses_missing_field_or_child_while_unpinned_skips() {
+        let (_dir, store, service) = TestStateStore::open(5);
+        let parent = test_object_id(0xAA);
+        let dof_field_id = test_object_id(0x02);
+        let child_id = test_object_id(0x03);
+
+        let dof_v1 = make_dynamic_object_field_u64(parent, dof_field_id, 1, 8, child_id);
+        let child_v1 = make_struct_object(
+            child_id,
+            1,
+            Owner::ObjectOwner(dof_field_id.into()),
+            struct_tag("0x9::item::Widget"),
+            dummy_struct_bytes(child_id, 42),
+        );
+        store.put_object(dof_v1);
+        store.put_object(child_v1);
+        store.take_snapshot(1);
+
+        // Drop child version -> pinned read requesting child_object refuses with pruning_race.
+        store.drop_object_version(child_id, SequenceNumber::from_u64(1));
+        let mut pinned_req = ListDynamicFieldsRequest::default();
+        pinned_req.parent = Some(parent.to_string());
+        pinned_req.at_checkpoint = Some(1);
+        pinned_req.read_mask = Some(FieldMask::from_str("kind,child_object.version"));
+        assert_refusal(
+            list_dynamic_fields(&service, pinned_req.clone()).unwrap_err(),
+            tonic::Code::Unavailable,
+            ErrorReason::NotReady,
+            "pruning_race",
+        );
+
+        // Drop field version too -> pinned refuses with pruning_race, unpinned skips cleanly.
+        store.drop_object_version(dof_field_id, SequenceNumber::from_u64(1));
+        assert_refusal(
+            list_dynamic_fields(&service, pinned_req).unwrap_err(),
+            tonic::Code::Unavailable,
+            ErrorReason::NotReady,
+            "pruning_race",
+        );
+
+        let mut unpinned_req = ListDynamicFieldsRequest::default();
+        unpinned_req.parent = Some(parent.to_string());
+        unpinned_req.read_mask = Some(FieldMask::from_str("kind,field_object.version"));
+        let unpinned = list_dynamic_fields(&service, unpinned_req).unwrap();
+        assert!(unpinned.dynamic_fields.is_empty());
+    }
+}

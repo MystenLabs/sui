@@ -31,6 +31,8 @@ mod list_balances;
 mod list_dynamic_fields;
 mod list_objects;
 mod list_owned_objects;
+#[cfg(test)]
+mod test_support;
 
 const DEFAULT_LIST_OBJECTS_TIMEOUT: Duration = Duration::from_secs(60);
 #[tonic::async_trait]

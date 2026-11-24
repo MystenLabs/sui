@@ -464,3 +464,263 @@ pub(super) fn should_load_object(mask: &FieldMaskTree) -> bool {
     .into_iter()
     .any(|field| mask.contains(field))
 }
+
+#[cfg(test)]
+mod tests {
+    use sui_rpc::proto::sui::rpc::v2::Ordering;
+    use sui_rpc::proto::sui::rpc::v2::QueryOptions;
+    use sui_types::base_types::ObjectID;
+    use sui_types::base_types::SequenceNumber;
+    use sui_types::object::Owner;
+
+    use super::*;
+    use crate::ledger_history::query_options::assert_below_serving_floor_error;
+    use crate::reader::assert_refusal;
+    use crate::grpc::v2::state_service::test_support::TestStateStore;
+    use crate::grpc::v2::state_service::test_support::dummy_struct_bytes;
+    use crate::grpc::v2::state_service::test_support::make_coin_object;
+    use crate::grpc::v2::state_service::test_support::make_struct_object;
+    use crate::grpc::v2::state_service::test_support::struct_tag;
+    use crate::grpc::v2::state_service::test_support::test_address;
+    use crate::grpc::v2::state_service::test_support::test_object_id;
+
+    #[test]
+    fn owner_kinds_and_type_filter_levels() {
+        let (_dir, store, service) = TestStateStore::open(5);
+        let alice = test_address(0x10);
+        let parent = test_object_id(0x20);
+
+        // Address-owned + ConsensusAddressOwner (collapsed into ADDRESS).
+        store.put_object(make_struct_object(
+            test_object_id(1),
+            1,
+            Owner::AddressOwner(alice),
+            struct_tag("0x1::mod_a::Foo"),
+            dummy_struct_bytes(test_object_id(1), 1),
+        ));
+        store.put_object(make_struct_object(
+            test_object_id(2),
+            1,
+            Owner::ConsensusAddressOwner {
+                start_version: SequenceNumber::from_u64(1),
+                owner: alice,
+            },
+            struct_tag("0x1::mod_b::Bar"),
+            dummy_struct_bytes(test_object_id(2), 2),
+        ));
+        // Object-owned, Shared, Immutable.
+        store.put_object(make_struct_object(
+            test_object_id(3),
+            1,
+            Owner::ObjectOwner(parent.into()),
+            struct_tag("0x1::mod_a::Foo"),
+            dummy_struct_bytes(test_object_id(3), 3),
+        ));
+        store.put_object(make_struct_object(
+            test_object_id(4),
+            1,
+            Owner::Shared {
+                initial_shared_version: SequenceNumber::from_u64(1),
+            },
+            struct_tag("0x2::kiosk::Kiosk"),
+            dummy_struct_bytes(test_object_id(4), 4),
+        ));
+        store.put_object(make_struct_object(
+            test_object_id(5),
+            1,
+            Owner::Immutable,
+            struct_tag("0x2::coin::CoinMetadata<0x2::sui::SUI>"),
+            dummy_struct_bytes(test_object_id(5), 5),
+        ));
+        store.take_snapshot(1);
+
+        // ADDRESS includes ConsensusAddressOwner; package-level object_type `"0x1"` matches both.
+        let mut req = ListOwnedObjectsRequest::default();
+        req.owner = Some(alice.to_string());
+        req.object_type = Some("0x1".to_owned());
+        req.options = Some(QueryOptions::default());
+        let resp = list_owned_objects(&service, req).unwrap();
+        assert_eq!(resp.objects.len(), 2);
+
+        // Module-level object_type `"0x1::mod_a"` matches only id 1.
+        let mut req_mod = ListOwnedObjectsRequest::default();
+        req_mod.owner = Some(alice.to_string());
+        req_mod.object_type = Some("0x1::mod_a".to_owned());
+        req_mod.options = Some(QueryOptions::default());
+        let resp_mod = list_owned_objects(&service, req_mod).unwrap();
+        assert_eq!(resp_mod.objects.len(), 1);
+        assert_eq!(
+            resp_mod.objects[0].object_id(),
+            test_object_id(1).to_canonical_string(true)
+        );
+
+        // OBJECT with object_type filter.
+        let mut req_obj = ListOwnedObjectsRequest::default();
+        req_obj.owner_kind = Some(OwnerKind::Object as i32);
+        req_obj.owner = Some(parent.to_string());
+        req_obj.object_type = Some("0x1::mod_a::Foo".to_owned());
+        req_obj.options = Some(QueryOptions::default());
+        let resp_obj = list_owned_objects(&service, req_obj).unwrap();
+        assert_eq!(resp_obj.objects.len(), 1);
+        assert_eq!(
+            resp_obj.objects[0].object_id(),
+            test_object_id(3).to_canonical_string(true)
+        );
+
+        // SHARED and IMMUTABLE with owner unset.
+        for (kind, expected_id) in [(OwnerKind::Shared, 4u8), (OwnerKind::Immutable, 5u8)] {
+            let mut req = ListOwnedObjectsRequest::default();
+            req.owner_kind = Some(kind as i32);
+            req.options = Some(QueryOptions::default());
+            let resp = list_owned_objects(&service, req).unwrap();
+            assert_eq!(resp.objects.len(), 1);
+            assert_eq!(
+                resp.objects[0].object_id(),
+                test_object_id(expected_id).to_canonical_string(true)
+            );
+
+            // Setting owner on SHARED / IMMUTABLE -> INVALID_ARGUMENT.
+            let mut bad = ListOwnedObjectsRequest::default();
+            bad.owner_kind = Some(kind as i32);
+            bad.owner = Some(alice.to_string());
+            bad.options = Some(QueryOptions::default());
+            assert_eq!(
+                list_owned_objects(&service, bad).unwrap_err().code(),
+                tonic::Code::InvalidArgument
+            );
+
+            // Unpinned non-ADDRESS without options or at_checkpoint -> INVALID_ARGUMENT.
+            let mut unpinned = ListOwnedObjectsRequest::default();
+            unpinned.owner_kind = Some(kind as i32);
+            assert_eq!(
+                list_owned_objects(&service, unpinned).unwrap_err().code(),
+                tonic::Code::InvalidArgument
+            );
+        }
+
+        // OWNER_KIND_UNKNOWN and CONSENSUS_ADDRESS -> INVALID_ARGUMENT.
+        for invalid_kind in [OwnerKind::Unknown as i32, OwnerKind::ConsensusAddress as i32, 99] {
+            let mut bad = ListOwnedObjectsRequest::default();
+            bad.owner_kind = Some(invalid_kind);
+            bad.owner = Some(alice.to_string());
+            bad.options = Some(QueryOptions::default());
+            assert_eq!(
+                list_owned_objects(&service, bad).unwrap_err().code(),
+                tonic::Code::InvalidArgument
+            );
+        }
+    }
+
+    #[test]
+    fn coin_ordering_reverse_and_size_limit_item_limit_end_reason() {
+        let (_dir, store, service) = TestStateStore::open(5);
+        let alice = test_address(0x10);
+        let sui = struct_tag("0x2::sui::SUI");
+        // Insert three SUI coins with balances 100, 500, 200.
+        for (id, bal) in [(1u8, 100u64), (2, 500), (3, 200)] {
+            store.put_object(make_coin_object(
+                test_object_id(id),
+                1,
+                Owner::AddressOwner(alice),
+                sui.clone(),
+                bal,
+            ));
+        }
+        store.take_snapshot(1);
+
+        // Canonical ascending order sorts coins by balance descending: 500, 200, 100.
+        let mut asc = ListOwnedObjectsRequest::default();
+        asc.owner = Some(alice.to_string());
+        asc.read_mask = Some(FieldMask::from_str("object_id,balance"));
+        asc.options = Some(QueryOptions::default());
+        let asc_resp = list_owned_objects(&service, asc).unwrap();
+        let asc_bals: Vec<_> = asc_resp.objects.iter().map(|o| o.balance()).collect();
+        assert_eq!(asc_bals, vec![500, 200, 100]);
+        assert_eq!(asc_resp.end.unwrap().reason(), QueryEndReason::CheckpointBound);
+
+        // Descending order reverses it: 100, 200, 500.
+        let mut desc_opts = QueryOptions::default();
+        desc_opts.ordering = Some(Ordering::Descending as i32);
+        let mut desc = ListOwnedObjectsRequest::default();
+        desc.owner = Some(alice.to_string());
+        desc.read_mask = Some(FieldMask::from_str("object_id,balance"));
+        desc.options = Some(desc_opts);
+        let desc_resp = list_owned_objects(&service, desc).unwrap();
+        let desc_bals: Vec<_> = desc_resp.objects.iter().map(|o| o.balance()).collect();
+        assert_eq!(desc_bals, vec![100, 200, 500]);
+
+        // Response-size limit cutting a page shorter than `options.limit` still ends with
+        // ITEM_LIMIT.
+        let big_owner = test_address(0x11);
+        for id in 10u8..13 {
+            let mut payload = vec![0u8; 300 * 1024];
+            payload[..ObjectID::LENGTH].copy_from_slice(test_object_id(id).as_ref());
+            store.put_object(make_struct_object(
+                test_object_id(id),
+                1,
+                Owner::AddressOwner(big_owner),
+                struct_tag("0x1::big::Blob"),
+                payload,
+            ));
+        }
+        store.take_snapshot(2);
+
+        let mut size_opts = QueryOptions::default();
+        size_opts.limit = Some(50);
+        let mut size_req = ListOwnedObjectsRequest::default();
+        size_req.owner = Some(big_owner.to_string());
+        size_req.read_mask = Some(FieldMask::from_str("object_id,contents"));
+        size_req.options = Some(size_opts);
+        let size_resp = list_owned_objects(&service, size_req).unwrap();
+        assert!(size_resp.objects.len() < 3);
+        assert_eq!(size_resp.end.unwrap().reason(), QueryEndReason::ItemLimit);
+    }
+
+    #[test]
+    fn pinned_loads_exact_version_and_refuses_missing_while_unpinned_skips() {
+        let (_dir, store, service) = TestStateStore::open(5);
+        let alice = test_address(0x10);
+        let id = test_object_id(1);
+        let v1 = make_coin_object(id, 1, Owner::AddressOwner(alice), struct_tag("0x2::sui::SUI"), 50);
+        store.put_object(v1.clone());
+        store.take_snapshot(5);
+
+        let v2 = make_coin_object(id, 2, Owner::AddressOwner(alice), struct_tag("0x2::sui::SUI"), 99);
+        store.replace_object(&v1, v2);
+        store.take_snapshot(6);
+
+        // Pinned read at checkpoint 5 loads exact version 1 (balance 50) even with full object mask.
+        let mut req5 = ListOwnedObjectsRequest::default();
+        req5.owner = Some(alice.to_string());
+        req5.at_checkpoint = Some(5);
+        req5.read_mask = Some(FieldMask::from_str("object_id,version,digest,balance"));
+        req5.options = Some(QueryOptions::default());
+        let resp5 = list_owned_objects(&service, req5.clone()).unwrap();
+        assert_eq!(resp5.objects.len(), 1);
+        assert_eq!(resp5.objects[0].version(), 1);
+        assert_eq!(resp5.objects[0].balance(), 50);
+
+        // Drop version 1 from object store: pinned read at 5 fails with pruning_race (never skips).
+        store.drop_object_version(id, SequenceNumber::from_u64(1));
+        assert_refusal(
+            list_owned_objects(&service, req5.clone()).unwrap_err(),
+            tonic::Code::Unavailable,
+            ErrorReason::NotReady,
+            "pruning_race",
+        );
+
+        // Once object pruning floor advances past 5 (lowest_available_objects = 7 -> floor 6),
+        // explicit checkpoint 5 fails with BELOW_EARLIEST_AVAILABLE (floor 6).
+        store.set_lowest_available_objects(7);
+        assert_below_serving_floor_error(list_owned_objects(&service, req5).unwrap_err(), 6);
+
+        // Unpinned current-state read skips missing object version rather than failing.
+        store.set_lowest_available_objects(0);
+        store.drop_object_version(id, SequenceNumber::from_u64(2));
+        let mut current = ListOwnedObjectsRequest::default();
+        current.owner = Some(alice.to_string());
+        current.read_mask = Some(FieldMask::from_str("object_id,version,digest"));
+        let current_resp = list_owned_objects(&service, current).unwrap();
+        assert!(current_resp.objects.is_empty());
+    }
+}

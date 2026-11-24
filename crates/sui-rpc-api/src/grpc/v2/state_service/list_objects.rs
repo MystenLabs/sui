@@ -257,3 +257,204 @@ fn object_by_type_to_proto(info: &ObjectByTypeInfo, mask: &FieldMaskTree) -> Obj
 
     message
 }
+
+#[cfg(test)]
+mod tests {
+    use futures::TryStreamExt;
+    use sui_rpc::proto::sui::rpc::v2::ObjectFilter;
+    use sui_rpc::proto::sui::rpc::v2::ObjectLiteral;
+    use sui_rpc::proto::sui::rpc::v2::ObjectTerm;
+    use sui_rpc::proto::sui::rpc::v2::ObjectTypeFilter;
+    use sui_rpc::proto::sui::rpc::v2::Ordering;
+    use sui_rpc::proto::sui::rpc::v2::QueryOptions;
+    use sui_rpc::proto::sui::rpc::v2::object_literal;
+    use sui_types::base_types::SequenceNumber;
+    use sui_types::object::Owner;
+    use sui_types::storage::OwnedObjectKey;
+    use sui_types::storage::OwnedObjectOwner;
+
+    use super::*;
+    use crate::reader::assert_refusal;
+    use crate::grpc::v2::state_service::test_support::TestStateStore;
+    use crate::grpc::v2::state_service::test_support::dummy_struct_bytes;
+    use crate::grpc::v2::state_service::test_support::make_struct_object;
+    use crate::grpc::v2::state_service::test_support::struct_tag;
+    use crate::grpc::v2::state_service::test_support::test_address;
+    use crate::grpc::v2::state_service::test_support::test_object_id;
+
+    fn type_filter(object_type: &str, negated: bool) -> ObjectFilter {
+        let mut tf = ObjectTypeFilter::default();
+        tf.object_type = Some(object_type.to_owned());
+        let mut lit = ObjectLiteral::default();
+        lit.negated = negated;
+        lit.predicate = Some(object_literal::Predicate::ObjectType(tf));
+        let mut term = ObjectTerm::default();
+        term.literals = vec![lit];
+        let mut filter = ObjectFilter::default();
+        filter.terms = vec![term];
+        filter
+    }
+
+    async fn collect_frames(
+        service: &RpcService,
+        request: ListObjectsRequest,
+    ) -> Result<Vec<ListObjectsResponse>> {
+        let stream = list_objects(service.clone(), request).await?;
+        stream.try_collect().await
+    }
+
+    #[tokio::test]
+    async fn streams_unfiltered_filtered_reverse_and_exact_frame_invariants() {
+        let (_dir, store, service) = TestStateStore::open(5);
+        let alice = test_address(1);
+        let o1 = make_struct_object(
+            test_object_id(1),
+            1,
+            Owner::AddressOwner(alice),
+            struct_tag("0x1::a::A"),
+            dummy_struct_bytes(test_object_id(1), 1),
+        );
+        let o2 = make_struct_object(
+            test_object_id(2),
+            1,
+            Owner::Shared {
+                initial_shared_version: SequenceNumber::from_u64(1),
+            },
+            struct_tag("0x2::b::B"),
+            dummy_struct_bytes(test_object_id(2), 2),
+        );
+        let o3 = make_struct_object(
+            test_object_id(3),
+            1,
+            Owner::Immutable,
+            struct_tag("0x3::c::C"),
+            dummy_struct_bytes(test_object_id(3), 3),
+        );
+        store.put_object(o1.clone());
+        store.put_object(o2);
+        store.put_object(o3);
+        store.take_snapshot(10);
+
+        // Mutate o1 at checkpoint 11; checkpoint 10 stream must still see v1.
+        let o1_v2 = make_struct_object(
+            test_object_id(1),
+            2,
+            Owner::AddressOwner(alice),
+            struct_tag("0x1::a::A"),
+            dummy_struct_bytes(test_object_id(1), 99),
+        );
+        store.replace_object(&o1, o1_v2);
+        store.take_snapshot(11);
+
+        // Unfiltered ascending at checkpoint 10: 3 item frames + 1 empty terminal CHECKPOINT_BOUND frame.
+        let mut req_all = ListObjectsRequest::default();
+        req_all.at_checkpoint = Some(10);
+        req_all.read_mask = Some(FieldMask::from_str("object_id,version,contents"));
+        let frames = collect_frames(&service, req_all).await.unwrap();
+        assert_eq!(frames.len(), 4);
+        for f in &frames[..3] {
+            assert!(f.object.is_some());
+            assert!(f.cursor.is_some());
+            assert!(f.end.is_none());
+        }
+        assert_eq!(frames[0].object.as_ref().unwrap().version(), 1);
+        assert!(frames[3].object.is_none());
+        assert!(frames[3].cursor.is_none());
+        assert_eq!(
+            frames[3].end.as_ref().unwrap().reason(),
+            QueryEndReason::CheckpointBound
+        );
+
+        // ITEM_LIMIT rides on the last item's frame with no trailing empty frame.
+        let mut lim_opts = QueryOptions::default();
+        lim_opts.limit = Some(2);
+        let mut req_lim = ListObjectsRequest::default();
+        req_lim.at_checkpoint = Some(10);
+        req_lim.options = Some(lim_opts);
+        let lim_frames = collect_frames(&service, req_lim).await.unwrap();
+        assert_eq!(lim_frames.len(), 2);
+        assert!(lim_frames[0].end.is_none());
+        assert!(lim_frames[1].object.is_some());
+        assert!(lim_frames[1].cursor.is_some());
+        assert_eq!(
+            lim_frames[1].end.as_ref().unwrap().reason(),
+            QueryEndReason::ItemLimit
+        );
+
+        // Filtered negated (`!0x2::b::B`) descending returns [o3, o1] + empty CHECKPOINT_BOUND frame.
+        let mut desc_opts = QueryOptions::default();
+        desc_opts.ordering = Some(Ordering::Descending as i32);
+        let mut req_filt = ListObjectsRequest::default();
+        req_filt.at_checkpoint = Some(10);
+        req_filt.filter = Some(type_filter("0x2::b::B", true));
+        req_filt.options = Some(desc_opts);
+        let filt_frames = collect_frames(&service, req_filt).await.unwrap();
+        assert_eq!(filt_frames.len(), 3);
+        assert_eq!(
+            filt_frames[0].object.as_ref().unwrap().object_id(),
+            test_object_id(3).to_canonical_string(true)
+        );
+        assert_eq!(
+            filt_frames[1].object.as_ref().unwrap().object_id(),
+            test_object_id(1).to_canonical_string(true)
+        );
+        assert!(filt_frames[2].object.is_none());
+        assert_eq!(
+            filt_frames[2].end.as_ref().unwrap().reason(),
+            QueryEndReason::CheckpointBound
+        );
+
+        // Empty matching result yields a single empty frame with end set (CURSOR_BOUND when far cursor set).
+        let mut bounded_opts = QueryOptions::default();
+        bounded_opts.after = Some(frames[0].cursor.clone().unwrap());
+        bounded_opts.before = Some(frames[1].cursor.clone().unwrap());
+        let mut req_empty = ListObjectsRequest::default();
+        req_empty.options = Some(bounded_opts);
+        let empty_frames = collect_frames(&service, req_empty).await.unwrap();
+        assert_eq!(empty_frames.len(), 1);
+        assert!(empty_frames[0].object.is_none());
+        assert!(empty_frames[0].cursor.is_none());
+        assert_eq!(
+            empty_frames[0].end.as_ref().unwrap().reason(),
+            QueryEndReason::CursorBound
+        );
+
+        // Reject cursor from ListOwnedObjects.
+        let owned_cursor = StateCursor {
+            checkpoint: 10,
+            key: StateCursorKey::OwnedObjects {
+                owner: OwnedObjectOwner::Address(alice),
+                key: OwnedObjectKey {
+                    object_type: struct_tag("0x1::a::A"),
+                    balance: None,
+                    object_id: test_object_id(1),
+                },
+            },
+        }
+        .encode();
+        let mut wrong_opts = QueryOptions::default();
+        wrong_opts.after = Some(owned_cursor);
+        let mut req_wrong = ListObjectsRequest::default();
+        req_wrong.options = Some(wrong_opts);
+        assert_eq!(
+            list_objects(service.clone(), req_wrong)
+                .await
+                .err()
+                .unwrap()
+                .code(),
+            tonic::Code::InvalidArgument
+        );
+
+        // Missing object version fails stream with pruning_race and does not emit QueryEnd.
+        store.drop_object_version(test_object_id(1), SequenceNumber::from_u64(1));
+        let mut req_race = ListObjectsRequest::default();
+        req_race.at_checkpoint = Some(10);
+        req_race.read_mask = Some(FieldMask::from_str("object_id,contents"));
+        assert_refusal(
+            collect_frames(&service, req_race).await.unwrap_err(),
+            tonic::Code::Unavailable,
+            ErrorReason::NotReady,
+            "pruning_race",
+        );
+    }
+}
