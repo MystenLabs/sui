@@ -3,12 +3,16 @@
 
 //! Shared helpers for the `#[path]`-included test modules.
 
+use std::ops::Bound;
+
+use sui_rpc_store::RpcStoreReader;
+use sui_types::base_types::SuiAddress;
+use sui_types::storage::{OwnedObjectFilter, OwnedObjectInfo, OwnedObjectOwner, RpcIndexes};
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;
 use wiremock::matchers::body_string_contains;
 use wiremock::matchers::method;
-
 /// Mock remote that reports every object lookup as "not found", through both the plain and the
 /// checkpoint-scoped object queries. Execution routinely probes dynamic fields that exist
 /// nowhere, and the fallible child-read path must see an authoritative remote miss rather than a
@@ -33,4 +37,23 @@ pub(crate) async fn absent_objects_gql_server() -> MockServer {
         .mount(&server)
         .await;
     server
+}
+
+/// Collect all address-owned objects matching `filter` in ascending canonical order.
+pub(crate) fn owned_object_infos(
+    reader: &RpcStoreReader,
+    owner: SuiAddress,
+    filter: Option<&OwnedObjectFilter>,
+) -> Vec<OwnedObjectInfo> {
+    RpcIndexes::owned_objects_iter(
+        reader,
+        OwnedObjectOwner::Address(owner),
+        filter,
+        Bound::Unbounded,
+        Bound::Unbounded,
+        false,
+    )
+    .expect("owned-object iterator should build")
+    .map(|result| result.expect("owned-object entry should decode"))
+    .collect()
 }

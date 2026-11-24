@@ -266,10 +266,10 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         descending: bool,
     ) -> StorageResult<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>> {
         use crate::schema::object_by_owner::{Key, OwnerKind};
-        // Dynamic fields are `Field<Name, Value>` objects owned (in the
-        // object-owner sense) by `parent`, so they share the `object_by_owner`
-        // index with address-owned objects. Field objects are never coins, so
-        // the balance component is always absent.
+        // Dynamic fields are `Field<Name, Value>` objects owned (in the object-owner sense) by
+        // `parent`, so they share the `object_by_owner` index with address-owned objects. An
+        // unfiltered scan also returns non-`Field` objects owned by `parent`, including `Coin<T>`
+        // values whose index key carries an inverted balance.
         let map = &self.schema().object_by_owner;
         let kind = OwnerKind::ObjectOwner(parent.into());
         let ranges =
@@ -277,7 +277,7 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         let to_key = |c: DynamicFieldKey| Key {
             kind,
             type_: c.object_type,
-            inverted_balance: None,
+            inverted_balance: c.balance.map(|b| !b),
             object_id: c.field_id,
         };
         let lower_key = lower.map(to_key);
@@ -297,6 +297,7 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
                 parent,
                 field_id: key.object_id,
                 object_type: key.type_,
+                balance: key.inverted_balance.map(|b| !b),
                 version: SequenceNumber::from_u64(value.0),
             })
         });
@@ -2264,5 +2265,71 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].field_id, field_id);
         assert_eq!(entries[0].version, SequenceNumber::from_u64(42));
+    }
+
+    #[test]
+    fn dynamic_field_iter_pages_coin_child_exclusively_in_both_directions() {
+        use crate::schema::object_by_owner::{Key, OwnerKind};
+        use crate::schema::primitives::U64Varint;
+
+        let (_dir, db, reader) = setup();
+        let parent = ObjectID::from_single_byte(0xAA);
+        let coin_type: move_core_types::language_storage::StructTag =
+            "0x2::coin::Coin<0x2::sui::SUI>".parse().unwrap();
+        let rich = ObjectID::from_single_byte(0x01);
+        let poor = ObjectID::from_single_byte(0x02);
+
+        let mut batch = db.batch();
+        for (id, balance) in [(rich, 500u64), (poor, 100u64)] {
+            batch
+                .put(
+                    &reader.schema().object_by_owner,
+                    &Key {
+                        kind: OwnerKind::ObjectOwner(parent.into()),
+                        type_: coin_type.clone(),
+                        inverted_balance: Some(!balance),
+                        object_id: id,
+                    },
+                    &U64Varint(7),
+                )
+                .unwrap();
+        }
+        batch.commit().unwrap();
+
+        // Forward exclusive pagination with limit 1 must advance past the coin without looping.
+        let mut seen_asc = Vec::new();
+        let mut after = Bound::Unbounded;
+        for _ in 0..5 {
+            let next = reader
+                .dynamic_field_iter(parent, None, after, Bound::Unbounded, false)
+                .unwrap()
+                .next()
+                .transpose()
+                .unwrap();
+            let Some(entry) = next else {
+                break;
+            };
+            seen_asc.push((entry.field_id, entry.balance));
+            after = Bound::Excluded(entry.into_key());
+        }
+        assert_eq!(seen_asc, vec![(rich, Some(500)), (poor, Some(100))]);
+
+        // Reverse exclusive pagination must visit both coins in reverse balance order.
+        let mut seen_desc = Vec::new();
+        let mut before = Bound::Unbounded;
+        for _ in 0..5 {
+            let next = reader
+                .dynamic_field_iter(parent, None, Bound::Unbounded, before, true)
+                .unwrap()
+                .next()
+                .transpose()
+                .unwrap();
+            let Some(entry) = next else {
+                break;
+            };
+            seen_desc.push((entry.field_id, entry.balance));
+            before = Bound::Excluded(entry.into_key());
+        }
+        assert_eq!(seen_desc, vec![(poor, Some(100)), (rich, Some(500))]);
     }
 }

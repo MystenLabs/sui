@@ -412,17 +412,7 @@ async fn test_index_reads_are_seed_bounded_and_never_scan_the_remote() {
 
     // A seeded owner has the full derived surface: owner index, balance, and
     // balance iteration.
-    let infos: Vec<_> = RpcIndexes::owned_objects_iter(
-        &reader,
-        sui_types::storage::OwnedObjectOwner::Address(seeded_owner),
-        Some(&gas_coins()),
-        std::ops::Bound::Unbounded,
-        std::ops::Bound::Unbounded,
-        false,
-    )
-    .expect("owned-object iterator should read the seeded index")
-    .map(|result| result.expect("owned-object entry should decode"))
-    .collect();
+    let infos = crate::test_support::owned_object_infos(&reader, seeded_owner, Some(&gas_coins()));
     assert_eq!(infos.len(), 1);
     assert_eq!(infos[0].owner, seeded_owner);
     assert_eq!(infos[0].object_id, object_id);
@@ -453,16 +443,7 @@ async fn test_index_reads_are_seed_bounded_and_never_scan_the_remote() {
     // reaching for the remote.
     let unseeded = SuiAddress::random_for_testing_only();
     assert_eq!(
-        RpcIndexes::owned_objects_iter(
-            &reader,
-            sui_types::storage::OwnedObjectOwner::Address(unseeded),
-            Some(&gas_coins()),
-            std::ops::Bound::Unbounded,
-            std::ops::Bound::Unbounded,
-            false,
-        )
-        .expect("unseeded owner read should not error")
-        .count(),
+        crate::test_support::owned_object_infos(&reader, unseeded, Some(&gas_coins())).len(),
         0,
     );
     assert!(
@@ -520,17 +501,7 @@ async fn test_seed_load_survives_restart_without_remote() {
         load_seed_objects(&store, &manifest).expect("seed load should hydrate from the remote");
 
         let reader = store.local_store().reader().clone();
-        let infos: Vec<_> = RpcIndexes::owned_objects_iter(
-            &reader,
-            sui_types::storage::OwnedObjectOwner::Address(owner),
-            Some(&gas_coins()),
-            std::ops::Bound::Unbounded,
-            std::ops::Bound::Unbounded,
-            false,
-        )
-        .expect("owned-object iterator should read the seeded index")
-        .map(|result| result.expect("owned-object entry should decode"))
-        .collect();
+        let infos = crate::test_support::owned_object_infos(&reader, owner, Some(&gas_coins()));
         assert_eq!(infos.len(), 1);
         let balance = RpcIndexes::get_balance(&reader, &owner, &GAS::type_())
             .expect("balance lookup should read the seeded index")
@@ -548,17 +519,7 @@ async fn test_seed_load_survives_restart_without_remote() {
     load_seed_objects(&store, &manifest).expect("a resumed seed load must not touch the remote");
 
     let reader = store.local_store().reader().clone();
-    let infos: Vec<_> = RpcIndexes::owned_objects_iter(
-        &reader,
-        sui_types::storage::OwnedObjectOwner::Address(owner),
-        Some(&gas_coins()),
-        std::ops::Bound::Unbounded,
-        std::ops::Bound::Unbounded,
-        false,
-    )
-    .expect("owned-object iterator should read the reopened seed index")
-    .map(|result| result.expect("owned-object entry should decode"))
-    .collect();
+    let infos = crate::test_support::owned_object_infos(&reader, owner, Some(&gas_coins()));
     assert_eq!(infos.len(), 1);
     assert_eq!(infos[0].object_id, object_id);
     assert_eq!(
@@ -3101,17 +3062,7 @@ fn test_owned_objects_tracks_consensus_address_owner_writes() {
     store.local_store().restore_seed_objects(&[object]).unwrap();
 
     let reader = store.local_store().reader().clone();
-    let infos: Vec<_> = RpcIndexes::owned_objects_iter(
-        &reader,
-        sui_types::storage::OwnedObjectOwner::Address(owner),
-        Some(&gas_coins()),
-        std::ops::Bound::Unbounded,
-        std::ops::Bound::Unbounded,
-        false,
-    )
-    .expect("owned-object iterator should build")
-    .map(|result| result.expect("owned-object entry should decode"))
-    .collect();
+    let infos = crate::test_support::owned_object_infos(&reader, owner, Some(&gas_coins()));
     assert_eq!(infos.len(), 1);
     assert_eq!(infos[0].owner, owner);
     assert_eq!(infos[0].object_id, object_id);
@@ -3746,17 +3697,7 @@ fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
         .unwrap();
 
     let reader = store.local_store().reader().clone();
-    let infos: Vec<_> = RpcIndexes::owned_objects_iter(
-        &reader,
-        sui_types::storage::OwnedObjectOwner::Address(owner),
-        Some(&gas_coins()),
-        std::ops::Bound::Unbounded,
-        std::ops::Bound::Unbounded,
-        false,
-    )
-    .expect("owned-object iterator should build")
-    .map(|result| result.expect("owned-object entry should decode"))
-    .collect();
+    let infos = crate::test_support::owned_object_infos(&reader, owner, Some(&gas_coins()));
     assert_eq!(infos.len(), 2);
     assert!(infos[0].object_id < infos[1].object_id);
     assert!(infos.iter().all(|info| info.owner == owner));
@@ -3765,22 +3706,12 @@ fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
     let wrong_type =
         OwnedObjectFilter::object_type("0x2::clock::Clock".parse::<StructTag>().unwrap());
     assert_eq!(
-        RpcIndexes::owned_objects_iter(
-            &reader,
-            sui_types::storage::OwnedObjectOwner::Address(owner),
-            Some(&wrong_type),
-            std::ops::Bound::Unbounded,
-            std::ops::Bound::Unbounded,
-            false,
-        )
-        .expect("owned-object iterator should build")
-        .count(),
+        crate::test_support::owned_object_infos(&reader, owner, Some(&wrong_type)).len(),
         0,
     );
 
-    // The rpc-store cursor is inclusive: it carries the full sort position of
-    // the first *unread* object, and the resumed scan seeks straight to it. So
-    // resuming from `infos[1]` yields exactly that trailing object.
+    // Passing `Bound::Included` for `infos[1]` seeks straight to it and yields
+    // exactly that trailing object.
     let page_from_cursor: Vec<_> = RpcIndexes::owned_objects_iter(
         &reader,
         sui_types::storage::OwnedObjectOwner::Address(owner),
@@ -3819,17 +3750,7 @@ fn test_cloned_store_shares_owned_object_snapshot_guard() {
     drop(local_snapshot_guard);
 
     let reader = cloned_store.local_store().reader().clone();
-    let infos: Vec<_> = RpcIndexes::owned_objects_iter(
-        &reader,
-        sui_types::storage::OwnedObjectOwner::Address(owner),
-        Some(&gas_coins()),
-        std::ops::Bound::Unbounded,
-        std::ops::Bound::Unbounded,
-        false,
-    )
-    .expect("owned-object iterator should build")
-    .map(|result| result.expect("owned-object entry should decode"))
-    .collect();
+    let infos = crate::test_support::owned_object_infos(&reader, owner, Some(&gas_coins()));
     assert_eq!(infos.len(), 1);
     assert_eq!(infos[0].object_id, object_id);
 }
@@ -3854,4 +3775,31 @@ async fn test_read_child_object_propagates_store_errors() {
         err.to_string().contains(&child.to_string()),
         "error should name the child object: {err}",
     );
+}
+
+#[test]
+fn test_fork_store_clamps_retained_snapshot_range_at_fork_checkpoint() {
+    let temp = tempfile::tempdir().unwrap();
+    let forked_at = 100;
+    let (store, _services) =
+        data_store_with_remote(temp.path(), "http://localhost:1".to_owned(), forked_at);
+
+    // Snapshot at checkpoint 101 leaves stock window `70..=101` (capacity 32), which must clamp
+    // to `100..=101` so pre-fork checkpoints are reported as below the earliest available range.
+    store
+        .local_store()
+        .reader()
+        .db()
+        .take_snapshot(sui_consistent_store::Watermark::for_checkpoint(101));
+
+    assert_eq!(
+        RpcStateReader::retained_checkpoint_indexes_range(&store),
+        Some(100..=101)
+    );
+    match RpcStateReader::indexes_at_checkpoint(&store, 99) {
+        sui_types::storage::CheckpointIndexes::Unavailable { retained_range } => {
+            assert_eq!(retained_range, 100..=101);
+        }
+        _ => panic!("expected Unavailable clamped to fork checkpoint"),
+    }
 }

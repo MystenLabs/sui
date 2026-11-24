@@ -86,30 +86,23 @@ impl KeyRanges {
     }
 
     /// Restrict this set to keys within the byte interval `(lower, upper)`.
-    pub(crate) fn restrict(&self, lower: Bound<&[u8]>, upper: Bound<&[u8]>) -> Self {
+    pub(crate) fn restrict(&self, lower: Bound<Vec<u8>>, upper: Bound<Vec<u8>>) -> Self {
         let start = match lower {
             Bound::Unbounded => Vec::new(),
-            Bound::Included(bytes) => bytes.to_vec(),
-            Bound::Excluded(bytes) => {
-                let mut next = Vec::with_capacity(bytes.len() + 1);
-                next.extend_from_slice(bytes);
-                next.push(0);
-                next
+            Bound::Included(bytes) => bytes,
+            Bound::Excluded(mut bytes) => {
+                bytes.push(0);
+                bytes
             }
         };
         let end = match upper {
             Bound::Unbounded => None,
-            Bound::Excluded(bytes) => Some(bytes.to_vec()),
-            Bound::Included(bytes) => {
-                let mut next = Vec::with_capacity(bytes.len() + 1);
-                next.extend_from_slice(bytes);
-                next.push(0);
-                Some(next)
+            Bound::Excluded(bytes) => Some(bytes),
+            Bound::Included(mut bytes) => {
+                bytes.push(0);
+                Some(bytes)
             }
         };
-        if !before_end(&start, &end) {
-            return Self::empty();
-        }
         self.intersection(&Self(vec![KeyRange { start, end }]))
     }
 
@@ -360,20 +353,11 @@ impl<'d, K, V> FilteredScan<'d, K, V> {
     {
         let lower_bytes = encode_bound(lower)?;
         let upper_bytes = encode_bound(upper)?;
-        let ranges = ranges
-            .restrict(
-                lower_bytes.as_ref().map(Vec::as_slice),
-                upper_bytes.as_ref().map(Vec::as_slice),
-            )
-            .0;
+        let ranges = ranges.restrict(lower_bytes, upper_bytes).0;
         let (Some(first), Some(last)) = (ranges.first(), ranges.last()) else {
             return Ok(Self::empty());
         };
-        let iter_lower = if first.start.is_empty() {
-            Bound::Unbounded
-        } else {
-            Bound::Included(first.start.clone())
-        };
+        let iter_lower = Bound::Included(first.start.clone());
         let iter_upper = last.end.clone().map_or(Bound::Unbounded, Bound::Excluded);
         let (rows, current) = if descending {
             let rev = map.iter_rev_with::<Vec<u8>>((iter_lower, iter_upper))?;

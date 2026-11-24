@@ -1259,7 +1259,18 @@ impl RpcStateReader for ForkStore {
         &self,
         checkpoint: CheckpointSequenceNumber,
     ) -> sui_types::storage::CheckpointIndexes {
-        self.stock_reader().indexes_at_checkpoint(checkpoint)
+        match self.stock_reader().indexes_at_checkpoint(checkpoint) {
+            sui_types::storage::CheckpointIndexes::Unavailable { retained_range } => {
+                let hi = *retained_range.end();
+                let lo = (*retained_range.start())
+                    .max(self.forked_at_checkpoint())
+                    .min(hi);
+                sui_types::storage::CheckpointIndexes::Unavailable {
+                    retained_range: lo..=hi,
+                }
+            }
+            other => other,
+        }
     }
 
     fn latest_checkpoint_indexes(&self) -> sui_types::storage::CheckpointIndexes {
@@ -1269,7 +1280,13 @@ impl RpcStateReader for ForkStore {
     fn retained_checkpoint_indexes_range(
         &self,
     ) -> Option<std::ops::RangeInclusive<CheckpointSequenceNumber>> {
-        self.stock_reader().retained_checkpoint_indexes_range()
+        self.stock_reader()
+            .retained_checkpoint_indexes_range()
+            .map(|range| {
+                let hi = *range.end();
+                let lo = (*range.start()).max(self.forked_at_checkpoint()).min(hi);
+                lo..=hi
+            })
     }
 
     /// Resolve layouts using packages from committed `sui-rpc-store` data.

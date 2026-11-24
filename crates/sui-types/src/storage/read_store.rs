@@ -1247,6 +1247,10 @@ pub struct DynamicFieldEntry {
     pub parent: ObjectID,
     pub field_id: ObjectID,
     pub object_type: StructTag,
+    /// Coin balance when the owned child is a `Coin<T>` (e.g. a dynamic object field's value
+    /// object or a coin transferred directly to `parent`), `None` for non-coin objects including
+    /// `Field<K, V>`.
+    pub balance: Option<u64>,
     pub version: SequenceNumber,
 }
 
@@ -1256,6 +1260,16 @@ impl DynamicFieldEntry {
             parent: self.parent,
             field_id: self.field_id,
             object_type: self.object_type.clone(),
+            balance: self.balance,
+        }
+    }
+
+    pub fn into_key(self) -> DynamicFieldKey {
+        DynamicFieldKey {
+            parent: self.parent,
+            field_id: self.field_id,
+            object_type: self.object_type,
+            balance: self.balance,
         }
     }
 }
@@ -1264,10 +1278,13 @@ impl DynamicFieldEntry {
 pub struct DynamicFieldKey {
     pub parent: ObjectID,
     pub field_id: ObjectID,
-    /// The dynamic field object's Move type. The owned-object index sorts by
-    /// `(type, object id)`, so this is needed -- together with `field_id` -- to
-    /// resume a paginated scan at this entry.
+    /// The object's Move type. The owned-object index sorts by `(type, balance?, object id)`, so
+    /// this is needed -- together with `balance` and `field_id` -- to resume a paginated scan at
+    /// this entry.
     pub object_type: StructTag,
+    /// Coin balance when the entry is a `Coin<T>` indexed under `ObjectOwner(parent)`, `None`
+    /// otherwise.
+    pub balance: Option<u64>,
 }
 
 impl DynamicFieldKey {
@@ -1276,6 +1293,7 @@ impl DynamicFieldKey {
             parent: parent.into(),
             field_id,
             object_type,
+            balance: None,
         }
     }
 }
