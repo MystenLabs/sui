@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::time::Duration;
-
 use futures::TryStreamExt;
 use prost_types::FieldMask;
 use rand::rngs::OsRng;
+use std::collections::BTreeMap;
+use std::str::FromStr;
+use std::time::Duration;
 use sui_config::RpcConfig;
 use sui_macros::sim_test;
 use sui_rpc::Client;
@@ -26,8 +26,12 @@ use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::QueryOptions;
 use sui_rpc::proto::sui::rpc::v2::object_literal;
 use sui_rpc::proto::sui::rpc::v2::owner::OwnerKind;
+use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
+use sui_types::digests::ObjectDigest;
+use sui_types::storage::RpcIndexes;
 use test_cluster::FullNodeHandle;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
@@ -97,15 +101,37 @@ async fn wait_for_snapshot_range(
     }
 }
 
-/// With the default snapshot window of 0, every checkpoint-pinned `StateService` read refuses with
-/// `UNIMPLEMENTED` / `NOT_SERVED_HERE` (`disabled_by_config`), while unpinned reads still work.
+/// When `rpc-store-num-checkpoint-snapshots-to-retain` is set to 0, every checkpoint-pinned
+/// `StateService` read refuses with `UNIMPLEMENTED` / `NOT_SERVED_HERE` (`disabled_by_config`),
+/// while unpinned reads still work.
 #[sim_test]
 async fn test_window_zero_refuses_pinned_reads() {
-    let cluster = TestClusterBuilder::new()
+    let mut cluster = TestClusterBuilder::new()
         .with_num_validators(1)
         .build()
         .await;
-    let mut client = Client::new(cluster.rpc_url().to_owned()).unwrap();
+    let snapshot_fn = spawn_snapshot_fullnode(&mut cluster, 0).await;
+    // Wait for checkpoint 0 to be indexed so the unpinned read below sees genesis balances while
+    // the snapshot window remains disabled (`None`).
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(60);
+    loop {
+        let indexed = snapshot_fn.sui_node.with(|node| {
+            let reader = node
+                .embedded_rpc_store()
+                .expect("fullnode runs rpc indexes")
+                .reader();
+            RpcIndexes::get_highest_indexed_checkpoint_seq_number(&reader).unwrap()
+        });
+        if indexed.is_some() {
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "timed out waiting for window-0 fullnode to index checkpoint 0"
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let mut client = Client::new(snapshot_fn.rpc_url.clone()).unwrap();
     let owner = cluster.get_address_0();
 
     let mut get_bal = GetBalanceRequest::default();
@@ -191,19 +217,21 @@ async fn test_window_zero_refuses_pinned_reads() {
 /// newer checkpoints.
 #[sim_test]
 async fn test_paging_across_checkpoints_stays_pinned_while_state_changes() {
-    let mut cluster = TestClusterBuilder::new()
+    // Default fullnode config retains 15,000 snapshots (~1h), so consistent pagination works out
+    // of the box without extra snapshot configuration.
+    let cluster = TestClusterBuilder::new()
         .with_num_validators(1)
+        .disable_fullnode_pruning()
         .build()
         .await;
-    let snapshot_fn = spawn_snapshot_fullnode(&mut cluster, 100).await;
-    let mut client = Client::new(snapshot_fn.rpc_url.clone()).unwrap();
-    let mut default_client = Client::new(cluster.rpc_url().to_owned()).unwrap();
+    let snapshot_fn = &cluster.fullnode_handle;
+    let mut client = Client::new(cluster.rpc_url().to_owned()).unwrap();
 
     let sender = cluster.get_address_0();
     let receiver = cluster.get_address_1();
 
-    // Wait for initial snapshot on the snapshot fullnode.
-    let (_, initial_hi) = wait_for_snapshot_range(&snapshot_fn, |_, _| true).await;
+    // Wait for the default fullnode to retain at least one snapshot before recording `initial_hi`.
+    let (_, initial_hi) = wait_for_snapshot_range(snapshot_fn, |_, _| true).await;
 
     // Record sender's exact balance and owned objects as of `initial_hi`.
     let mut bal_req = GetBalanceRequest::default();
@@ -245,7 +273,7 @@ async fn test_paging_across_checkpoints_stays_pinned_while_state_changes() {
     baseline_req.read_mask = Some(FieldMask::from_str("object_id,version,balance,digest"));
     baseline_req.at_checkpoint = Some(initial_hi);
     baseline_req.options = Some(QueryOptions::default());
-    let expected_objects: Vec<(String, u64, u64)> = client
+    let expected_objects: Vec<(String, u64, u64, String)> = client
         .state_client()
         .list_owned_objects(baseline_req)
         .await
@@ -253,33 +281,59 @@ async fn test_paging_across_checkpoints_stays_pinned_while_state_changes() {
         .into_inner()
         .objects
         .into_iter()
-        .map(|o| (o.object_id().to_owned(), o.version(), o.balance()))
+        .map(|o| {
+            (
+                o.object_id().to_owned(),
+                o.version(),
+                o.balance(),
+                o.digest().to_owned(),
+            )
+        })
         .collect();
     assert!(
         expected_objects.len() >= 2,
         "sender should own multiple gas coins at genesis"
     );
+    assert!(
+        expected_objects
+            .iter()
+            .all(|(_, _, _, digest)| !digest.is_empty()),
+        "read_mask includes digest so every loaded object must carry a digest"
+    );
 
-    // Execute a transfer from sender to receiver, mutating sender's coin version and balance.
+    // Execute a transfer paying gas with the last coin in `expected_objects` so the mutated coin
+    // appears on a cursor-resumed page fetched after the transfer (not on `page1`).
     let transfer_amount = 1_000_000;
-    let txn = sui_test_transaction_builder::make_transfer_sui_transaction(
-        &cluster.wallet,
-        Some(receiver),
-        Some(transfer_amount),
-    )
-    .await;
-    let executed = super::super::execute_transaction(&mut default_client, &txn).await;
+    let (last_id, last_version, _, last_digest) = expected_objects.last().unwrap();
+    let gas_ref = (
+        ObjectID::from_str(last_id).unwrap(),
+        SequenceNumber::from_u64(*last_version),
+        ObjectDigest::from_str(last_digest).unwrap(),
+    );
+    let gas_price = cluster.get_reference_gas_price().await;
+    let tx_data = TestTransactionBuilder::new(sender, gas_ref, gas_price)
+        .transfer_sui(Some(transfer_amount), receiver)
+        .build();
+    let txn = cluster.wallet.sign_transaction(&tx_data).await;
+    let executed = super::super::execute_transaction(&mut client, &txn).await;
     let tx_checkpoint = executed.checkpoint();
 
-    // Wait for the snapshot fullnode to commit and snapshot `tx_checkpoint`.
-    wait_for_snapshot_range(&snapshot_fn, |_, hi| hi >= tx_checkpoint).await;
+    // Wait for the fullnode to commit and snapshot `tx_checkpoint`.
+    wait_for_snapshot_range(snapshot_fn, |_, hi| hi >= tx_checkpoint).await;
 
     // Finish paging sender's owned objects from page 1's cursor: every remaining page must still
     // see the pre-transfer checkpoint state.
-    let mut paged: Vec<(String, u64, u64)> = page1
+    let mut paged: Vec<(String, u64, u64, String)> = page1
         .objects
         .iter()
-        .map(|o| (o.object_id().to_owned(), o.version(), o.balance()))
+        .map(|o| {
+            (
+                o.object_id().to_owned(),
+                o.version(),
+                o.balance(),
+                o.digest().to_owned(),
+            )
+        })
         .collect();
     let mut after = page1.cursors[0].clone();
     loop {
@@ -297,7 +351,12 @@ async fn test_paging_across_checkpoints_stays_pinned_while_state_changes() {
             .unwrap()
             .into_inner();
         for o in &page.objects {
-            paged.push((o.object_id().to_owned(), o.version(), o.balance()));
+            paged.push((
+                o.object_id().to_owned(),
+                o.version(),
+                o.balance(),
+                o.digest().to_owned(),
+            ));
         }
         match page.end.as_ref().unwrap().reason() {
             QueryEndReason::ItemLimit => {
@@ -311,7 +370,7 @@ async fn test_paging_across_checkpoints_stays_pinned_while_state_changes() {
 
     // Pinned legacy `page_token` paging stays at `initial_hi` even when follow-up requests omit
     // `at_checkpoint`.
-    let mut legacy_paged: Vec<(String, u64, u64)> = Vec::new();
+    let mut legacy_paged: Vec<(String, u64, u64, String)> = Vec::new();
     let mut page_token = None;
     loop {
         let mut req = ListOwnedObjectsRequest::default();
@@ -331,7 +390,12 @@ async fn test_paging_across_checkpoints_stays_pinned_while_state_changes() {
         assert!(page.cursors.is_empty());
         assert!(page.end.is_none());
         for o in &page.objects {
-            legacy_paged.push((o.object_id().to_owned(), o.version(), o.balance()));
+            legacy_paged.push((
+                o.object_id().to_owned(),
+                o.version(),
+                o.balance(),
+                o.digest().to_owned(),
+            ));
         }
         match page.next_page_token {
             Some(token) => page_token = Some(token),
@@ -431,13 +495,13 @@ async fn test_at_checkpoint_below_and_above_window() {
     let mut client = Client::new(snapshot_fn.rpc_url.clone()).unwrap();
     let owner = cluster.get_address_0();
 
-    // Mint a cursor at an early snapshot so we can test evicted-cursor refusals once it ages out.
-    let (_, early_cp) = wait_for_snapshot_range(&snapshot_fn, |_, _| true).await;
+    // Wait until at least one snapshot exists, then mint a cursor without `at_checkpoint` so it
+    // atomically pins to the latest snapshot without racing catch-up eviction.
+    wait_for_snapshot_range(&snapshot_fn, |_, _| true).await;
     let mut early_opts = QueryOptions::default();
     early_opts.limit = Some(1);
     let mut early_req = ListOwnedObjectsRequest::default();
     early_req.owner = Some(owner.to_string());
-    early_req.at_checkpoint = Some(early_cp);
     early_req.options = Some(early_opts);
     let evicted_cursor = client
         .state_client()
@@ -450,9 +514,13 @@ async fn test_at_checkpoint_below_and_above_window() {
         .next()
         .expect("genesis owner has at least one object");
 
-    // Wait until `early_cp` and checkpoints 0..=1 have been evicted from the 2-checkpoint window.
-    wait_for_snapshot_range(&snapshot_fn, |lo, hi| lo > early_cp && lo >= 2 && hi >= 3).await;
-
+    // Any `hi` observed after `early_req` succeeded is an upper bound on the cursor's checkpoint;
+    // wait until it (and checkpoints 0..=1) have been evicted from the 2-checkpoint window.
+    let (_, early_upper_bound) = wait_for_snapshot_range(&snapshot_fn, |_, _| true).await;
+    wait_for_snapshot_range(&snapshot_fn, |lo, hi| {
+        lo > early_upper_bound && lo >= 2 && hi >= 3
+    })
+    .await;
     // Halt the default fullnode and all validators so `snapshot_fn` has no remaining peer to sync
     // newer checkpoints from, then wait for its own state to settle so `lo..=hi` is stationary.
     let default_fn = cluster

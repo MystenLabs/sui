@@ -1035,10 +1035,6 @@ fn is_true(value: &bool) -> bool {
     *value
 }
 
-fn is_zero(value: &usize) -> bool {
-    *value == 0
-}
-
 impl Config for NodeConfig {}
 
 impl NodeConfig {
@@ -1407,19 +1403,22 @@ pub struct AuthorityStorePruningConfig {
     /// Number of per-checkpoint RocksDB snapshots the embedded RPC store
     /// retains in memory. The store's synchronizer takes a snapshot each
     /// time every pipeline in its cohort has committed a checkpoint; once
-    /// this many are retained, each new one evicts the oldest. Zero (the
-    /// default) disables snapshotting.
+    /// this many are retained, each new one evicts the oldest. Zero
+    /// disables snapshotting.
     ///
-    /// Nothing reads these snapshots yet; they are intended to back
-    /// consistent pagination for the RPC store's live-index reads.
-    /// Retaining them prevents compaction from dropping keys overwritten
-    /// or deleted after the oldest retained snapshot, and from combining
-    /// merge operands that a snapshot separates, so a key merged in many
-    /// checkpoints (a balance, the current bitmap bucket) keeps up to one
-    /// operand per checkpoint in the window for reads to fold. Larger
-    /// values therefore cost disk space, compaction work, and read latency.
-    /// At ~4 checkpoints per second, 15,000 snapshots span about an hour.
-    #[serde(default, skip_serializing_if = "is_zero")]
+    /// These snapshots back consistent pagination and checkpoint-pinned
+    /// reads on `StateService`. Retaining them prevents compaction from
+    /// dropping keys overwritten or deleted after the oldest retained
+    /// snapshot, and from combining merge operands that a snapshot
+    /// separates, so a key merged in many checkpoints (a balance, the
+    /// current bitmap bucket) keeps up to one operand per checkpoint in
+    /// the window for reads to fold. Larger values therefore cost disk
+    /// space, compaction work, and read latency. At ~4 checkpoints per
+    /// second, the default of 15,000 snapshots spans about an hour.
+    #[serde(
+        default = "default_rpc_store_num_checkpoint_snapshots_to_retain",
+        skip_serializing_if = "is_default_rpc_store_num_checkpoint_snapshots_to_retain"
+    )]
     pub rpc_store_num_checkpoint_snapshots_to_retain: usize,
     /// number of epochs to keep the latest version of transactions and effects for
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1455,6 +1454,16 @@ fn default_periodic_compaction_threshold_days() -> Option<usize> {
     Some(1)
 }
 
+const DEFAULT_RPC_STORE_NUM_CHECKPOINT_SNAPSHOTS_TO_RETAIN: usize = 15_000;
+
+fn default_rpc_store_num_checkpoint_snapshots_to_retain() -> usize {
+    DEFAULT_RPC_STORE_NUM_CHECKPOINT_SNAPSHOTS_TO_RETAIN
+}
+
+fn is_default_rpc_store_num_checkpoint_snapshots_to_retain(value: &usize) -> bool {
+    *value == DEFAULT_RPC_STORE_NUM_CHECKPOINT_SNAPSHOTS_TO_RETAIN
+}
+
 impl Default for AuthorityStorePruningConfig {
     fn default() -> Self {
         Self {
@@ -1466,7 +1475,8 @@ impl Default for AuthorityStorePruningConfig {
             max_transactions_in_batch: default_max_transactions_in_batch(),
             periodic_compaction_threshold_days: None,
             rpc_store_bitmap_periodic_compaction_days: None,
-            rpc_store_num_checkpoint_snapshots_to_retain: 0,
+            rpc_store_num_checkpoint_snapshots_to_retain:
+                default_rpc_store_num_checkpoint_snapshots_to_retain(),
             num_epochs_to_retain_for_checkpoints: if cfg!(msim) { Some(2) } else { None },
             killswitch_tombstone_pruning: false,
             smooth: true,
@@ -2030,6 +2040,37 @@ mod tests {
         assert_eq!(
             round_tripped.rpc_store_bitmap_periodic_compaction_days,
             Some(17)
+        );
+    }
+
+    #[test]
+    fn rpc_store_num_checkpoint_snapshots_to_retain_defaults_and_disable() {
+        assert_eq!(
+            AuthorityStorePruningConfig::default().rpc_store_num_checkpoint_snapshots_to_retain,
+            15_000
+        );
+
+        let omitted: AuthorityStorePruningConfig = serde_yaml::from_str("{}").unwrap();
+        assert_eq!(omitted.rpc_store_num_checkpoint_snapshots_to_retain, 15_000);
+
+        let disabled: AuthorityStorePruningConfig =
+            serde_yaml::from_str("rpc-store-num-checkpoint-snapshots-to-retain: 0").unwrap();
+        assert_eq!(disabled.rpc_store_num_checkpoint_snapshots_to_retain, 0);
+        let serialized_disabled = serde_yaml::to_string(&disabled).unwrap();
+        let round_tripped_disabled: AuthorityStorePruningConfig =
+            serde_yaml::from_str(&serialized_disabled).unwrap();
+        assert_eq!(
+            round_tripped_disabled.rpc_store_num_checkpoint_snapshots_to_retain,
+            0
+        );
+
+        let configured: AuthorityStorePruningConfig =
+            serde_yaml::from_str("rpc-store-num-checkpoint-snapshots-to-retain: 42").unwrap();
+        let serialized = serde_yaml::to_string(&configured).unwrap();
+        let round_tripped: AuthorityStorePruningConfig = serde_yaml::from_str(&serialized).unwrap();
+        assert_eq!(
+            round_tripped.rpc_store_num_checkpoint_snapshots_to_retain,
+            42
         );
     }
 

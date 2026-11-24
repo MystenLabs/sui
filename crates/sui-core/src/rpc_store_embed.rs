@@ -894,8 +894,14 @@ mod tests {
 
         assert_eq!(
             take_snapshots(&AuthorityStorePruningConfig::default()),
-            None
+            Some(1..=5)
         );
+
+        let disabled = AuthorityStorePruningConfig {
+            rpc_store_num_checkpoint_snapshots_to_retain: 0,
+            ..Default::default()
+        };
+        assert_eq!(take_snapshots(&disabled), None);
 
         let retain_three = AuthorityStorePruningConfig {
             rpc_store_num_checkpoint_snapshots_to_retain: 3,
