@@ -594,12 +594,11 @@ impl RpcStateReader for TestStateStore {
         self.store.indexes()
     }
 
-    fn indexes_at_checkpoint(&self, checkpoint: CheckpointSequenceNumber) -> CheckpointIndexes {
+    fn indexes_at_checkpoint(
+        &self,
+        checkpoint: Option<CheckpointSequenceNumber>,
+    ) -> CheckpointIndexes {
         self.store.indexes_at_checkpoint(checkpoint)
-    }
-
-    fn latest_checkpoint_indexes(&self) -> CheckpointIndexes {
-        self.store.latest_checkpoint_indexes()
     }
 
     fn retained_checkpoint_indexes_range(

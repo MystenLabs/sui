@@ -18,7 +18,6 @@ use crate::ledger_history::query_options::below_serving_floor;
 use crate::reader::NotReadyCause;
 use crate::reader::NotServedHereCause;
 use crate::reader::index_empty;
-use crate::reader::indexes_disabled;
 use crate::reader::not_ready;
 use crate::reader::not_served_here;
 use crate::reader::version_not_retained;
@@ -122,22 +121,12 @@ pub(super) fn resolve_pinned(
     source: PinSource,
     loads_objects: bool,
 ) -> Result<PinnedStateRead> {
-    reader.indexes().ok_or_else(indexes_disabled)?;
-
-    let (requested, origin, lookup) = match source {
-        PinSource::AtCheckpoint(k) => (
-            Some((k, "at_checkpoint")),
-            PinOrigin::Explicit,
-            reader.indexes_at_checkpoint(k),
-        ),
-        PinSource::Cursor(k) => (
-            Some((k, "cursor")),
-            PinOrigin::Explicit,
-            reader.indexes_at_checkpoint(k),
-        ),
-        PinSource::Latest => (None, PinOrigin::Latest, reader.latest_checkpoint_indexes()),
+    let (requested, origin) = match source {
+        PinSource::AtCheckpoint(k) => (Some((k, "at_checkpoint")), PinOrigin::Explicit),
+        PinSource::Cursor(k) => (Some((k, "cursor")), PinOrigin::Explicit),
+        PinSource::Latest => (None, PinOrigin::Latest),
     };
-    match lookup {
+    match reader.indexes_at_checkpoint(requested.map(|(k, _)| k)) {
         CheckpointIndexes::Disabled => Err(not_served_here(
             NotServedHereCause::DisabledByConfig,
             "checkpoint-pinned state reads are disabled on this server",
@@ -194,18 +183,9 @@ mod tests {
     use crate::ledger_history::query_options::assert_below_serving_floor_error;
     use crate::reader::assert_not_served_here;
     use crate::reader::assert_refusal;
-    use crate::stub_store::StubStore;
 
     #[test]
-    fn no_indexes_and_disabled_window_return_not_served_here() {
-        let no_indexes = StubStore::new();
-        assert_not_served_here(
-            resolve_pinned(&no_indexes, PinSource::AtCheckpoint(5), false)
-                .err()
-                .unwrap(),
-            NotServedHereCause::NoRpcIndexes,
-        );
-
+    fn disabled_window_returns_not_served_here() {
         let (_dir, disabled, _service) = TestStateStore::open(0);
         assert_not_served_here(
             resolve_pinned(disabled.as_ref(), PinSource::AtCheckpoint(5), false)

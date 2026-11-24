@@ -3796,7 +3796,7 @@ fn test_fork_store_clamps_retained_snapshot_range_at_fork_checkpoint() {
         RpcStateReader::retained_checkpoint_indexes_range(&store),
         Some(100..=101)
     );
-    match RpcStateReader::indexes_at_checkpoint(&store, 99) {
+    match RpcStateReader::indexes_at_checkpoint(&store, Some(99)) {
         sui_types::storage::CheckpointIndexes::Unavailable { retained_range } => {
             assert_eq!(retained_range, 100..=101);
         }

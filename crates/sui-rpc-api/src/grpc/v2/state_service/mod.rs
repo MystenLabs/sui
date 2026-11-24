@@ -137,38 +137,56 @@ mod tests {
         let service = StubStore::new().into_service();
         let no_rpc_indexes = NotServedHereCause::NoRpcIndexes;
 
-        assert_not_served_here(
-            get_balance::get_balance(&service, GetBalanceRequest::default()).unwrap_err(),
-            no_rpc_indexes,
-        );
-        assert_not_served_here(
-            get_balance::batch_get_balances(&service, BatchGetBalancesRequest::default())
-                .unwrap_err(),
-            no_rpc_indexes,
-        );
+        for at_checkpoint in [None, Some(1)] {
+            let mut get_bal = GetBalanceRequest::default();
+            get_bal.at_checkpoint = at_checkpoint;
+            assert_not_served_here(
+                get_balance::get_balance(&service, get_bal.clone()).unwrap_err(),
+                no_rpc_indexes,
+            );
+
+            let mut batch_bal = BatchGetBalancesRequest::default();
+            if at_checkpoint.is_some() {
+                batch_bal.requests = vec![get_bal];
+            }
+            assert_not_served_here(
+                get_balance::batch_get_balances(&service, batch_bal).unwrap_err(),
+                no_rpc_indexes,
+            );
+
+            let mut list_bal = ListBalancesRequest::default();
+            list_bal.at_checkpoint = at_checkpoint;
+            assert_not_served_here(
+                list_balances::list_balances(&service, list_bal).unwrap_err(),
+                no_rpc_indexes,
+            );
+
+            let mut list_df = ListDynamicFieldsRequest::default();
+            list_df.at_checkpoint = at_checkpoint;
+            assert_not_served_here(
+                list_dynamic_fields::list_dynamic_fields(&service, list_df).unwrap_err(),
+                no_rpc_indexes,
+            );
+
+            let mut list_owned = ListOwnedObjectsRequest::default();
+            list_owned.at_checkpoint = at_checkpoint;
+            assert_not_served_here(
+                list_owned_objects::list_owned_objects(&service, list_owned).unwrap_err(),
+                no_rpc_indexes,
+            );
+
+            let mut list_obj = ListObjectsRequest::default();
+            list_obj.at_checkpoint = at_checkpoint;
+            assert_not_served_here(
+                list_objects::list_objects(service.clone(), list_obj)
+                    .await
+                    .err()
+                    .unwrap(),
+                no_rpc_indexes,
+            );
+        }
         assert_not_served_here(
             get_coin_info::get_coin_info(&service, GetCoinInfoRequest::default()).unwrap_err(),
-            no_rpc_indexes,
-        );
-        assert_not_served_here(
-            list_balances::list_balances(&service, ListBalancesRequest::default()).unwrap_err(),
-            no_rpc_indexes,
-        );
-        assert_not_served_here(
-            list_dynamic_fields::list_dynamic_fields(&service, ListDynamicFieldsRequest::default())
-                .unwrap_err(),
-            no_rpc_indexes,
-        );
-        assert_not_served_here(
-            list_owned_objects::list_owned_objects(&service, ListOwnedObjectsRequest::default())
-                .unwrap_err(),
-            no_rpc_indexes,
-        );
-        assert_not_served_here(
-            list_objects::list_objects(service.clone(), ListObjectsRequest::default())
-                .await
-                .err()
-                .unwrap(),
             no_rpc_indexes,
         );
     }

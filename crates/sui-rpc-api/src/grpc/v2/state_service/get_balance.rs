@@ -102,7 +102,7 @@ pub fn get_balance(service: &RpcService, request: GetBalanceRequest) -> Result<G
     }
     .unwrap_or_default();
 
-    let balance = render_balance(service, parsed.owner, &parsed.coin_type, balance_info);
+    let balance = render_balance(&parsed.coin_type, balance_info);
 
     Ok(GetBalanceResponse::default().with_balance(balance))
 }
@@ -152,12 +152,7 @@ pub fn batch_get_balances(
         let balance_info = indexes
             .get_balance(&item.owner, &item.coin_type)?
             .unwrap_or_default();
-        balances.push(render_balance(
-            service,
-            item.owner,
-            &item.coin_type,
-            balance_info,
-        ));
+        balances.push(render_balance(&item.coin_type, balance_info));
     }
 
     let mut response = BatchGetBalancesResponse::default();
@@ -165,12 +160,7 @@ pub fn batch_get_balances(
     Ok(response)
 }
 
-pub(super) fn render_balance(
-    _service: &RpcService,
-    _owner: SuiAddress,
-    coin_type: &CoreStructTag,
-    balance_info: BalanceInfo,
-) -> Balance {
+pub(super) fn render_balance(coin_type: &CoreStructTag, balance_info: BalanceInfo) -> Balance {
     let mut balance = Balance::default()
         .with_coin_type(coin_type.to_canonical_string(true))
         .with_balance(

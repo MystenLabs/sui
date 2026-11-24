@@ -791,15 +791,13 @@ pub trait RpcStateReader: ReadStore + super::RuntimeObjectResolver + Send + Sync
     // Get a handle to an instance of the RpcIndexes
     fn indexes(&self) -> Option<&dyn RpcIndexes>;
 
-    /// Acquire an [`RpcIndexes`] handle pinned to the end of `checkpoint`, or report why none was
+    /// Acquire an [`RpcIndexes`] handle pinned to the end of `checkpoint` (or the highest
+    /// checkpoint snapshot currently retained when `checkpoint` is `None`), or report why none was
     /// acquired using the snapshot window state observed atomically with the lookup.
-    fn indexes_at_checkpoint(&self, _checkpoint: CheckpointSequenceNumber) -> CheckpointIndexes {
-        CheckpointIndexes::Disabled
-    }
-
-    /// Acquire an [`RpcIndexes`] handle pinned to the highest checkpoint snapshot currently
-    /// retained, together with that checkpoint sequence number.
-    fn latest_checkpoint_indexes(&self) -> CheckpointIndexes {
+    fn indexes_at_checkpoint(
+        &self,
+        _checkpoint: Option<CheckpointSequenceNumber>,
+    ) -> CheckpointIndexes {
         CheckpointIndexes::Disabled
     }
 
@@ -1209,7 +1207,7 @@ pub struct OwnedObjectInfo {
 }
 
 /// Ownership category and optional owner address for querying the `object_by_owner` index.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OwnedObjectOwner {
     Address(SuiAddress),
     Object(ObjectID),

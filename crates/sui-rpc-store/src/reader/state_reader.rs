@@ -75,22 +75,15 @@ impl<R: Reader + Send + Sync> RpcStateReader for RpcStoreReader<R> {
         Some(self)
     }
 
-    fn indexes_at_checkpoint(&self, checkpoint: CheckpointSequenceNumber) -> CheckpointIndexes {
-        match self.db().lookup_snapshot(checkpoint) {
-            SnapshotLookup::Disabled => CheckpointIndexes::Disabled,
-            SnapshotLookup::Empty => CheckpointIndexes::Empty,
-            SnapshotLookup::Found(snap) => CheckpointIndexes::Available {
-                checkpoint: snap.checkpoint(),
-                indexes: Arc::new(self.at_snapshot(&snap)),
-            },
-            SnapshotLookup::NotFound { retained_range } => {
-                CheckpointIndexes::Unavailable { retained_range }
-            }
-        }
-    }
-
-    fn latest_checkpoint_indexes(&self) -> CheckpointIndexes {
-        match self.db().lookup_latest_snapshot() {
+    fn indexes_at_checkpoint(
+        &self,
+        checkpoint: Option<CheckpointSequenceNumber>,
+    ) -> CheckpointIndexes {
+        let lookup = match checkpoint {
+            Some(k) => self.db().lookup_snapshot(k),
+            None => self.db().lookup_latest_snapshot(),
+        };
+        match lookup {
             SnapshotLookup::Disabled => CheckpointIndexes::Disabled,
             SnapshotLookup::Empty => CheckpointIndexes::Empty,
             SnapshotLookup::Found(snap) => CheckpointIndexes::Available {

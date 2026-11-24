@@ -132,7 +132,7 @@ pub fn list_balances(
     response.balances = rows
         .into_iter()
         .map(|(coin_type, balance_info)| {
-            super::get_balance::render_balance(service, owner_sui, &coin_type, balance_info)
+            super::get_balance::render_balance(&coin_type, balance_info)
         })
         .collect();
     response.next_page_token = next_page_token;
@@ -166,12 +166,9 @@ fn list_balances_pinned(
         response.balances = Vec::with_capacity(rows.len());
         response.cursors = Vec::with_capacity(rows.len());
         for (coin_type, balance_info) in rows {
-            response.balances.push(super::get_balance::render_balance(
-                service,
-                owner_sui,
-                &coin_type,
-                balance_info,
-            ));
+            response
+                .balances
+                .push(super::get_balance::render_balance(&coin_type, balance_info));
             response.cursors.push(
                 StateCursor {
                     checkpoint: pinned.checkpoint,
@@ -197,12 +194,9 @@ fn list_balances_pinned(
         let mut last_coin_type: Option<StructTag> = None;
         response.balances = Vec::with_capacity(rows.len());
         for (coin_type, balance_info) in rows {
-            response.balances.push(super::get_balance::render_balance(
-                service,
-                owner_sui,
-                &coin_type,
-                balance_info,
-            ));
+            response
+                .balances
+                .push(super::get_balance::render_balance(&coin_type, balance_info));
             last_coin_type = Some(coin_type);
         }
         if has_more {

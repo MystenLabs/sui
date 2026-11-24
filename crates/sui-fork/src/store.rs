@@ -1257,7 +1257,7 @@ impl RpcStateReader for ForkStore {
 
     fn indexes_at_checkpoint(
         &self,
-        checkpoint: CheckpointSequenceNumber,
+        checkpoint: Option<CheckpointSequenceNumber>,
     ) -> sui_types::storage::CheckpointIndexes {
         match self.stock_reader().indexes_at_checkpoint(checkpoint) {
             sui_types::storage::CheckpointIndexes::Unavailable { retained_range } => {
@@ -1271,10 +1271,6 @@ impl RpcStateReader for ForkStore {
             }
             other => other,
         }
-    }
-
-    fn latest_checkpoint_indexes(&self) -> sui_types::storage::CheckpointIndexes {
-        self.stock_reader().latest_checkpoint_indexes()
     }
 
     fn retained_checkpoint_indexes_range(
