@@ -515,19 +515,10 @@ impl Db {
         Some(lo..=hi)
     }
 
-    /// Maximum number of in-memory snapshots this database is configured to retain (`0` disables
-    /// snapshotting).
-    pub fn snapshot_capacity(&self) -> usize {
-        self.inner.snapshot_capacity
-    }
-
     /// Configured retained checkpoint range (`lo..=hi`), where `hi` is the highest snapshot in the
     /// buffer and `lo = hi.saturating_sub(snapshot_capacity - 1)`. Returns `None` if snapshotting
     /// is disabled or no snapshots have been taken yet.
     pub fn retained_snapshot_range(&self) -> Option<RangeInclusive<u64>> {
-        if self.inner.snapshot_capacity == 0 {
-            return None;
-        }
         let snaps = self.inner.snapshots.read();
         let hi = *snaps.keys().next_back()?;
         let lo = hi.saturating_sub((self.inner.snapshot_capacity - 1) as u64);
