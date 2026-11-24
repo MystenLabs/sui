@@ -450,6 +450,7 @@ const MAINNET_USDB: &str =
 // Version 145: Reject secp256r1 public keys in the SEC1 compact encoding.
 //              Create the FreezeList system object.
 //              Enable coin regulation.
+//              Charge a MIST-denominated amount for configured mutable system-object inputs.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1841,6 +1842,14 @@ pub struct ProtocolConfig {
     /// MIST charged per dependency of a publish or upgrade command.
     package_publish_charge_per_dependency: Option<u64>,
 
+    /// System object IDs whose mutable transaction inputs incur an additional charge.
+    #[skip_accessor]
+    mutable_system_object_input_charge_ids: Option<BTreeSet<AccountAddress>>,
+
+    /// MIST charged for each mutable transaction input in
+    /// `mutable_system_object_input_charge_ids`.
+    mutable_system_object_input_charge: Option<u64>,
+
     // Per-byte cost of reading an object during transaction execution
     obj_access_cost_read_per_byte: Option<u64>,
 
@@ -2702,6 +2711,10 @@ impl ProtocolConfig {
         self.gasless_allowed_token_types.as_deref().unwrap_or(&[])
     }
 
+    pub fn mutable_system_object_input_charge_ids(&self) -> Option<&BTreeSet<AccountAddress>> {
+        self.mutable_system_object_input_charge_ids.as_ref()
+    }
+
     pub fn get_gasless_max_unused_inputs(&self) -> u64 {
         self.gasless_max_unused_inputs.unwrap_or(u64::MAX)
     }
@@ -2913,6 +2926,8 @@ impl ProtocolConfig {
             package_publish_charge_fixed: None,
             package_publish_charge_per_module: None,
             package_publish_charge_per_dependency: None,
+            mutable_system_object_input_charge_ids: None,
+            mutable_system_object_input_charge: None,
             obj_access_cost_read_per_byte: Some(15),
             obj_access_cost_read_per_package_kb: None,
             obj_access_cost_mutate_per_byte: Some(40),
@@ -5147,6 +5162,11 @@ impl ProtocolConfig {
                     cfg.feature_flags.secp256r1_strict_public_keys = true;
                     cfg.feature_flags.create_freeze_list = true;
                     cfg.feature_flags.enable_coin_regulation = true;
+                    cfg.mutable_system_object_input_charge_ids = Some(BTreeSet::from([
+                        AccountAddress::from_hex_literal("0xfa").unwrap(),
+                        AccountAddress::from_hex_literal("0xcf").unwrap(),
+                    ]));
+                    cfg.mutable_system_object_input_charge = Some(250_000_000);
                 }
                 // Use this template when making changes:
                 //

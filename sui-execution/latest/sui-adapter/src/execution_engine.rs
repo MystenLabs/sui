@@ -637,7 +637,7 @@ pub(crate) mod checked {
         let charge = if execution_params.early_errors().is_some() {
             0
         } else {
-            pre_execution::publish_upgrade_charge(transaction_kind, protocol_config)
+            pre_execution::charge(transaction_kind, protocol_config)
         };
         gas_charger.settle_pre_execution(charge)
     }

@@ -1,0 +1,75 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+// A mutable FreezeList input owes the 250_000_000 MIST pre-execution charge. A budget equal to
+// that charge leaves no gas for input loading, so the transaction runs out of gas before its
+// command can execute and consumes the whole budget. A larger budget executes successfully.
+
+init:
+A: object(0,0)
+
+task 1, lines 10-15:
+//# publish --sender A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1031000000, storage_cost: 3944400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 17:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 2
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299998965055600u64,
+    },
+}
+
+task 3, lines 19-20:
+//# programmable --sender A --inputs mutshared(0xcf) --gas-budget 250000000
+//> test::m::touch(Input(0));
+Error: Transaction Effects Status: Insufficient Gas.
+Debug of error: InsufficientGas at command None
+
+task 4, line 22:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299998715055600u64,
+    },
+}
+
+task 5, lines 24-26:
+// The additional budget covers normal input and execution gas after the pre-execution charge.
+//# programmable --sender A --inputs mutshared(0xcf) --gas-budget 500000000
+//> test::m::touch(Input(0));
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0)
+gas summary: computation_cost: 251000000, storage_cost: 2371200,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 6, line 28:
+//# view-object 0,0
+Owner: Account Address ( A )
+Version: 4
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 299998462672301u64,
+    },
+}
