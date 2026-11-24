@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 use std::sync::RwLock;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
@@ -82,6 +83,7 @@ pub(super) struct TestStateStore {
     objects: RwLock<BTreeMap<(ObjectID, SequenceNumber), Object>>,
     packages: BTreeMap<ObjectID, Object>,
     lowest_available_objects: AtomicU64,
+    retains_object_version_history: AtomicBool,
 }
 
 impl TestStateStore {
@@ -104,6 +106,7 @@ impl TestStateStore {
             objects: RwLock::new(BTreeMap::new()),
             packages,
             lowest_available_objects: AtomicU64::new(0),
+            retains_object_version_history: AtomicBool::new(true),
         });
         let service = RpcService::new(state.clone());
         (dir, state, service)
@@ -177,6 +180,11 @@ impl TestStateStore {
     pub(super) fn set_lowest_available_objects(&self, checkpoint: u64) {
         self.lowest_available_objects
             .store(checkpoint, Ordering::SeqCst);
+    }
+
+    pub(super) fn set_retains_object_version_history(&self, retains: bool) {
+        self.retains_object_version_history
+            .store(retains, Ordering::SeqCst);
     }
 }
 
@@ -586,6 +594,9 @@ impl RpcStateReader for TestStateStore {
         Ok(self.lowest_available_objects.load(Ordering::SeqCst))
     }
 
+    fn retains_object_version_history(&self) -> bool {
+        self.retains_object_version_history.load(Ordering::SeqCst)
+    }
     fn get_chain_identifier(&self) -> StorageResult<ChainIdentifier> {
         Ok(ChainIdentifier::from(CheckpointDigest::default()))
     }

@@ -38,17 +38,17 @@ pub(super) enum PinSource {
     Latest,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum PinOrigin {
-    Explicit,
-    Latest,
+impl PinSource {
+    fn is_explicit(self) -> bool {
+        !matches!(self, Self::Latest)
+    }
 }
 
 /// An [`RpcIndexes`] handle pinned to one checkpoint snapshot, acquired once so the snapshot
 /// cannot be evicted while the request executes.
 pub(super) struct PinnedStateRead {
     pub(super) checkpoint: u64,
-    origin: PinOrigin,
+    source: PinSource,
     pub(super) indexes: Arc<dyn RpcIndexes>,
 }
 
@@ -60,33 +60,33 @@ impl PinnedStateRead {
     pub(super) fn check_object_floor(&self, reader: &dyn RpcStateReader) -> Result<()> {
         let object_floor = object_pruning_floor(reader)?;
         if self.checkpoint < object_floor {
-            return Err(match self.origin {
-                PinOrigin::Explicit => {
-                    let window_lo = reader
-                        .retained_checkpoint_indexes_range()
-                        .map_or(0, |range| *range.start());
-                    below_serving_floor(window_lo.max(object_floor))
-                }
-                PinOrigin::Latest => pruning_race(format!(
+            return Err(if self.source.is_explicit() {
+                let window_lo = reader
+                    .retained_checkpoint_indexes_range()
+                    .map_or(0, |range| *range.start());
+                below_serving_floor(window_lo.max(object_floor))
+            } else {
+                pruning_race(format!(
                     "checkpoint {} fell below the object pruning floor ({object_floor})",
                     self.checkpoint
-                )),
+                ))
             });
         }
         Ok(())
     }
 
     /// Error for an indexed object version that could not be loaded during a checkpoint-pinned
-    /// read. Never skips the entry: reports `VERSION_NOT_RETAINED` when the store does not keep
-    /// replaced versions, `BELOW_EARLIEST_AVAILABLE` when an explicit checkpoint/cursor is now
-    /// below the object pruning floor, and `NOT_READY` (`pruning_race`) otherwise.
+    /// read. Never skips the entry: reports `VERSION_NOT_RETAINED` when an explicit
+    /// checkpoint/cursor targets a store that does not keep replaced versions,
+    /// `BELOW_EARLIEST_AVAILABLE` when an explicit checkpoint/cursor is now below the object
+    /// pruning floor, and `NOT_READY` (`pruning_race`) otherwise.
     pub(super) fn missing_object_error(
         &self,
         reader: &dyn RpcStateReader,
         object_id: ObjectID,
         version: SequenceNumber,
     ) -> RpcError {
-        if !reader.retains_object_version_history() {
+        if self.source.is_explicit() && !reader.retains_object_version_history() {
             return version_not_retained();
         }
         if let Err(err) = self.check_object_floor(reader) {
@@ -121,10 +121,10 @@ pub(super) fn resolve_pinned(
     source: PinSource,
     loads_objects: bool,
 ) -> Result<PinnedStateRead> {
-    let (requested, origin) = match source {
-        PinSource::AtCheckpoint(k) => (Some((k, "at_checkpoint")), PinOrigin::Explicit),
-        PinSource::Cursor(k) => (Some((k, "cursor")), PinOrigin::Explicit),
-        PinSource::Latest => (None, PinOrigin::Latest),
+    let requested = match source {
+        PinSource::AtCheckpoint(k) => Some((k, "at_checkpoint")),
+        PinSource::Cursor(k) => Some((k, "cursor")),
+        PinSource::Latest => None,
     };
     match reader.indexes_at_checkpoint(requested.map(|(k, _)| k)) {
         CheckpointIndexes::Disabled => Err(not_served_here(
@@ -163,7 +163,7 @@ pub(super) fn resolve_pinned(
         } => {
             let pinned = PinnedStateRead {
                 checkpoint,
-                origin,
+                source,
                 indexes,
             };
             if loads_objects {
@@ -349,6 +349,42 @@ mod tests {
                 SequenceNumber::from_u64(1),
             ),
             11,
+        );
+    }
+
+    #[test]
+    fn missing_object_on_non_retaining_store_distinguishes_explicit_and_latest() {
+        let (_dir, reader, _service) = TestStateStore::open(5);
+        reader.take_snapshot(10);
+        reader.set_retains_object_version_history(false);
+
+        let explicit = resolve_pinned(reader.as_ref(), PinSource::AtCheckpoint(10), true).unwrap();
+        let err = explicit.missing_object_error(
+            reader.as_ref(),
+            ObjectID::ZERO,
+            SequenceNumber::from_u64(1),
+        );
+        let status = err.into_status_proto();
+        assert_eq!(status.code, tonic::Code::OutOfRange as i32);
+        let info = status
+            .details
+            .iter()
+            .find_map(|d| d.to_msg::<crate::proto::google::rpc::ErrorInfo>().ok())
+            .expect("ErrorInfo detail");
+        assert_eq!(info.reason, ErrorReason::VersionNotRetained.as_str_name());
+        assert_eq!(info.domain, ErrorReason::DOMAIN);
+        assert!(info.metadata.is_empty());
+
+        let latest = resolve_pinned(reader.as_ref(), PinSource::Latest, true).unwrap();
+        assert_refusal(
+            latest.missing_object_error(
+                reader.as_ref(),
+                ObjectID::ZERO,
+                SequenceNumber::from_u64(1),
+            ),
+            tonic::Code::Unavailable,
+            ErrorReason::NotReady,
+            "pruning_race",
         );
     }
 }

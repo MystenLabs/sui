@@ -3785,7 +3785,7 @@ fn test_fork_store_clamps_retained_snapshot_range_at_fork_checkpoint() {
         data_store_with_remote(temp.path(), "http://localhost:1".to_owned(), forked_at);
 
     // Snapshot at checkpoint 101 leaves stock window `70..=101` (capacity 32), which must clamp
-    // to `100..=101` so pre-fork checkpoints are reported as below the earliest available range.
+    // to `101..=101` (`forked_at + 1`) because no snapshot is taken at the fork checkpoint itself.
     store
         .local_store()
         .reader()
@@ -3794,12 +3794,14 @@ fn test_fork_store_clamps_retained_snapshot_range_at_fork_checkpoint() {
 
     assert_eq!(
         RpcStateReader::retained_checkpoint_indexes_range(&store),
-        Some(100..=101)
+        Some(101..=101)
     );
-    match RpcStateReader::indexes_at_checkpoint(&store, Some(99)) {
-        sui_types::storage::CheckpointIndexes::Unavailable { retained_range } => {
-            assert_eq!(retained_range, 100..=101);
+    for cp in [99, 100] {
+        match RpcStateReader::indexes_at_checkpoint(&store, Some(cp)) {
+            sui_types::storage::CheckpointIndexes::Unavailable { retained_range } => {
+                assert_eq!(retained_range, 101..=101);
+            }
+            _ => panic!("expected Unavailable clamped to forked_at + 1 for checkpoint {cp}"),
         }
-        _ => panic!("expected Unavailable clamped to fork checkpoint"),
     }
 }

@@ -1262,9 +1262,8 @@ impl RpcStateReader for ForkStore {
         match self.stock_reader().indexes_at_checkpoint(checkpoint) {
             sui_types::storage::CheckpointIndexes::Unavailable { retained_range } => {
                 let hi = *retained_range.end();
-                let lo = (*retained_range.start())
-                    .max(self.forked_at_checkpoint())
-                    .min(hi);
+                let floor = self.forked_at_checkpoint().saturating_add(1);
+                let lo = (*retained_range.start()).max(floor).min(hi);
                 sui_types::storage::CheckpointIndexes::Unavailable {
                     retained_range: lo..=hi,
                 }
@@ -1280,7 +1279,8 @@ impl RpcStateReader for ForkStore {
             .retained_checkpoint_indexes_range()
             .map(|range| {
                 let hi = *range.end();
-                let lo = (*range.start()).max(self.forked_at_checkpoint()).min(hi);
+                let floor = self.forked_at_checkpoint().saturating_add(1);
+                let lo = (*range.start()).max(floor).min(hi);
                 lo..=hi
             })
     }
