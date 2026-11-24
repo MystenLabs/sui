@@ -4,7 +4,6 @@
 use std::ops::Bound;
 use std::sync::Arc;
 
-use bytes::Bytes;
 use futures::StreamExt;
 use futures::stream::BoxStream;
 use prost_types::FieldMask;
@@ -20,14 +19,19 @@ use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_types::storage::ObjectByTypeInfo;
 use sui_types::storage::ObjectByTypeKey;
 use sui_types::storage::OwnedObjectFilter;
-use tokio_util::sync::CancellationToken;
 
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
+use crate::grpc::v2::ledger_service::chunked_scan::ChunkArgs;
+use crate::grpc::v2::ledger_service::chunked_scan::ChunkedScan;
+use crate::grpc::v2::ledger_service::chunked_scan::ScanChunkDone;
+use crate::grpc::v2::ledger_service::chunked_scan::cancelled;
+use crate::grpc::v2::ledger_service::chunked_scan::spawn_list_chunk;
 use crate::grpc::v2::render::RenderContext;
 use crate::reader::indexes_disabled;
 
+use super::checkpoint::PinSource;
 use super::checkpoint::PinnedStateRead;
 use super::checkpoint::resolve_pinned;
 use super::cursor::StateCursor;
@@ -88,127 +92,101 @@ pub(super) async fn list_objects(
         },
     )?;
 
-    // Acquire the snapshot handle and verify the object pruning floor on a blocking thread before
-    // opening the stream so pre-stream refusals return directly as gRPC status errors.
-    let pinned = {
-        let service = service.clone();
-        let pin = opts.pin;
-        tokio::task::spawn_blocking(move || {
-            resolve_pinned(service.reader.inner().as_ref(), pin, true)
-        })
-        .await
-        .map_err(|e| {
-            RpcError::new(
-                tonic::Code::Internal,
-                format!("list_objects task failed: {e}"),
-            )
-        })??
-    };
-    let pinned = Arc::new(pinned);
-
-    let (mut lower, mut upper) = opts.bounds();
+    let (lower, upper) = opts.bounds();
     let descending = opts.descending;
     let exhausted_end_reason = opts.exhausted_end_reason();
-    let mut remaining = opts.limit;
+    let limit = opts.limit;
+    let initial_state = ObjectsScanState::Init {
+        pin: opts.pin,
+        lower,
+        upper,
+    };
 
     let stream = async_stream::try_stream! {
-        let cancel = CancellationToken::new();
-        let _cancel_guard = cancel.clone().drop_guard();
-        loop {
-            let chunk_limit = remaining.min(CHUNK_SIZE);
-            let chunk_service = service.clone();
-            let chunk_pinned = pinned.clone();
-            let chunk_filter = filter.clone();
-            let chunk_mask = read_mask.clone();
-            let chunk_lower = lower.clone();
-            let chunk_upper = upper.clone();
-            let chunk_cancel = cancel.clone();
-
-            let ObjectsChunk { items, last_key } = tokio::task::spawn_blocking(move || {
+        let mut scan = ChunkedScan::new(initial_state, limit, CHUNK_SIZE, 0, move |state, args| {
+            let service = service.clone();
+            let filter = filter.clone();
+            let read_mask = read_mask.clone();
+            spawn_list_chunk(None, move |_| {
                 read_chunk(
-                    &chunk_service,
-                    &chunk_pinned,
-                    chunk_filter.as_deref(),
-                    &chunk_mask,
+                    &service,
+                    state,
+                    filter.as_deref(),
+                    &read_mask,
                     should_load,
-                    chunk_lower,
-                    chunk_upper,
                     descending,
-                    chunk_limit,
-                    &chunk_cancel,
+                    exhausted_end_reason,
+                    args,
                 )
             })
-            .await
-            .map_err(|e| {
-                RpcError::new(tonic::Code::Internal, format!("list_objects task failed: {e}"))
-            })??;
+        });
 
-            let count = items.len();
-            let hit_limit = count == remaining;
-            for (idx, (object, cursor)) in items.into_iter().enumerate() {
-                let mut frame = ListObjectsResponse::default()
-                    .with_object(object)
-                    .with_cursor(cursor);
-                if hit_limit && idx + 1 == count {
-                    frame.end = Some(QueryEnd::default().with_reason(QueryEndReason::ItemLimit));
-                }
-                yield frame;
-            }
-            if hit_limit {
-                break;
-            }
-
-            if count < chunk_limit {
-                yield ListObjectsResponse::default()
-                    .with_end(QueryEnd::default().with_reason(exhausted_end_reason));
-                break;
-            }
-
-            remaining -= count;
-            let resume_key = last_key.expect("non-empty chunk always records last_key");
-            if descending {
-                upper = Bound::Excluded(resume_key);
-            } else {
-                lower = Bound::Excluded(resume_key);
-            }
+        while let Some(frame) = scan.next_item().await? {
+            yield frame;
+        }
+        let terminal = scan.into_terminal().expect("scan always sets terminal");
+        if terminal != QueryEndReason::ItemLimit {
+            yield ListObjectsResponse::default()
+                .with_end(QueryEnd::default().with_reason(terminal));
         }
     };
 
     Ok(stream.boxed())
 }
 
-struct ObjectsChunk {
-    items: Vec<(Object, Bytes)>,
-    last_key: Option<ObjectByTypeKey>,
+enum ObjectsScanState {
+    Init {
+        pin: PinSource,
+        lower: Bound<ObjectByTypeKey>,
+        upper: Bound<ObjectByTypeKey>,
+    },
+    Continue {
+        pinned: Arc<PinnedStateRead>,
+        lower: Bound<ObjectByTypeKey>,
+        upper: Bound<ObjectByTypeKey>,
+    },
 }
+
+type ObjectsChunkDone = ScanChunkDone<ObjectsScanState, ListObjectsResponse, QueryEndReason>;
 
 #[allow(clippy::too_many_arguments)]
 fn read_chunk(
     service: &RpcService,
-    pinned: &PinnedStateRead,
+    state: ObjectsScanState,
     filter: Option<&OwnedObjectFilter>,
     read_mask: &FieldMaskTree,
     should_load: bool,
-    lower: Bound<ObjectByTypeKey>,
-    upper: Bound<ObjectByTypeKey>,
     descending: bool,
-    chunk_limit: usize,
-    cancel: &CancellationToken,
-) -> Result<ObjectsChunk> {
-    if cancel.is_cancelled() {
-        return Err(RpcError::new(tonic::Code::Cancelled, "request cancelled"));
+    exhausted_end_reason: QueryEndReason,
+    args: ChunkArgs,
+) -> Result<ObjectsChunkDone> {
+    if args.cancel.is_cancelled() {
+        return Err(cancelled());
     }
     let reader = service.reader.inner();
+    let (pinned, mut lower, mut upper) = match state {
+        ObjectsScanState::Init { pin, lower, upper } => {
+            let pinned = resolve_pinned(reader.as_ref(), pin, true)?;
+            (Arc::new(pinned), lower, upper)
+        }
+        ObjectsScanState::Continue {
+            pinned,
+            lower,
+            upper,
+        } => (pinned, lower, upper),
+    };
+
     let render_context = RenderContext::empty(reader);
-    let mut iter = pinned
-        .indexes
-        .objects_by_type_iter(filter, lower, upper, descending)?;
-    let mut items = Vec::with_capacity(chunk_limit);
+    let mut iter =
+        pinned
+            .indexes
+            .objects_by_type_iter(filter, lower.clone(), upper.clone(), descending)?;
+    let mut items = Vec::with_capacity(args.chunk_item_limit);
     let mut last_key = None;
 
-    while items.len() < chunk_limit {
-        if cancel.is_cancelled() {
-            return Err(RpcError::new(tonic::Code::Cancelled, "request cancelled"));
+    while items.len() < args.chunk_item_limit {
+        if args.cancel.is_cancelled() {
+            return Err(cancelled());
         }
         let Some(info) = iter
             .next()
@@ -245,13 +223,50 @@ fn read_chunk(
             unreachable!();
         };
         last_key = Some(key);
-        items.push((object, cursor));
+        items.push(
+            ListObjectsResponse::default()
+                .with_object(object)
+                .with_cursor(cursor),
+        );
     }
+    drop(iter);
 
     // Re-check the object pruning floor before releasing any frame from this chunk.
     pinned.check_object_floor(reader.as_ref())?;
 
-    Ok(ObjectsChunk { items, last_key })
+    let produced = items.len();
+    let (next_state, terminal) = if produced == args.remaining_request_item_limit {
+        items
+            .last_mut()
+            .expect("remaining_request_item_limit >= 1")
+            .end = Some(QueryEnd::default().with_reason(QueryEndReason::ItemLimit));
+        (None, QueryEndReason::ItemLimit)
+    } else if produced < args.chunk_item_limit {
+        (None, exhausted_end_reason)
+    } else {
+        let resume_key = last_key.expect("non-empty chunk always records last_key");
+        if descending {
+            upper = Bound::Excluded(resume_key);
+        } else {
+            lower = Bound::Excluded(resume_key);
+        }
+        (
+            Some(ObjectsScanState::Continue {
+                pinned,
+                lower,
+                upper,
+            }),
+            exhausted_end_reason,
+        )
+    };
+
+    Ok(ScanChunkDone {
+        items,
+        produced,
+        next_state,
+        terminal,
+        remaining_scan_budget: args.scan_budget,
+    })
 }
 
 fn should_load_object_by_type(mask: &FieldMaskTree) -> bool {
@@ -559,25 +574,26 @@ mod tests {
         );
 
         // A cancelled token makes `read_chunk` bail immediately with Cancelled.
-        let pinned = resolve_pinned(
-            service.reader.inner().as_ref(),
-            super::super::checkpoint::PinSource::AtCheckpoint(1),
-            true,
-        )
-        .unwrap();
-        let cancel = CancellationToken::new();
+        let cancel = tokio_util::sync::CancellationToken::new();
         cancel.cancel();
         let err = read_chunk(
             &service,
-            &pinned,
+            ObjectsScanState::Init {
+                pin: PinSource::AtCheckpoint(1),
+                lower: Bound::Unbounded,
+                upper: Bound::Unbounded,
+            },
             None,
             &FieldMaskTree::from(FieldMask::from_str("object_id")),
             false,
-            Bound::Unbounded,
-            Bound::Unbounded,
             false,
-            CHUNK_SIZE,
-            &cancel,
+            QueryEndReason::CheckpointBound,
+            ChunkArgs {
+                scan_budget: 0,
+                chunk_item_limit: CHUNK_SIZE,
+                remaining_request_item_limit: CHUNK_SIZE,
+                cancel,
+            },
         )
         .err()
         .unwrap();

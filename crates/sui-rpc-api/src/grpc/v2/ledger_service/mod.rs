@@ -31,7 +31,7 @@ use sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerService;
 use tonic::codegen::BoxStream;
 
 mod bitmap_scan;
-mod chunked_scan;
+pub(crate) mod chunked_scan;
 mod event_scan;
 pub(crate) mod get_checkpoint;
 mod get_epoch;

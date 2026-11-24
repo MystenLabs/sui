@@ -5,7 +5,6 @@ use futures::TryStreamExt;
 use prost_types::FieldMask;
 use rand::rngs::OsRng;
 use std::collections::BTreeMap;
-use std::str::FromStr;
 use std::time::Duration;
 use sui_config::RpcConfig;
 use sui_macros::sim_test;
@@ -54,6 +53,17 @@ fn assert_not_served_here_disabled(status: &tonic::Status) {
         info.metadata,
         BTreeMap::from([("cause".to_owned(), "disabled_by_config".to_owned())]),
     );
+}
+
+async fn list_objects_err(client: &mut Client, request: ListObjectsRequest) -> tonic::Status {
+    let mut stream = match client.state_client().list_objects(request).await {
+        Err(status) => return status,
+        Ok(response) => response.into_inner(),
+    };
+    stream
+        .message()
+        .await
+        .expect_err("expected ListObjects refusal before any frame")
 }
 
 async fn spawn_snapshot_fullnode(
@@ -190,11 +200,7 @@ async fn test_window_zero_refuses_pinned_reads() {
     );
 
     assert_not_served_here_disabled(
-        &client
-            .state_client()
-            .list_objects(ListObjectsRequest::default())
-            .await
-            .unwrap_err(),
+        &list_objects_err(&mut client, ListObjectsRequest::default()).await,
     );
 
     // Unpinned current-state read still succeeds on a window-0 fullnode.
@@ -608,14 +614,7 @@ async fn test_at_checkpoint_below_and_above_window() {
 
     let mut below_obj = ListObjectsRequest::default();
     below_obj.at_checkpoint = Some(0);
-    assert_below_earliest_available(
-        &client
-            .state_client()
-            .list_objects(below_obj)
-            .await
-            .unwrap_err(),
-        lo,
-    );
+    assert_below_earliest_available(&list_objects_err(&mut client, below_obj).await, lo);
 
     // Exact upper boundary `hi + 1` -> ABOVE_LATEST_AVAILABLE (bound = "at_checkpoint").
     let above_cp = hi + 1;
