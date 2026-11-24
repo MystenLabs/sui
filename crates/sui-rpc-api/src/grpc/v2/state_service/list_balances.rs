@@ -3,6 +3,11 @@
 
 use std::ops::Bound;
 
+use crate::ErrorReason;
+use crate::Result;
+use crate::RpcError;
+use crate::RpcService;
+use crate::reader::indexes_disabled;
 use bytes::Bytes;
 use move_core_types::language_storage::StructTag;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
@@ -12,14 +17,8 @@ use sui_rpc::proto::sui::rpc::v2::QueryEnd;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_sdk_types::Address;
 use sui_types::base_types::SuiAddress;
+use sui_types::storage::RpcIndexes;
 
-use crate::ErrorReason;
-use crate::Result;
-use crate::RpcError;
-use crate::RpcService;
-use crate::reader::indexes_disabled;
-
-use super::checkpoint::PinSource;
 use super::checkpoint::resolve_pinned;
 use super::cursor::StateCursor;
 use super::cursor::StateCursorKey;
@@ -65,152 +64,111 @@ pub fn list_balances(
         )),
     };
 
-    if let Some(options) = request.options.as_ref() {
-        reject_legacy_paging_with_options(request.page_size, request.page_token.as_deref())?;
-        let opts = parse_query_options(
-            Some(options),
-            request.at_checkpoint,
-            DEFAULT_PAGE_SIZE,
-            MAX_PAGE_SIZE,
-            extract_key,
-        )?;
-        let (lower, upper) = opts.bounds();
-        return list_balances_pinned(
-            service,
-            owner_sui,
-            opts.pin,
-            lower,
-            upper,
-            opts.descending,
-            opts.limit,
-            Some(opts.exhausted_end_reason()),
-        );
-    }
+    let (pin, lower, upper, descending, limit, exhausted_end_reason) =
+        if let Some(options) = request.options.as_ref() {
+            reject_legacy_paging_with_options(request.page_size, request.page_token.as_deref())?;
+            let opts = parse_query_options(
+                Some(options),
+                request.at_checkpoint,
+                DEFAULT_PAGE_SIZE,
+                MAX_PAGE_SIZE,
+                extract_key,
+            )?;
+            let (lower, upper) = opts.bounds();
+            (
+                Some(opts.pin),
+                lower,
+                upper,
+                opts.descending,
+                opts.limit,
+                Some(opts.exhausted_end_reason()),
+            )
+        } else {
+            let page_size = request
+                .page_size
+                .map(|s| (s as usize).clamp(1, MAX_PAGE_SIZE))
+                .unwrap_or(DEFAULT_PAGE_SIZE);
+            let (pin, lower) = decode_page_token::<LegacyPageToken, StructTag, _, _, _>(
+                request.page_token.as_deref(),
+                request.at_checkpoint,
+                |t| t.owner == owner,
+                |t| t.coin_type,
+                extract_key,
+            )?;
+            (pin, lower, Bound::Unbounded, false, page_size, None)
+        };
 
-    let page_size = request
-        .page_size
-        .map(|s| (s as usize).clamp(1, MAX_PAGE_SIZE))
-        .unwrap_or(DEFAULT_PAGE_SIZE);
-    let (pin, lower) = decode_page_token::<LegacyPageToken, StructTag, _, _, _>(
-        request.page_token.as_deref(),
-        request.at_checkpoint,
-        |t| t.owner == owner,
-        |t| t.coin_type,
-        extract_key,
-    )?;
+    let pinned = pin
+        .map(|pin| resolve_pinned(reader.as_ref(), pin, false))
+        .transpose()?;
+    let indexes: &dyn RpcIndexes = pinned
+        .as_ref()
+        .map_or(current_indexes, |p| p.indexes.as_ref());
 
-    if let Some(pin) = pin {
-        return list_balances_pinned(
-            service,
-            owner_sui,
-            pin,
-            lower,
-            Bound::Unbounded,
-            false,
-            page_size,
-            None,
-        );
-    }
-
-    let mut rows = current_indexes
-        .balance_iter(&owner_sui, lower, Bound::Unbounded, false)?
-        .take(page_size + 1)
-        .map(|result| result.map_err(|err| RpcError::new(tonic::Code::Internal, err.to_string())))
-        .collect::<Result<Vec<_>, _>>()?;
-
-    let next_page_token = if rows.len() > page_size {
-        let next_row = rows.pop().unwrap();
-        Some(encode_legacy_page_token(LegacyPageToken {
-            owner,
-            coin_type: next_row.0,
-        }))
+    let take_count = if exhausted_end_reason.is_some() {
+        limit
     } else {
-        None
+        limit + 1
     };
-
-    let mut response = ListBalancesResponse::default();
-    response.balances = rows
-        .into_iter()
-        .map(|(coin_type, balance_info)| {
-            super::get_balance::render_balance(&coin_type, balance_info)
-        })
-        .collect();
-    response.next_page_token = next_page_token;
-    Ok(response)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn list_balances_pinned(
-    service: &RpcService,
-    owner_sui: SuiAddress,
-    pin: PinSource,
-    lower: Bound<StructTag>,
-    upper: Bound<StructTag>,
-    descending: bool,
-    limit: usize,
-    exhausted_end_reason: Option<QueryEndReason>,
-) -> Result<ListBalancesResponse> {
-    let pinned = resolve_pinned(service.reader.inner().as_ref(), pin, false)?;
-    let is_legacy = exhausted_end_reason.is_none();
-    let take_count = if is_legacy { limit + 1 } else { limit };
-    let mut rows = pinned
-        .indexes
+    let mut rows = indexes
         .balance_iter(&owner_sui, lower, upper, descending)?
         .take(take_count)
         .map(|result| result.map_err(|err| RpcError::new(tonic::Code::Internal, err.to_string())))
         .collect::<Result<Vec<_>, _>>()?;
+    let next_row =
+        (exhausted_end_reason.is_none() && rows.len() > limit).then(|| rows.pop().unwrap());
+    let hit_limit = rows.len() == limit;
 
     let mut response = ListBalancesResponse::default();
-    if let Some(exhausted_reason) = exhausted_end_reason {
-        let hit_limit = rows.len() == limit;
-        response.balances = Vec::with_capacity(rows.len());
+    response.balances = Vec::with_capacity(rows.len());
+    if exhausted_end_reason.is_some() {
         response.cursors = Vec::with_capacity(rows.len());
-        for (coin_type, balance_info) in rows {
-            response
-                .balances
-                .push(super::get_balance::render_balance(&coin_type, balance_info));
-            response.cursors.push(
-                StateCursor {
-                    checkpoint: pinned.checkpoint,
-                    key: StateCursorKey::Balances {
-                        owner: owner_sui,
-                        coin_type,
-                    },
-                }
-                .encode(),
-            );
+    }
+    let mut last_coin_type = None;
+    for (coin_type, balance_info) in rows {
+        response
+            .balances
+            .push(super::get_balance::render_balance(&coin_type, balance_info));
+        if let Some(pinned) = &pinned {
+            if exhausted_end_reason.is_some() {
+                response.cursors.push(
+                    StateCursor {
+                        checkpoint: pinned.checkpoint,
+                        key: StateCursorKey::Balances {
+                            owner: owner_sui,
+                            coin_type,
+                        },
+                    }
+                    .encode(),
+                );
+            } else {
+                last_coin_type = Some(coin_type);
+            }
         }
+    }
+
+    if let Some(exhausted_reason) = exhausted_end_reason {
         let end_reason = if hit_limit {
             QueryEndReason::ItemLimit
         } else {
             exhausted_reason
         };
         response.end = Some(QueryEnd::default().with_reason(end_reason));
-    } else {
-        let has_more = rows.len() > limit;
-        if has_more {
-            rows.pop();
-        }
-        let mut last_coin_type: Option<StructTag> = None;
-        response.balances = Vec::with_capacity(rows.len());
-        for (coin_type, balance_info) in rows {
-            response
-                .balances
-                .push(super::get_balance::render_balance(&coin_type, balance_info));
-            last_coin_type = Some(coin_type);
-        }
-        if has_more {
-            response.next_page_token = Some(
-                StateCursor {
-                    checkpoint: pinned.checkpoint,
-                    key: StateCursorKey::Balances {
-                        owner: owner_sui,
-                        coin_type: last_coin_type.expect("limit >= 1"),
-                    },
-                }
-                .encode(),
-            );
-        }
+    } else if let Some((next_coin_type, _)) = next_row {
+        response.next_page_token = Some(match &pinned {
+            Some(pinned) => StateCursor {
+                checkpoint: pinned.checkpoint,
+                key: StateCursorKey::Balances {
+                    owner: owner_sui,
+                    coin_type: last_coin_type.expect("limit >= 1"),
+                },
+            }
+            .encode(),
+            None => encode_legacy_page_token(LegacyPageToken {
+                owner,
+                coin_type: next_coin_type,
+            }),
+        });
     }
 
     Ok(response)

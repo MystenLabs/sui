@@ -23,6 +23,7 @@ use sui_types::storage::OwnedObjectFilter;
 use sui_types::storage::OwnedObjectInfo;
 use sui_types::storage::OwnedObjectKey;
 use sui_types::storage::OwnedObjectOwner;
+use sui_types::storage::RpcIndexes;
 use sui_types::storage::StructTypePattern;
 
 use crate::Result;
@@ -31,7 +32,6 @@ use crate::RpcService;
 use crate::grpc::v2::render::RenderContext;
 use crate::reader::indexes_disabled;
 
-use super::checkpoint::PinSource;
 use super::checkpoint::resolve_pinned;
 use super::cursor::StateCursor;
 use super::cursor::StateCursorKey;
@@ -110,165 +110,82 @@ pub fn list_owned_objects(
         )),
     };
 
-    if let Some(options) = request.options.as_ref() {
-        reject_legacy_paging_with_options(request.page_size, request.page_token.as_deref())?;
-        let opts = parse_query_options(
-            Some(options),
-            request.at_checkpoint,
-            DEFAULT_PAGE_SIZE,
-            MAX_PAGE_SIZE,
-            extract_key,
-        )?;
-        let (lower, upper) = opts.bounds();
-        return list_owned_objects_pinned(
-            service,
-            owner,
-            filter.as_ref(),
-            &read_mask,
-            should_load,
-            opts.pin,
-            lower,
-            upper,
-            opts.descending,
-            opts.limit,
-            Some(opts.exhausted_end_reason()),
-        );
-    }
-
-    // Non-ADDRESS owner kinds require cursor paging (`options`) or a checkpoint-pinned read
-    // (`at_checkpoint` or a pinned `page_token`).
-    if !matches!(owner, OwnedObjectOwner::Address(_))
-        && request.at_checkpoint.is_none()
-        && request.page_token.is_none()
-    {
-        return Err(FieldViolation::new("owner_kind")
-            .with_description("owner_kind other than ADDRESS requires options or at_checkpoint")
-            .with_reason(ErrorReason::FieldInvalid)
-            .into());
-    }
-
-    let legacy_struct_tag: Option<StructTag> = match &object_type {
-        Some(StructTypePattern::Type(tag)) => Some(tag.clone()),
-        _ => None,
-    };
-
-    let page_size = request
-        .page_size
-        .map(|s| (s as usize).clamp(1, MAX_PAGE_SIZE))
-        .unwrap_or(DEFAULT_PAGE_SIZE);
-    let (pin, lower) = decode_page_token::<LegacyPageToken, OwnedObjectKey, _, _, _>(
-        request.page_token.as_deref(),
-        request.at_checkpoint,
-        |t| {
-            matches!(owner, OwnedObjectOwner::Address(addr) if Address::from(addr) == t.owner)
-                && t.object_type == legacy_struct_tag
-        },
-        |t| OwnedObjectKey {
-            object_type: t.inner.object_type,
-            balance: t.inner.balance,
-            object_id: t.inner.object_id,
-        },
-        extract_key,
-    )?;
-
-    if let Some(pin) = pin {
-        return list_owned_objects_pinned(
-            service,
-            owner,
-            filter.as_ref(),
-            &read_mask,
-            should_load,
-            pin,
-            lower,
-            Bound::Unbounded,
-            false,
-            page_size,
-            None,
-        );
-    }
-
-    let OwnedObjectOwner::Address(addr) = owner else {
-        unreachable!("non-ADDRESS owner kinds are always pinned");
-    };
-    let mut iter = current_indexes.owned_objects_iter(
-        owner,
-        filter.as_ref(),
-        lower,
-        Bound::Unbounded,
-        false,
-    )?;
-    let mut objects = Vec::with_capacity(page_size);
-    let render_context = RenderContext::empty(reader);
-    let mut size_bytes = 0;
-
-    while let Some(object_info) = iter
-        .next()
-        .transpose()
-        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
-    {
-        let object = if should_load {
-            let Some(object) =
-                reader.get_object_by_key(&object_info.object_id, object_info.version)
-            else {
-                tracing::debug!(
-                    "unable to find object {}:{} while iterating through owned objects",
-                    object_info.object_id,
-                    object_info.version
-                );
-                continue;
-            };
-
-            service.render_object_to_proto(&object, &read_mask, &render_context)
+    let (pin, lower, upper, descending, limit, exhausted_end_reason, legacy_struct_tag) =
+        if let Some(options) = request.options.as_ref() {
+            reject_legacy_paging_with_options(request.page_size, request.page_token.as_deref())?;
+            let opts = parse_query_options(
+                Some(options),
+                request.at_checkpoint,
+                DEFAULT_PAGE_SIZE,
+                MAX_PAGE_SIZE,
+                extract_key,
+            )?;
+            let (lower, upper) = opts.bounds();
+            (
+                Some(opts.pin),
+                lower,
+                upper,
+                opts.descending,
+                opts.limit,
+                Some(opts.exhausted_end_reason()),
+                None,
+            )
         } else {
-            owned_object_to_proto(&object_info, &read_mask)
+            // Non-ADDRESS owner kinds require cursor paging (`options`) or a checkpoint-pinned
+            // read (`at_checkpoint` or a pinned `page_token`).
+            if !matches!(owner, OwnedObjectOwner::Address(_))
+                && request.at_checkpoint.is_none()
+                && request.page_token.is_none()
+            {
+                return Err(FieldViolation::new("owner_kind")
+                    .with_description(
+                        "owner_kind other than ADDRESS requires options or at_checkpoint",
+                    )
+                    .with_reason(ErrorReason::FieldInvalid)
+                    .into());
+            }
+
+            let legacy_struct_tag: Option<StructTag> = match &object_type {
+                Some(StructTypePattern::Type(tag)) => Some(tag.clone()),
+                _ => None,
+            };
+            let page_size = request
+                .page_size
+                .map(|s| (s as usize).clamp(1, MAX_PAGE_SIZE))
+                .unwrap_or(DEFAULT_PAGE_SIZE);
+            let (pin, lower) = decode_page_token::<LegacyPageToken, OwnedObjectKey, _, _, _>(
+                request.page_token.as_deref(),
+                request.at_checkpoint,
+                |t| {
+                    matches!(owner, OwnedObjectOwner::Address(addr) if Address::from(addr) == t.owner)
+                        && t.object_type == legacy_struct_tag
+                },
+                |t| OwnedObjectKey {
+                    object_type: t.inner.object_type,
+                    balance: t.inner.balance,
+                    object_id: t.inner.object_id,
+                },
+                extract_key,
+            )?;
+            (
+                pin,
+                lower,
+                Bound::Unbounded,
+                false,
+                page_size,
+                None,
+                legacy_struct_tag,
+            )
         };
 
-        size_bytes += object.encoded_len();
-        objects.push(object);
+    let pinned = pin
+        .map(|pin| resolve_pinned(reader.as_ref(), pin, true))
+        .transpose()?;
+    let indexes: &dyn RpcIndexes = pinned
+        .as_ref()
+        .map_or(current_indexes, |p| p.indexes.as_ref());
 
-        if objects.len() >= page_size || size_bytes >= MAX_PAGE_SIZE_BYTES {
-            break;
-        }
-    }
-
-    let next_row = iter
-        .next()
-        .transpose()
-        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
-
-    let next_page_token = next_row.map(|cursor| {
-        encode_legacy_page_token(LegacyPageToken {
-            owner: addr.into(),
-            object_type: legacy_struct_tag,
-            inner: cursor,
-        })
-    });
-
-    let mut message = ListOwnedObjectsResponse::default();
-    message.objects = objects;
-    message.next_page_token = next_page_token;
-    Ok(message)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn list_owned_objects_pinned(
-    service: &RpcService,
-    owner: OwnedObjectOwner,
-    filter: Option<&OwnedObjectFilter>,
-    read_mask: &FieldMaskTree,
-    should_load: bool,
-    pin: PinSource,
-    lower: Bound<OwnedObjectKey>,
-    upper: Bound<OwnedObjectKey>,
-    descending: bool,
-    limit: usize,
-    exhausted_end_reason: Option<QueryEndReason>,
-) -> Result<ListOwnedObjectsResponse> {
-    let reader = service.reader.inner();
-    let pinned = resolve_pinned(reader.as_ref(), pin, true)?;
-    let mut iter = pinned
-        .indexes
-        .owned_objects_iter(owner, filter, lower, upper, descending)?;
+    let mut iter = indexes.owned_objects_iter(owner, filter.as_ref(), lower, upper, descending)?;
     let mut objects = Vec::with_capacity(limit);
     let mut cursors = if exhausted_end_reason.is_some() {
         Vec::with_capacity(limit)
@@ -289,32 +206,42 @@ fn list_owned_objects_pinned(
             let Some(object) =
                 reader.get_object_by_key(&object_info.object_id, object_info.version)
             else {
-                return Err(pinned.missing_object_error(
-                    reader.as_ref(),
+                if let Some(pinned) = &pinned {
+                    return Err(pinned.missing_object_error(
+                        reader.as_ref(),
+                        object_info.object_id,
+                        object_info.version,
+                    ));
+                }
+                tracing::debug!(
+                    "unable to find object {}:{} while iterating through owned objects",
                     object_info.object_id,
-                    object_info.version,
-                ));
+                    object_info.version
+                );
+                continue;
             };
-            service.render_object_to_proto(&object, read_mask, &render_context)
+            service.render_object_to_proto(&object, &read_mask, &render_context)
         } else {
-            owned_object_to_proto(&object_info, read_mask)
+            owned_object_to_proto(&object_info, &read_mask)
         };
 
-        let key = OwnedObjectKey {
-            object_type: object_info.object_type,
-            balance: object_info.balance,
-            object_id: object_info.object_id,
-        };
-        if exhausted_end_reason.is_some() {
-            cursors.push(
-                StateCursor {
-                    checkpoint: pinned.checkpoint,
-                    key: StateCursorKey::OwnedObjects { owner, key },
-                }
-                .encode(),
-            );
-        } else {
-            last_key = Some(key);
+        if let Some(pinned) = &pinned {
+            let key = OwnedObjectKey {
+                object_type: object_info.object_type,
+                balance: object_info.balance,
+                object_id: object_info.object_id,
+            };
+            if exhausted_end_reason.is_some() {
+                cursors.push(
+                    StateCursor {
+                        checkpoint: pinned.checkpoint,
+                        key: StateCursorKey::OwnedObjects { owner, key },
+                    }
+                    .encode(),
+                );
+            } else {
+                last_key = Some(key);
+            }
         }
 
         size_bytes += object.encoded_len();
@@ -326,17 +253,18 @@ fn list_owned_objects_pinned(
         }
     }
 
-    let has_more = if exhausted_end_reason.is_none() && hit_limit {
+    let next_row = if exhausted_end_reason.is_none() && hit_limit {
         iter.next()
             .transpose()
             .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
-            .is_some()
     } else {
-        false
+        None
     };
 
     // Re-check object pruning floor after reads to catch pruning that raced with object loads.
-    pinned.check_object_floor(reader.as_ref())?;
+    if let Some(pinned) = &pinned {
+        pinned.check_object_floor(reader.as_ref())?;
+    }
 
     let mut message = ListOwnedObjectsResponse::default();
     message.objects = objects;
@@ -348,9 +276,9 @@ fn list_owned_objects_pinned(
         };
         message.cursors = cursors;
         message.end = Some(QueryEnd::default().with_reason(end_reason));
-    } else if has_more {
-        message.next_page_token = Some(
-            StateCursor {
+    } else if let Some(next_row) = next_row {
+        message.next_page_token = Some(match &pinned {
+            Some(pinned) => StateCursor {
                 checkpoint: pinned.checkpoint,
                 key: StateCursorKey::OwnedObjects {
                     owner,
@@ -358,7 +286,17 @@ fn list_owned_objects_pinned(
                 },
             }
             .encode(),
-        );
+            None => {
+                let OwnedObjectOwner::Address(addr) = owner else {
+                    unreachable!("non-ADDRESS owner kinds are always pinned");
+                };
+                encode_legacy_page_token(LegacyPageToken {
+                    owner: addr.into(),
+                    object_type: legacy_struct_tag,
+                    inner: next_row,
+                })
+            }
+        });
     }
     Ok(message)
 }

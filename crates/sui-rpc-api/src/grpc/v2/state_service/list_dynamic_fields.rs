@@ -27,11 +27,10 @@ use sui_sdk_types::Address;
 use sui_types::base_types::ObjectID;
 use sui_types::object::Object;
 use sui_types::storage::DynamicFieldEntry;
-use sui_types::storage::DynamicFieldFilter;
 use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::OwnedObjectOwner;
+use sui_types::storage::RpcIndexes;
 
-use super::checkpoint::PinSource;
 use super::checkpoint::PinnedStateRead;
 use super::checkpoint::resolve_pinned;
 use super::cursor::StateCursor;
@@ -95,133 +94,54 @@ pub fn list_dynamic_fields(
         )),
     };
 
-    if let Some(options) = request.options.as_ref() {
-        reject_legacy_paging_with_options(request.page_size, request.page_token.as_deref())?;
-        let opts = parse_query_options(
-            Some(options),
-            request.at_checkpoint,
-            DEFAULT_PAGE_SIZE,
-            MAX_PAGE_SIZE,
-            extract_key,
-        )?;
-        let (lower, upper) = opts.bounds();
-        return list_dynamic_fields_pinned(
-            service,
-            parent_id,
-            filter.as_ref(),
-            &read_mask,
-            opts.pin,
-            lower,
-            upper,
-            opts.descending,
-            opts.limit,
-            Some(opts.exhausted_end_reason()),
-        );
-    }
-
-    let page_size = request
-        .page_size
-        .map(|s| (s as usize).clamp(1, MAX_PAGE_SIZE))
-        .unwrap_or(DEFAULT_PAGE_SIZE);
-    let (pin, lower) = decode_page_token::<LegacyPageToken, DynamicFieldKey, _, _, _>(
-        request.page_token.as_deref(),
-        request.at_checkpoint,
-        |t| t.parent == parent,
-        |t| DynamicFieldKey {
-            parent: parent_id,
-            field_id: t.field_id.into(),
-            object_type: t.object_type,
-            balance: None,
-        },
-        extract_key,
-    )?;
-
-    if let Some(pin) = pin {
-        return list_dynamic_fields_pinned(
-            service,
-            parent_id,
-            filter.as_ref(),
-            &read_mask,
-            pin,
-            lower,
-            Bound::Unbounded,
-            false,
-            page_size,
-            None,
-        );
-    }
-
-    let mut iter = current_indexes.dynamic_field_iter(
-        parent_id,
-        filter.as_ref(),
-        lower,
-        Bound::Unbounded,
-        false,
-    )?;
-    let mut dynamic_fields = Vec::with_capacity(page_size);
-    let render_context = RenderContext::empty(reader);
-    let mut size_bytes = 0;
-
-    while let Some(entry) = iter
-        .next()
-        .transpose()
-        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
-    {
-        let Some(dynamic_field) = get_dynamic_field_current(
-            service,
-            &entry.parent,
-            &entry.field_id,
-            &read_mask,
-            &render_context,
-        ) else {
-            continue;
+    let (pin, lower, upper, descending, limit, exhausted_end_reason) =
+        if let Some(options) = request.options.as_ref() {
+            reject_legacy_paging_with_options(request.page_size, request.page_token.as_deref())?;
+            let opts = parse_query_options(
+                Some(options),
+                request.at_checkpoint,
+                DEFAULT_PAGE_SIZE,
+                MAX_PAGE_SIZE,
+                extract_key,
+            )?;
+            let (lower, upper) = opts.bounds();
+            (
+                Some(opts.pin),
+                lower,
+                upper,
+                opts.descending,
+                opts.limit,
+                Some(opts.exhausted_end_reason()),
+            )
+        } else {
+            let page_size = request
+                .page_size
+                .map(|s| (s as usize).clamp(1, MAX_PAGE_SIZE))
+                .unwrap_or(DEFAULT_PAGE_SIZE);
+            let (pin, lower) = decode_page_token::<LegacyPageToken, DynamicFieldKey, _, _, _>(
+                request.page_token.as_deref(),
+                request.at_checkpoint,
+                |t| t.parent == parent,
+                |t| DynamicFieldKey {
+                    parent: parent_id,
+                    field_id: t.field_id.into(),
+                    object_type: t.object_type,
+                    balance: None,
+                },
+                extract_key,
+            )?;
+            (pin, lower, Bound::Unbounded, false, page_size, None)
         };
 
-        size_bytes += dynamic_field.encoded_len();
-        dynamic_fields.push(dynamic_field);
+    let pinned = pin
+        .map(|pin| resolve_pinned(reader.as_ref(), pin, true))
+        .transpose()?;
+    let indexes: &dyn RpcIndexes = pinned
+        .as_ref()
+        .map_or(current_indexes, |p| p.indexes.as_ref());
 
-        if dynamic_fields.len() >= page_size || size_bytes >= MAX_PAGE_SIZE_BYTES {
-            break;
-        }
-    }
-
-    let next_entry = iter
-        .next()
-        .transpose()
-        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
-
-    let next_page_token = next_entry.map(|cursor| {
-        encode_legacy_page_token(LegacyPageToken {
-            parent,
-            field_id: cursor.field_id.into(),
-            object_type: cursor.object_type,
-        })
-    });
-
-    let mut message = ListDynamicFieldsResponse::default();
-    message.dynamic_fields = dynamic_fields;
-    message.next_page_token = next_page_token;
-    Ok(message)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn list_dynamic_fields_pinned(
-    service: &RpcService,
-    parent_id: ObjectID,
-    filter: Option<&DynamicFieldFilter>,
-    read_mask: &FieldMaskTree,
-    pin: PinSource,
-    lower: Bound<DynamicFieldKey>,
-    upper: Bound<DynamicFieldKey>,
-    descending: bool,
-    limit: usize,
-    exhausted_end_reason: Option<QueryEndReason>,
-) -> Result<ListDynamicFieldsResponse> {
-    let reader = service.reader.inner();
-    let pinned = resolve_pinned(reader.as_ref(), pin, true)?;
-    let mut iter = pinned
-        .indexes
-        .dynamic_field_iter(parent_id, filter, lower, upper, descending)?;
+    let mut iter =
+        indexes.dynamic_field_iter(parent_id, filter.as_ref(), lower, upper, descending)?;
     let mut dynamic_fields = Vec::with_capacity(limit);
     let mut cursors = if exhausted_end_reason.is_some() {
         Vec::with_capacity(limit)
@@ -238,19 +158,34 @@ fn list_dynamic_fields_pinned(
         .transpose()
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
     {
-        let dynamic_field =
-            get_dynamic_field_pinned(service, &pinned, &entry, read_mask, &render_context)?;
-        let key = entry.into_key();
-        if exhausted_end_reason.is_some() {
-            cursors.push(
-                StateCursor {
-                    checkpoint: pinned.checkpoint,
-                    key: StateCursorKey::DynamicFields { key },
-                }
-                .encode(),
-            );
+        let dynamic_field = if let Some(pinned) = &pinned {
+            get_dynamic_field_pinned(service, pinned, &entry, &read_mask, &render_context)?
         } else {
-            last_key = Some(key);
+            let Some(dynamic_field) = get_dynamic_field_current(
+                service,
+                &entry.parent,
+                &entry.field_id,
+                &read_mask,
+                &render_context,
+            ) else {
+                continue;
+            };
+            dynamic_field
+        };
+
+        if let Some(pinned) = &pinned {
+            let key = entry.into_key();
+            if exhausted_end_reason.is_some() {
+                cursors.push(
+                    StateCursor {
+                        checkpoint: pinned.checkpoint,
+                        key: StateCursorKey::DynamicFields { key },
+                    }
+                    .encode(),
+                );
+            } else {
+                last_key = Some(key);
+            }
         }
 
         size_bytes += dynamic_field.encoded_len();
@@ -262,16 +197,17 @@ fn list_dynamic_fields_pinned(
         }
     }
 
-    let has_more = if exhausted_end_reason.is_none() && hit_limit {
+    let next_entry = if exhausted_end_reason.is_none() && hit_limit {
         iter.next()
             .transpose()
             .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
-            .is_some()
     } else {
-        false
+        None
     };
 
-    pinned.check_object_floor(reader.as_ref())?;
+    if let Some(pinned) = &pinned {
+        pinned.check_object_floor(reader.as_ref())?;
+    }
 
     let mut message = ListDynamicFieldsResponse::default();
     message.dynamic_fields = dynamic_fields;
@@ -283,16 +219,21 @@ fn list_dynamic_fields_pinned(
         };
         message.cursors = cursors;
         message.end = Some(QueryEnd::default().with_reason(end_reason));
-    } else if has_more {
-        message.next_page_token = Some(
-            StateCursor {
+    } else if let Some(next_entry) = next_entry {
+        message.next_page_token = Some(match &pinned {
+            Some(pinned) => StateCursor {
                 checkpoint: pinned.checkpoint,
                 key: StateCursorKey::DynamicFields {
                     key: last_key.expect("next row only peeked after non-empty page"),
                 },
             }
             .encode(),
-        );
+            None => encode_legacy_page_token(LegacyPageToken {
+                parent,
+                field_id: next_entry.field_id.into(),
+                object_type: next_entry.object_type,
+            }),
+        });
     }
     Ok(message)
 }
