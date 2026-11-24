@@ -1137,20 +1137,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let pending = self.encrypted_transactions.take_pending();
         let keys = encrypted_transactions::derive_keys(&self.epoch_store, &pending).await;
         self.encrypted_transactions
-            .wait_for_execution(&self.epoch_store)
+            .wait_for_execution(&self.epoch_store, self.cache_reader.as_ref())
             .await;
 
+        let mut validator =
+            encrypted_transactions::Validator::new(&self.epoch_store, self.cache_reader.as_ref());
         let (transactions, resolutions): (Vec<_>, Vec<_>) = pending
             .into_iter()
             .zip_debug_eq(keys)
-            .map(|(transaction, key)| {
-                encrypted_transactions::resolve(
-                    &self.epoch_store,
-                    self.cache_reader.as_ref(),
-                    transaction,
-                    &key,
-                )
-            })
+            .map(|(transaction, key)| validator.resolve(transaction, &key))
             .unzip();
         info!(
             "Decrypted {} encrypted transactions, {} execute commands",

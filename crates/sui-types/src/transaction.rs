@@ -3266,6 +3266,13 @@ pub trait TransactionDataAPI {
         chain_identifier: ChainIdentifier,
     ) -> BTreeMap<AccumulatorObjId, u64>;
 
+    /// Like `process_funds_withdrawals_for_execution`, but returns an error where that function
+    /// panics. It does not require a transaction that is known to be valid.
+    fn try_process_funds_withdrawals_for_execution(
+        &self,
+        chain_identifier: ChainIdentifier,
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>>;
+
     /// Validates the declared funder, the spender, and the funds type of each
     /// `WithdrawFrom::SenderAllowance` against its loaded input object. Execution trusts the
     /// declared funder, which is immutable on the allowance. Policy checks live in Move.
@@ -3429,6 +3436,17 @@ impl TransactionDataAPI for TransactionDataV1 {
         &self,
         chain_identifier: ChainIdentifier,
     ) -> BTreeMap<AccumulatorObjId, u64> {
+        self.try_process_funds_withdrawals_for_execution(chain_identifier)
+            .expect("checked at signing time")
+    }
+
+    fn try_process_funds_withdrawals_for_execution(
+        &self,
+        chain_identifier: ChainIdentifier,
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>> {
+        let invalid = |error: &str| UserInputError::InvalidWithdrawReservation {
+            error: error.to_string(),
+        };
         let mut withdraws: Vec<_> = self.get_funds_withdrawals().collect();
         withdraws.extend(self.get_funds_withdrawal_for_gas_payment());
 
@@ -3437,21 +3455,24 @@ impl TransactionDataAPI for TransactionDataV1 {
         for withdraw in withdraws {
             let reserved_amount = match &withdraw.reservation {
                 Reservation::MaxAmountU64(amount) => {
-                    assert!(*amount > 0, "verified in validity check");
+                    fp_ensure!(
+                        *amount > 0,
+                        invalid("Balance withdraw reservation amount must be non-zero")
+                    );
                     *amount
                 }
             };
 
             let withdrawal_owner = withdraw.owner_for_withdrawal(self);
 
-            // unwrap checked at signing time
             let account_id =
                 AccumulatorValue::get_field_id(withdrawal_owner, &withdraw.type_arg.to_type_tag())
-                    .unwrap();
+                    .map_err(|e| invalid(&e.to_string()))?;
 
             let value = withdraw_map.entry(account_id).or_default();
-            // overflow checked at signing time
-            *value = value.checked_add(reserved_amount).unwrap();
+            *value = value
+                .checked_add(reserved_amount)
+                .ok_or_else(|| invalid("Balance withdraw reservation overflow"))?;
         }
 
         // It is not necessarily possible to construct a FundsWithdrawalArg for coin reservations, because
@@ -3459,8 +3480,8 @@ impl TransactionDataAPI for TransactionDataV1 {
         // cancel the transaction if there are no funds available.
         for obj in self.coin_reservation_obj_refs() {
             assert_reachable!("processing coin reservation withdrawal");
-            // unwrap safe because of signing time checks
-            let parsed = ParsedObjectRefWithdrawal::parse(&obj, chain_identifier).unwrap();
+            let parsed = ParsedObjectRefWithdrawal::parse(&obj, chain_identifier)
+                .ok_or_else(|| invalid("Invalid coin reservation"))?;
             let value = withdraw_map
                 // new_unchecked is safe because we verify that this is a valid accumulator object id
                 // at signing time
@@ -3468,11 +3489,12 @@ impl TransactionDataAPI for TransactionDataV1 {
                 // here, we only need the accumulator object id.
                 .entry(AccumulatorObjId::new_unchecked(parsed.unmasked_object_id))
                 .or_default();
-            // overflow checked at signing time
-            *value = value.checked_add(parsed.reservation_amount()).unwrap();
+            *value = value
+                .checked_add(parsed.reservation_amount())
+                .ok_or_else(|| invalid("Balance withdraw reservation overflow"))?;
         }
 
-        withdraw_map
+        Ok(withdraw_map)
     }
 
     fn check_allowance_inputs(&self, input_objects: &InputObjects) -> UserInputResult<()> {
@@ -3845,7 +3867,7 @@ impl TransactionDataAPI for TransactionDataV1 {
             && self.is_gas_paid_from_address_balance()
         {
             if config.address_balance_gas_reject_gas_coin_arg()
-                && let TransactionKind::ProgrammableTransaction(pt) = &self.kind
+                && let Some(pt) = self.kind.user_programmable_transaction()
             {
                 fp_ensure!(
                     !pt.commands.iter().any(|cmd| cmd.is_gas_coin_used()),

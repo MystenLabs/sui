@@ -127,6 +127,15 @@ pub fn check_coin_deny_list_v2_during_signing(
         receiving_objects,
         funds_withdrawals,
     );
+    check_coin_deny_list_v2_for_addresses(addresses_by_coin_type, object_store)
+}
+
+/// Checks that no coin type is paused, and that no address is in the v2 deny list of the coin
+/// type it is listed under. Reads the newest settings, as at signing.
+pub fn check_coin_deny_list_v2_for_addresses(
+    addresses_by_coin_type: BTreeMap<String, BTreeSet<SuiAddress>>,
+    object_store: &dyn ObjectStore,
+) -> UserInputResult {
     for (coin_type, addresses) in addresses_by_coin_type {
         let Some(deny_list) = get_per_type_coin_deny_list_v2(&coin_type, object_store) else {
             continue;

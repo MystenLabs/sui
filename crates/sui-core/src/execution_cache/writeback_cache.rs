@@ -1445,7 +1445,7 @@ impl WritebackCache {
     }
 }
 
-fn account_amount_from_object(account_obj: &Object) -> u128 {
+pub(crate) fn account_amount_from_object(account_obj: &Object) -> u128 {
     let (_, AccumulatorValue::U128(value)) =
         account_obj.data.try_as_move().unwrap().try_into().unwrap();
     value.value

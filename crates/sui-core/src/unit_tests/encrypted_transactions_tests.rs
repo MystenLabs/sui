@@ -8,6 +8,7 @@ use fastcrypto::groups::{GroupElement, HashToGroupElement, Scalar as _};
 use move_core_types::ident_str;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
+use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::crypto::{AccountKeyPair, deterministic_random_account_key, get_key_pair};
 use sui_types::digests::TransactionDigest;
@@ -16,7 +17,9 @@ use sui_types::gas_coin::GAS;
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::object::Object;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{ObjectArg, SharedObjectMutability, Transaction, TransactionData};
+use sui_types::transaction::{
+    ObjectArg, ProgrammableTransaction, SharedObjectMutability, Transaction, TransactionData,
+};
 use sui_types::utils::to_sender_signed_transaction;
 
 use super::*;
@@ -139,6 +142,16 @@ impl Fixture {
         builder
             .transfer_object(self.sender, object.compute_full_object_reference())
             .unwrap();
+        builder.finish()
+    }
+
+    /// A programmable transaction that declares withdrawals and transfers gas.
+    fn withdraw(&self, withdrawals: Vec<FundsWithdrawalArg>) -> ProgrammableTransaction {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        for withdrawal in withdrawals {
+            builder.funds_withdrawal(withdrawal).unwrap();
+        }
+        builder.transfer_sui(self.sender, Some(1));
         builder.finish()
     }
 
@@ -316,14 +329,41 @@ async fn encrypted_transaction_is_scheduled_before_the_next_commit() {
 
 #[tokio::test]
 async fn invalid_decrypted_transaction_runs_no_command() {
-    let _guard = enable_encrypted_transactions(2);
+    let _guard = enable_encrypted_transactions(5);
     let fixture = fixture().await;
 
-    let invalid =
-        fixture.encrypted_transaction(&fixture.use_owned_object(&fixture.gas_objects[3]), 0);
+    let sender_withdrawal =
+        |amount| FundsWithdrawalArg::balance_from_sender(amount, GAS::type_tag());
+    let allowance_withdrawal = FundsWithdrawalArg::balance_from_allowance(
+        1,
+        GAS::type_tag(),
+        fixture.sender,
+        ObjectID::random(),
+    );
+    let invalid = [
+        fixture.use_owned_object(&fixture.gas_objects[5]),
+        fixture.withdraw(vec![allowance_withdrawal]),
+        fixture.withdraw(vec![sender_withdrawal(0)]),
+        // The sender's address balance is empty.
+        fixture.withdraw(vec![sender_withdrawal(1)]),
+        // The sum of the reservations overflows.
+        fixture.withdraw(vec![
+            sender_withdrawal(u64::MAX),
+            sender_withdrawal(u64::MAX - 1),
+        ]),
+    ];
+    let envelopes: Vec<_> = invalid
+        .iter()
+        .enumerate()
+        .map(|(index, transaction)| fixture.encrypted_transaction(transaction, index))
+        .collect();
+    let messages = envelopes
+        .iter()
+        .map(|envelope| fixture.message(envelope.clone()))
+        .collect();
 
     let mut setup = setup_consensus_handler_for_testing(&fixture.state).await;
-    for (round, transactions) in [(10, vec![fixture.message(invalid.clone())]), (11, vec![])] {
+    for (round, transactions) in [(10, messages), (11, vec![])] {
         setup
             .consensus_handler
             .handle_consensus_commit_for_test(TestConsensusCommit::new(
@@ -337,8 +377,11 @@ async fn invalid_decrypted_transaction_runs_no_command() {
 
     let commits = scheduled(&setup.captured_transactions, 2).await;
     assert!(commits[0].is_empty());
-    assert_eq!(digests(&commits[1]), vec![*invalid.digest()]);
-    assert!(decrypted(&commits[1][0]).commands.is_empty());
+    assert_eq!(commits[1].len(), envelopes.len());
+    for transaction in &commits[1] {
+        assert!(decrypted(transaction).commands.is_empty());
+        assert!(!transaction.transaction_data().has_funds_withdrawals());
+    }
 }
 
 #[tokio::test]
@@ -445,26 +488,116 @@ async fn checkpoint_transactions_are_decrypted_from_prologue_keys() {
             1,
         )
     };
-    let prologue = sui_types::transaction::VerifiedTransaction::new_consensus_commit_prologue_v4(
-        0,
+    let prologue = |round, encrypted_transactions| {
+        Arc::new(
+            sui_types::transaction::VerifiedTransaction::new_consensus_commit_prologue_v4(
+                0,
+                round,
+                0,
+                Default::default(),
+                sui_types::messages_consensus::ConsensusDeterminedVersionAssignments::CancelledAndEncryptedTransactions {
+                    cancelled_transactions: vec![],
+                    encrypted_transactions,
+                },
+                sui_types::digests::AdditionalConsensusStateDigest::ZERO,
+            ),
+        )
+    };
+    let with_key = prologue(
         1,
-        0,
-        Default::default(),
-        sui_types::messages_consensus::ConsensusDeterminedVersionAssignments::CancelledAndEncryptedTransactions {
-            cancelled_transactions: vec![],
-            encrypted_transactions: vec![EncryptedTransactionResolution {
-                transaction_digest: *encrypted.digest(),
-                key: key_to_bytes(&key),
-                executes: true,
-            }],
-        },
-        sui_types::digests::AdditionalConsensusStateDigest::ZERO,
+        vec![EncryptedTransactionResolution {
+            transaction_digest: *encrypted.digest(),
+            key: key_to_bytes(&key),
+            executes: true,
+        }],
     );
-    let prologue = VerifiedExecutableTransaction::new_system(prologue, 0);
+    let as_executable = |tx: &Arc<sui_types::transaction::VerifiedTransaction>| {
+        VerifiedExecutableTransaction::new_system((**tx).clone(), 0)
+    };
 
-    let mut known = HashMap::new();
-    let transactions =
-        decrypt_checkpoint_transactions(vec![prologue, executable(encrypted.clone())], &mut known);
+    // The prologue is in the same checkpoint. Earlier checkpoints are not read.
+    let transactions = decrypt_checkpoint_transactions(
+        vec![as_executable(&with_key), executable(encrypted.clone())],
+        std::iter::from_fn(|| -> Option<Vec<Arc<VerifiedTransaction>>> {
+            panic!("earlier checkpoints must not be read")
+        }),
+    );
     assert_eq!(decrypted(&transactions[1]), &inner);
-    assert!(known.is_empty());
+
+    // The commit spans two checkpoints, so the prologue is in the previous checkpoint.
+    let transactions = decrypt_checkpoint_transactions(
+        vec![executable(encrypted.clone())],
+        vec![vec![with_key.clone()]],
+    );
+    assert_eq!(decrypted(&transactions[0]), &inner);
+
+    // The search stops at the latest checkpoint with a prologue. A key recorded in an older
+    // prologue belongs to another commit and is not used.
+    let transactions = decrypt_checkpoint_transactions(
+        vec![executable(encrypted.clone())],
+        vec![vec![prologue(2, vec![])], vec![with_key]],
+    );
+    assert!(needs_key(&transactions[0]));
+}
+
+#[tokio::test]
+async fn withdrawals_of_one_commit_share_the_balance() {
+    let _guard = enable_encrypted_transactions(3);
+    let fixture = fixture().await;
+    let balance = AccumulatorValue::create_for_testing(
+        fixture.sender,
+        Balance::type_tag(GAS::type_tag()),
+        100,
+    );
+    fixture
+        .state
+        .insert_objects_unsafe_for_testing_only(&[balance])
+        .await
+        .unwrap();
+
+    let withdraw = |amount| {
+        fixture.withdraw(vec![FundsWithdrawalArg::balance_from_sender(
+            amount,
+            GAS::type_tag(),
+        )])
+    };
+    // The second withdrawal exceeds what the first leaves. It reserves nothing, so the third
+    // is covered.
+    let amounts = [60, 50, 40];
+    let envelopes: Vec<_> = amounts
+        .iter()
+        .enumerate()
+        .map(|(index, amount)| fixture.encrypted_transaction(&withdraw(*amount), index))
+        .collect();
+    let messages = envelopes
+        .iter()
+        .map(|envelope| fixture.message(envelope.clone()))
+        .collect();
+
+    let mut setup = setup_consensus_handler_for_testing(&fixture.state).await;
+    for (round, transactions) in [(10, messages), (11, vec![])] {
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(TestConsensusCommit::new(
+                transactions,
+                round,
+                round * 100,
+                round - 9,
+            ))
+            .await;
+    }
+
+    let commits = scheduled(&setup.captured_transactions, 2).await;
+    assert_eq!(
+        digests(&commits[1]),
+        envelopes
+            .iter()
+            .map(|envelope| *envelope.digest())
+            .collect::<Vec<_>>()
+    );
+    let executed: Vec<_> = commits[1]
+        .iter()
+        .map(|tx| !decrypted(tx).commands.is_empty())
+        .collect();
+    assert_eq!(executed, vec![true, false, true]);
 }

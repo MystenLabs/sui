@@ -23,6 +23,7 @@ use mysten_common::{ZipDebugEqIteratorExt, debug_fatal, fatal, izip_debug_eq};
 use parking_lot::Mutex;
 use std::{sync::Arc, time::Instant};
 use sui_types::base_types::SequenceNumber;
+use sui_types::committee::EpochId;
 use sui_types::crypto::RandomnessRound;
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::transaction::{TransactionDataAPI, TransactionKind};
@@ -205,14 +206,6 @@ pub struct CheckpointExecutor {
     /// checkpoint before this node builds it, or when this node builds none (outside the
     /// committee).
     locally_built_checkpoint_publisher: Option<LocallyBuiltCheckpointPublisher>,
-    /// Keys of encrypted transactions from commit prologues whose transactions are not loaded
-    /// yet.
-    encrypted_transaction_resolutions: Mutex<
-        std::collections::HashMap<
-            sui_types::base_types::TransactionDigest,
-            sui_types::encrypted_transaction::EncryptedTransactionResolution,
-        >,
-    >,
 }
 
 impl CheckpointExecutor {
@@ -243,7 +236,6 @@ impl CheckpointExecutor {
             tps_estimator: Mutex::new(TPSEstimator::default()),
             subscription_service_checkpoint_sender,
             locally_built_checkpoint_publisher,
-            encrypted_transaction_resolutions: Mutex::new(Default::default()),
         }
     }
 
@@ -783,6 +775,37 @@ impl CheckpointExecutor {
         Some(checkpoint)
     }
 
+    /// Yields the transactions of the checkpoints of `epoch` before `seq`, latest first. The
+    /// executor reads them to find the commit prologue that holds the keys of encrypted
+    /// transactions in checkpoint `seq`.
+    fn earlier_checkpoint_transactions(
+        &self,
+        epoch: EpochId,
+        seq: CheckpointSequenceNumber,
+    ) -> impl Iterator<Item = Vec<Arc<VerifiedTransaction>>> + '_ {
+        (0..seq).rev().map_while(move |seq| {
+            let checkpoint = self
+                .checkpoint_store
+                .get_checkpoint_by_sequence_number(seq)
+                .expect("db error")?;
+            if checkpoint.epoch != epoch {
+                return None;
+            }
+            let contents = self
+                .checkpoint_store
+                .get_checkpoint_contents(&checkpoint.content_digest)
+                .expect("db error")?;
+            let digests: Vec<_> = contents.iter().map(|digests| digests.transaction).collect();
+            Some(
+                self.transaction_cache_reader
+                    .multi_get_transaction_blocks(&digests)
+                    .into_iter()
+                    .flatten()
+                    .collect(),
+            )
+        })
+    }
+
     // Load all required transaction and effects data for the checkpoint.
     // When `state_hasher` is provided the returned `CheckpointExecutionState`
     // carries the hasher (used by the verify-locally-built-checkpoint path).
@@ -844,7 +867,7 @@ impl CheckpointExecutor {
 
             let transactions = crate::encrypted_transactions::decrypt_checkpoint_transactions(
                 transactions,
-                &mut self.encrypted_transaction_resolutions.lock(),
+                self.earlier_checkpoint_transactions(epoch, seq),
             );
             let executed_fx_digests = self
                 .transaction_cache_reader
@@ -896,7 +919,7 @@ impl CheckpointExecutor {
 
             let transactions = crate::encrypted_transactions::decrypt_checkpoint_transactions(
                 transactions,
-                &mut self.encrypted_transaction_resolutions.lock(),
+                self.earlier_checkpoint_transactions(epoch, seq),
             );
             let executed_fx_digests = self
                 .transaction_cache_reader

@@ -63,7 +63,14 @@ pub fn check_coin_deny_list_v1(
         receiving_objects,
         funds_withdrawals,
     );
+    check_coin_deny_list_v1_for_addresses(addresses_by_coin_type, object_store)
+}
 
+/// Checks that no address is in the v1 deny list of the coin type it is listed under.
+pub fn check_coin_deny_list_v1_for_addresses(
+    addresses_by_coin_type: BTreeMap<String, BTreeSet<SuiAddress>>,
+    object_store: &dyn ObjectStore,
+) -> UserInputResult {
     let Some(deny_list) = get_coin_deny_list(object_store) else {
         // TODO: This is where we should fire an invariant violation metric.
         if cfg!(debug_assertions) {
