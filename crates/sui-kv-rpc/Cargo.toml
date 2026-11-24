@@ -61,3 +61,4 @@ roaring.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 # Enables the in-memory mock BigTable server for the real-stage resolver tests.
 sui-kvstore = { workspace = true, features = ["testing"] }
+tracing-subscriber.workspace = true

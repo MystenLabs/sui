@@ -449,11 +449,13 @@ impl ResponseHandler for RpcMetricsCallbackHandler {
         // Unlike `request_latency` (observed in `Drop`, after the response
         // body finished streaming), this fires as soon as the handler
         // produced a response, so it excludes client-side network latency.
-        self.metrics
-            .request_handler_latency
-            .with_label_values(&[self.path.as_ref()])
-            .observe(self.start.elapsed().as_secs_f64());
-
+        // Skip when reading the request body failed before the handler ran.
+        if !self.request_body_failed.load(Ordering::Acquire) {
+            self.metrics
+                .request_handler_latency
+                .with_label_values(&[self.path.as_ref()])
+                .observe(self.start.elapsed().as_secs_f64());
+        }
         let content_type = response.headers.get(&http::header::CONTENT_TYPE);
         let status = if content_type.is_some_and(is_grpc_content_type) {
             match response.headers.get(&GRPC_STATUS) {
@@ -1107,6 +1109,56 @@ mod tests {
         );
     }
 
+    // A request whose inbound body fails before the handler runs is counted as
+    // `canceled` when the service answers `internal`, without recording a 0ms
+    // handler latency sample.
+    #[test]
+    fn request_body_error_reclassifies_internal_as_canceled_without_handler_latency() {
+        let metrics = Arc::new(RpcMetrics::new(&Registry::new()));
+        let make = RpcMetricsMakeCallbackHandler::with_grpc_method_allowlist(
+            metrics.clone(),
+            Arc::new(HashSet::from([TEST_GRPC_PATH.to_owned()])),
+        );
+        let (req_parts, _) = http::Request::builder()
+            .method(http::Method::POST)
+            .uri(TEST_GRPC_PATH)
+            .header(http::header::CONTENT_TYPE, "application/grpc")
+            .body(())
+            .unwrap()
+            .into_parts();
+        let (mut req_handler, mut resp_handler) = make.make_handler(&req_parts);
+
+        req_handler.on_body_error(&"h2 protocol error: error reading a body from connection");
+
+        let (resp_parts, _) = http::Response::builder()
+            .header(http::header::CONTENT_TYPE, "application/grpc")
+            .header(GRPC_STATUS, "13")
+            .body(())
+            .unwrap()
+            .into_parts();
+        resp_handler.on_response(&resp_parts);
+        drop(resp_handler);
+
+        assert_eq!(
+            grpc_status_counts(&metrics, TEST_GRPC_PATH),
+            BTreeMap::from([("canceled", 1)])
+        );
+        assert_eq!(
+            metrics
+                .request_handler_latency
+                .with_label_values(&[TEST_GRPC_PATH])
+                .get_sample_count(),
+            0
+        );
+        assert_eq!(
+            metrics
+                .request_latency
+                .with_label_values(&[TEST_GRPC_PATH])
+                .get_sample_count(),
+            1
+        );
+    }
+
     // gRPC requires a stream to end with `grpc-status` in its trailers. A
     // stream that ends without one was truncated, which clients report as
     // `unknown`.
@@ -1736,35 +1788,36 @@ mod tests {
             grpc_status_counts(&server.metrics, path)
         }
 
-        // The incident's `internal` population: a client resets its stream
-        // before the request message arrives, tonic answers the truncated
-        // request with `internal` ("Missing request message."), and the client
-        // never receives that answer.
+        // A client or proxy resets the stream before the request message
+        // arrives: tonic answers `CANCEL` with `internal` ("Missing request
+        // message.") and H2 error codes with `internal` ("h2 protocol error:
+        // error reading a body from connection"). Neither reaches the client
+        // or enters the handler, so both count as `canceled` with no handler
+        // latency sample.
         #[tokio::test]
         async fn client_reset_before_request_message_is_counted_canceled() {
             for stack in [ServerStack::KvRpc, ServerStack::Fullnode] {
-                let server = start(stack).await;
-                let (_response, mut request_body) =
-                    open_request(&server, STREAM_OK, "application/grpc").await;
-                request_body.send_reset(h2::Reason::CANCEL);
+                for reason in [h2::Reason::CANCEL, h2::Reason::INTERNAL_ERROR] {
+                    let server = start(stack).await;
+                    let (_response, mut request_body) =
+                        open_request(&server, STREAM_OK, "application/grpc").await;
+                    request_body.send_reset(reason);
 
-                assert_eq!(
-                    settled_grpc_status_counts(&server, STREAM_OK).await,
-                    BTreeMap::from([("canceled", 1)]),
-                    "{stack:?}"
-                );
-                // The service answered the truncated request, so the count
-                // comes from that answer being reclassified rather than from
-                // the request being dropped before any answer.
-                assert_eq!(
-                    server
-                        .metrics
-                        .request_handler_latency
-                        .with_label_values(&[STREAM_OK])
-                        .get_sample_count(),
-                    1,
-                    "{stack:?}"
-                );
+                    assert_eq!(
+                        settled_grpc_status_counts(&server, STREAM_OK).await,
+                        BTreeMap::from([("canceled", 1)]),
+                        "{stack:?} {reason:?}"
+                    );
+                    assert_eq!(
+                        server
+                            .metrics
+                            .request_handler_latency
+                            .with_label_values(&[STREAM_OK])
+                            .get_sample_count(),
+                        0,
+                        "{stack:?} {reason:?}"
+                    );
+                }
             }
         }
 
