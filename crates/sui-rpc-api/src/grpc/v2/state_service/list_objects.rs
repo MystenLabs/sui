@@ -92,15 +92,11 @@ pub(super) async fn list_objects(
         },
     )?;
 
-    let (lower, upper) = opts.bounds();
+    let pin = opts.pin;
     let descending = opts.descending;
-    let exhausted_end_reason = opts.exhausted_end_reason();
     let limit = opts.limit;
-    let initial_state = ObjectsScanState::Init {
-        pin: opts.pin,
-        lower,
-        upper,
-    };
+    let (lower, upper, exhausted_end_reason) = opts.into_bounds();
+    let initial_state = ObjectsScanState::Init { pin, lower, upper };
 
     let stream = async_stream::try_stream! {
         let mut scan = ChunkedScan::new(initial_state, limit, CHUNK_SIZE, 0, move |state, args| {
@@ -337,7 +333,7 @@ mod tests {
 
     #[tokio::test]
     async fn streams_unfiltered_filtered_reverse_and_exact_frame_invariants() {
-        let (_dir, store, service) = TestStateStore::open(5);
+        let (store, service) = TestStateStore::open(5);
         let alice = test_address(1);
         let o1 = make_struct_object(
             test_object_id(1),
@@ -506,7 +502,7 @@ mod tests {
 
     #[tokio::test]
     async fn streams_across_multiple_64_item_chunks_and_observes_cancellation() {
-        let (_dir, store, service) = TestStateStore::open(5);
+        let (store, service) = TestStateStore::open(5);
         let alice = test_address(1);
         let type_a = struct_tag("0x1::a::A");
         let type_b = struct_tag("0x2::b::B");

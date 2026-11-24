@@ -1259,10 +1259,17 @@ impl RpcStateReader for ForkStore {
         &self,
         checkpoint: Option<CheckpointSequenceNumber>,
     ) -> sui_types::storage::CheckpointIndexes {
+        let floor = self.forked_at_checkpoint().saturating_add(1);
         match self.stock_reader().indexes_at_checkpoint(checkpoint) {
+            sui_types::storage::CheckpointIndexes::Empty
+                if checkpoint.is_some_and(|k| k < floor) =>
+            {
+                sui_types::storage::CheckpointIndexes::Unavailable {
+                    retained_range: floor..=floor,
+                }
+            }
             sui_types::storage::CheckpointIndexes::Unavailable { retained_range } => {
                 let hi = *retained_range.end();
-                let floor = self.forked_at_checkpoint().saturating_add(1);
                 let lo = (*retained_range.start()).max(floor).min(hi);
                 sui_types::storage::CheckpointIndexes::Unavailable {
                     retained_range: lo..=hi,

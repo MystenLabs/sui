@@ -962,6 +962,10 @@ pub trait RpcIndexes: Send + Sync {
     /// `filter` is `None`), in the order of the `object_by_owner` index (by type, then by
     /// descending balance for coins, then by object id), or in reverse when `descending` is set.
     /// `lower` and `upper` bound the scan in canonical ascending key order.
+    ///
+    /// `OwnedObjectInfo.owner` holds the queried address for `OwnedObjectOwner::Address`, the
+    /// parent object ID converted to `SuiAddress` for `OwnedObjectOwner::Object`, and
+    /// `SuiAddress::ZERO` for `OwnedObjectOwner::Shared` and `OwnedObjectOwner::Immutable`.
     fn owned_objects_iter(
         &self,
         owner: OwnedObjectOwner,
@@ -984,8 +988,10 @@ pub trait RpcIndexes: Send + Sync {
     ) -> Result<Box<dyn Iterator<Item = Result<ObjectByTypeInfo, TypedStoreError>> + '_>>;
 
     /// Iterate the dynamic fields owned by `parent` that `filter` matches (every field when
-    /// `filter` is `None`), in canonical `(type, field_id)` order, or in reverse when `descending`
-    /// is set. Each entry carries the field object's live version from the `object_by_owner` row.
+    /// `filter` is `None`), in canonical `(type, descending balance for coins, field_id)` order,
+    /// or in reverse when `descending` is set. `lower` and `upper` bound the scan in canonical
+    /// ascending key order. Each entry carries the field object's live version from the
+    /// `object_by_owner` row.
     fn dynamic_field_iter(
         &self,
         parent: ObjectID,

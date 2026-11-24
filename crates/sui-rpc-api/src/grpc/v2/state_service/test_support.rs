@@ -77,17 +77,24 @@ use crate::RpcService;
 
 /// Real `sui-rpc-store` (with configurable RocksDB snapshot window) paired with an in-memory
 /// versioned object store and a minimal `0x2` Move package for `FieldVisitor` layout decoding.
+struct TestObjectMap {
+    versions: BTreeMap<(ObjectID, SequenceNumber), Object>,
+    live_versions: BTreeMap<ObjectID, SequenceNumber>,
+}
+
 pub(super) struct TestStateStore {
     db: Db,
     store: RpcStoreReader,
-    objects: RwLock<BTreeMap<(ObjectID, SequenceNumber), Object>>,
+    objects: RwLock<TestObjectMap>,
     packages: BTreeMap<ObjectID, Object>,
     lowest_available_objects: AtomicU64,
     retains_object_version_history: AtomicBool,
+    // Declared last so `db` and `store` drop before the RocksDB directory is removed.
+    _dir: tempfile::TempDir,
 }
 
 impl TestStateStore {
-    pub(super) fn open(snapshot_capacity: usize) -> (tempfile::TempDir, Arc<Self>, RpcService) {
+    pub(super) fn open(snapshot_capacity: usize) -> (Arc<Self>, RpcService) {
         let dir = tempfile::tempdir().unwrap();
         let (db, schema) = Db::open::<RpcStoreSchema>(
             dir.path(),
@@ -103,13 +110,17 @@ impl TestStateStore {
         let state = Arc::new(Self {
             db,
             store,
-            objects: RwLock::new(BTreeMap::new()),
+            objects: RwLock::new(TestObjectMap {
+                versions: BTreeMap::new(),
+                live_versions: BTreeMap::new(),
+            }),
             packages,
             lowest_available_objects: AtomicU64::new(0),
             retains_object_version_history: AtomicBool::new(true),
+            _dir: dir,
         });
         let service = RpcService::new(state.clone());
-        (dir, state, service)
+        (state, service)
     }
 
     pub(super) fn put_object(&self, object: Object) {
@@ -144,17 +155,21 @@ impl TestStateStore {
                 .put(&self.store.schema().object_by_type, &key, &value)
                 .unwrap();
         }
-        self.objects
-            .write()
-            .unwrap()
-            .insert((new.id(), new.version()), new);
+        let mut guard = self.objects.write().unwrap();
+        guard.live_versions.insert(new.id(), new.version());
+        guard.versions.insert((new.id(), new.version()), new);
+        drop(guard);
         batch.commit().unwrap();
     }
 
     /// Delete one stored object version without touching the rpc-store indexes (simulates a
     /// missing version / pruning race or post-index deletion).
     pub(super) fn drop_object_version(&self, id: ObjectID, version: SequenceNumber) {
-        self.objects.write().unwrap().remove(&(id, version));
+        self.objects
+            .write()
+            .unwrap()
+            .versions
+            .remove(&(id, version));
     }
 
     pub(super) fn add_balance(
@@ -451,18 +466,16 @@ fn synthetic_framework_package() -> Object {
 
 impl ObjectStore for TestStateStore {
     fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
-        self.objects
-            .read()
-            .unwrap()
-            .range((*object_id, SequenceNumber::MIN)..=(*object_id, SequenceNumber::MAX))
-            .next_back()
-            .map(|(_, obj)| obj.clone())
+        let guard = self.objects.read().unwrap();
+        let version = *guard.live_versions.get(object_id)?;
+        guard.versions.get(&(*object_id, version)).cloned()
     }
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: SequenceNumber) -> Option<Object> {
         self.objects
             .read()
             .unwrap()
+            .versions
             .get(&(*object_id, version))
             .cloned()
     }
@@ -489,6 +502,7 @@ impl RuntimeObjectResolver for TestStateStore {
             .objects
             .read()
             .unwrap()
+            .versions
             .range((*child, SequenceNumber::MIN)..=(*child, child_version_upper_bound))
             .next_back()
             .map(|(_, obj)| obj.clone()))

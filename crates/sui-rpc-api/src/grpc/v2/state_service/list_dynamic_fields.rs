@@ -104,14 +104,17 @@ pub fn list_dynamic_fields(
                 MAX_PAGE_SIZE,
                 extract_key,
             )?;
-            let (lower, upper) = opts.bounds();
+            let pin = opts.pin;
+            let descending = opts.descending;
+            let limit = opts.limit;
+            let (lower, upper, exhausted_end_reason) = opts.into_bounds();
             (
-                Some(opts.pin),
+                Some(pin),
                 lower,
                 upper,
-                opts.descending,
-                opts.limit,
-                Some(opts.exhausted_end_reason()),
+                descending,
+                limit,
+                Some(exhausted_end_reason),
             )
         } else {
             let page_size = request
@@ -176,13 +179,13 @@ pub fn list_dynamic_fields(
         if let Some(pinned) = &pinned {
             let key = entry.into_key();
             if exhausted_end_reason.is_some() {
-                cursors.push(
-                    StateCursor {
-                        checkpoint: pinned.checkpoint,
-                        key: StateCursorKey::DynamicFields { key },
-                    }
-                    .encode(),
-                );
+                let cursor = StateCursor {
+                    checkpoint: pinned.checkpoint,
+                    key: StateCursorKey::DynamicFields { key },
+                }
+                .encode();
+                size_bytes += cursor.len();
+                cursors.push(cursor);
             } else {
                 last_key = Some(key);
             }
@@ -568,7 +571,7 @@ mod tests {
 
     #[test]
     fn pinned_read_loads_exact_field_and_child_versions_at_checkpoint() {
-        let (_dir, store, service) = TestStateStore::open(5);
+        let (store, service) = TestStateStore::open(5);
         let parent = test_object_id(0xAA);
         let inline_field_id = test_object_id(0x01);
         let dof_field_id = test_object_id(0x02);
@@ -732,7 +735,7 @@ mod tests {
 
     #[test]
     fn pinned_refuses_missing_field_or_child_while_unpinned_skips() {
-        let (_dir, store, service) = TestStateStore::open(5);
+        let (store, service) = TestStateStore::open(5);
         let parent = test_object_id(0xAA);
         let dof_field_id = test_object_id(0x02);
         let child_id = test_object_id(0x03);
@@ -792,7 +795,7 @@ mod tests {
 
     #[test]
     fn cursor_paging_advances_past_coin_owned_by_parent_without_looping() {
-        let (_dir, store, service) = TestStateStore::open(5);
+        let (store, service) = TestStateStore::open(5);
         let parent = test_object_id(0xBB);
         let rich = test_object_id(0x10);
         let poor = test_object_id(0x11);

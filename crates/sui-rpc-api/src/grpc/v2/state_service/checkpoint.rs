@@ -138,9 +138,6 @@ pub(super) fn resolve_pinned(
             };
             let window_lo = *retained_range.start();
             let hi = *retained_range.end();
-            if k > hi {
-                return Err(above_latest_available(bound_name, k, hi.saturating_add(1)));
-            }
             let effective_lo = if loads_objects {
                 window_lo.max(object_pruning_floor(reader)?)
             } else {
@@ -149,11 +146,14 @@ pub(super) fn resolve_pinned(
             if k < effective_lo {
                 return Err(below_serving_floor(effective_lo));
             }
+            if k > hi {
+                return Err(above_latest_available(bound_name, k, hi.saturating_add(1)));
+            }
             Err(not_ready(
                 NotReadyCause::CheckpointUnavailable,
                 format!(
                     "checkpoint {k} is within the retained checkpoint range \
-                     ({window_lo}..={hi}) but is not yet servable on this replica"
+                     ({window_lo}..={hi}) but is not servable on this replica"
                 ),
             ))
         }
@@ -186,7 +186,7 @@ mod tests {
 
     #[test]
     fn disabled_window_returns_not_served_here() {
-        let (_dir, disabled, _service) = TestStateStore::open(0);
+        let (disabled, _service) = TestStateStore::open(0);
         assert_not_served_here(
             resolve_pinned(disabled.as_ref(), PinSource::AtCheckpoint(5), false)
                 .err()
@@ -203,7 +203,7 @@ mod tests {
 
     #[test]
     fn empty_window_returns_index_empty() {
-        let (_dir, reader, _service) = TestStateStore::open(5);
+        let (reader, _service) = TestStateStore::open(5);
         assert_refusal(
             resolve_pinned(reader.as_ref(), PinSource::AtCheckpoint(5), false)
                 .err()
@@ -226,7 +226,7 @@ mod tests {
     fn range_refusals_distinguish_below_gap_and_above() {
         // Capacity 5, replica restarted and only took snapshots 10 and 11.
         // Configured retained window is 7..=11.
-        let (_dir, reader, _service) = TestStateStore::open(5);
+        let (reader, _service) = TestStateStore::open(5);
         reader.take_snapshot(10);
         reader.take_snapshot(11);
 
@@ -285,7 +285,7 @@ mod tests {
     fn object_pruning_floor_applies_only_to_object_loading_methods() {
         // Configured retained window is 7..=11, snapshots 9, 10 and 11 held.
         // Object pruning floor = 11 - 1 = 10 (lowest_available_objects = 11 -> intact floor 10).
-        let (_dir, reader, _service) = TestStateStore::open(5);
+        let (reader, _service) = TestStateStore::open(5);
         reader.take_snapshot(9);
         reader.take_snapshot(10);
         reader.take_snapshot(11);
@@ -354,7 +354,7 @@ mod tests {
 
     #[test]
     fn missing_object_on_non_retaining_store_distinguishes_explicit_and_latest() {
-        let (_dir, reader, _service) = TestStateStore::open(5);
+        let (reader, _service) = TestStateStore::open(5);
         reader.take_snapshot(10);
         reader.set_retains_object_version_history(false);
 
@@ -385,6 +385,42 @@ mod tests {
             tonic::Code::Unavailable,
             ErrorReason::NotReady,
             "pruning_race",
+        );
+    }
+
+    #[test]
+    fn object_pruning_floor_past_window_hi_returns_below_earliest_available() {
+        // Retained window is 7..=11, object pruning floor is 15 - 1 = 14 (> hi = 11).
+        // Checkpoint 12 is permanently below the object pruning floor so object-loading reads
+        // must report BELOW_EARLIEST_AVAILABLE (14), not ABOVE_LATEST_AVAILABLE (12).
+        let (reader, _service) = TestStateStore::open(5);
+        reader.take_snapshot(10);
+        reader.take_snapshot(11);
+        reader.set_lowest_available_objects(15);
+
+        assert_below_serving_floor_error(
+            resolve_pinned(reader.as_ref(), PinSource::AtCheckpoint(12), true)
+                .err()
+                .unwrap(),
+            14,
+        );
+        // At or above the object pruning floor (15 > hi = 11) -> ABOVE_LATEST_AVAILABLE.
+        assert_above_latest_available_error(
+            resolve_pinned(reader.as_ref(), PinSource::AtCheckpoint(15), true)
+                .err()
+                .unwrap(),
+            "at_checkpoint",
+            15,
+            12,
+        );
+        // Balance reads ignore the object pruning floor -> 12 > hi = 11 is ABOVE_LATEST_AVAILABLE.
+        assert_above_latest_available_error(
+            resolve_pinned(reader.as_ref(), PinSource::AtCheckpoint(12), false)
+                .err()
+                .unwrap(),
+            "at_checkpoint",
+            12,
+            12,
         );
     }
 }

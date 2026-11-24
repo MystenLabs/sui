@@ -74,14 +74,17 @@ pub fn list_balances(
                 MAX_PAGE_SIZE,
                 extract_key,
             )?;
-            let (lower, upper) = opts.bounds();
+            let pin = opts.pin;
+            let descending = opts.descending;
+            let limit = opts.limit;
+            let (lower, upper, exhausted_end_reason) = opts.into_bounds();
             (
-                Some(opts.pin),
+                Some(pin),
                 lower,
                 upper,
-                opts.descending,
-                opts.limit,
-                Some(opts.exhausted_end_reason()),
+                descending,
+                limit,
+                Some(exhausted_end_reason),
             )
         } else {
             let page_size = request
@@ -196,7 +199,7 @@ mod tests {
 
     #[test]
     fn cursor_paging_directions_bounds_and_checkpoint_pinning() {
-        let (_dir, store, service) = TestStateStore::open(5);
+        let (store, service) = TestStateStore::open(5);
         let owner = test_address(1);
         for (name, amt) in [("A", 10), ("B", 20), ("C", 30), ("D", 40)] {
             store.add_balance(owner, struct_tag(&format!("0x2::c::{name}")), amt, 0);
@@ -318,7 +321,7 @@ mod tests {
 
     #[test]
     fn legacy_and_pinned_page_tokens_behave_as_specified() {
-        let (_dir, store, service) = TestStateStore::open(5);
+        let (store, service) = TestStateStore::open(5);
         let owner = test_address(1);
         for name in ["A", "B", "C"] {
             store.add_balance(owner, struct_tag(&format!("0x2::c::{name}")), 10, 0);

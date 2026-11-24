@@ -59,6 +59,9 @@ pub(super) struct StateCursor {
     pub(super) key: StateCursorKey,
 }
 
+/// Upper bound on encoded cursor / page-token byte length to bound BCS `TypeTag` allocations.
+const MAX_CURSOR_BYTES: usize = 64 * 1024;
+
 impl StateCursor {
     pub(super) fn encode(&self) -> Bytes {
         let state = match &self.key {
@@ -131,6 +134,9 @@ impl StateCursor {
                 .into()
         };
 
+        if bytes.len() > MAX_CURSOR_BYTES {
+            return Err(invalid("cursor exceeds maximum length"));
+        }
         let proto = grpc::CursorToken::decode(bytes).map_err(|_| invalid("invalid cursor"))?;
         if proto.kind != grpc::CursorKind::Item as i32 || proto.public_position.is_some() {
             return Err(invalid("invalid cursor"));
@@ -284,18 +290,12 @@ pub(super) struct StateQueryOptions<K> {
 }
 
 impl<K> StateQueryOptions<K> {
-    pub(super) fn bounds(&self) -> (Bound<K>, Bound<K>)
-    where
-        K: Clone,
-    {
-        let lower = self.after.clone().map_or(Bound::Unbounded, Bound::Excluded);
-        let upper = self
-            .before
-            .clone()
-            .map_or(Bound::Unbounded, Bound::Excluded);
-        (lower, upper)
+    pub(super) fn into_bounds(self) -> (Bound<K>, Bound<K>, QueryEndReason) {
+        let exhausted_end_reason = self.exhausted_end_reason();
+        let lower = self.after.map_or(Bound::Unbounded, Bound::Excluded);
+        let upper = self.before.map_or(Bound::Unbounded, Bound::Excluded);
+        (lower, upper, exhausted_end_reason)
     }
-
     /// End reason when the listing exhausts its interval without hitting `limit` (or response size
     /// cap).
     pub(super) fn exhausted_end_reason(&self) -> QueryEndReason {
@@ -448,6 +448,13 @@ where
     let Some(bytes) = bytes else {
         return Ok((at_checkpoint.map(PinSource::AtCheckpoint), Bound::Unbounded));
     };
+
+    if bytes.len() > MAX_CURSOR_BYTES {
+        return Err(FieldViolation::new("page_token")
+            .with_description("page_token exceeds maximum length")
+            .with_reason(ErrorReason::FieldInvalid)
+            .into());
+    }
 
     if let Ok(legacy) = bcs::from_bytes::<L>(bytes)
         && legacy_matches(&legacy)
@@ -858,6 +865,29 @@ mod tests {
             parse_query_options(Some(&bad_ordering), None, 50, 1000, extract)
                 .unwrap_err()
                 .code(),
+            tonic::Code::InvalidArgument
+        );
+    }
+
+    #[test]
+    fn rejects_oversized_cursor_and_page_token() {
+        let oversized = vec![0u8; MAX_CURSOR_BYTES + 1];
+        assert_eq!(
+            StateCursor::decode("options.after", &oversized)
+                .unwrap_err()
+                .code(),
+            tonic::Code::InvalidArgument
+        );
+        assert_eq!(
+            decode_page_token::<Vec<u8>, (), _, _, _>(
+                Some(&oversized),
+                None,
+                |_| true,
+                |_| (),
+                |_, _| Ok(()),
+            )
+            .unwrap_err()
+            .code(),
             tonic::Code::InvalidArgument
         );
     }

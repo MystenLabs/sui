@@ -3784,6 +3784,27 @@ fn test_fork_store_clamps_retained_snapshot_range_at_fork_checkpoint() {
     let (store, _services) =
         data_store_with_remote(temp.path(), "http://localhost:1".to_owned(), forked_at);
 
+    // Before the fork has taken any snapshot, checkpoints at or below `forked_at` still map to
+    // `Unavailable` with floor `forked_at + 1` (permanent `BELOW_EARLIEST_AVAILABLE`), while
+    // latest and post-fork checkpoints remain `Empty`.
+    for cp in [99, 100] {
+        match RpcStateReader::indexes_at_checkpoint(&store, Some(cp)) {
+            sui_types::storage::CheckpointIndexes::Unavailable { retained_range } => {
+                assert_eq!(retained_range, 101..=101);
+            }
+            _ => {
+                panic!("expected Unavailable at floor forked_at + 1 before first snapshot for {cp}")
+            }
+        }
+    }
+    assert!(matches!(
+        RpcStateReader::indexes_at_checkpoint(&store, None),
+        sui_types::storage::CheckpointIndexes::Empty
+    ));
+    assert!(matches!(
+        RpcStateReader::indexes_at_checkpoint(&store, Some(101)),
+        sui_types::storage::CheckpointIndexes::Empty
+    ));
     // Snapshot at checkpoint 101 leaves stock window `70..=101` (capacity 32), which must clamp
     // to `101..=101` (`forked_at + 1`) because no snapshot is taken at the fork checkpoint itself.
     store

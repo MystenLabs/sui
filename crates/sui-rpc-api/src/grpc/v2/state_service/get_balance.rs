@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn get_balance_at_checkpoint_reads_snapshot_not_current_state() {
-        let (_dir, store, service) = TestStateStore::open(5);
+        let (store, service) = TestStateStore::open(5);
         let owner = test_address(1);
         let sui = struct_tag("0x2::sui::SUI");
 
@@ -238,7 +238,7 @@ mod tests {
 
     #[test]
     fn batch_get_balances_mixed_checkpoints_zero_fill_and_refusals() {
-        let (_dir, store, service) = TestStateStore::open(2);
+        let (store, service) = TestStateStore::open(2);
         let alice = test_address(1);
         let bob = test_address(2);
         let sui = struct_tag("0x2::sui::SUI");
@@ -315,7 +315,7 @@ mod tests {
         );
 
         // Window 0 refuses pinned item with NOT_SERVED_HERE (disabled_by_config).
-        let (_dir0, _store0, service0) = TestStateStore::open(0);
+        let (_store0, service0) = TestStateStore::open(0);
         let mut disabled = BatchGetBalancesRequest::default();
         disabled.requests = vec![req(alice, "0x2::sui::SUI", Some(1))];
         assert_not_served_here(

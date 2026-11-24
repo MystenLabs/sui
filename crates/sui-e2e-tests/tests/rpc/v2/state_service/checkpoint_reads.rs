@@ -203,7 +203,7 @@ async fn test_window_zero_refuses_pinned_reads() {
         &list_objects_err(&mut client, ListObjectsRequest::default()).await,
     );
 
-    // Unpinned current-state read still succeeds on a window-0 fullnode.
+    // Unpinned current-state reads still succeed on a window-0 fullnode.
     let mut unpinned = GetBalanceRequest::default();
     unpinned.owner = Some(owner.to_string());
     unpinned.coin_type = Some(SUI_COIN_TYPE.to_owned());
@@ -216,6 +216,36 @@ async fn test_window_zero_refuses_pinned_reads() {
         .balance
         .unwrap();
     assert!(balance.balance() > 0);
+
+    let mut unpinned_balances = ListBalancesRequest::default();
+    unpinned_balances.owner = Some(owner.to_string());
+    let balances = client
+        .state_client()
+        .list_balances(unpinned_balances)
+        .await
+        .unwrap()
+        .into_inner()
+        .balances;
+    assert!(!balances.is_empty());
+
+    let mut unpinned_owned = ListOwnedObjectsRequest::default();
+    unpinned_owned.owner = Some(owner.to_string());
+    let owned = client
+        .state_client()
+        .list_owned_objects(unpinned_owned)
+        .await
+        .unwrap()
+        .into_inner()
+        .objects;
+    assert!(!owned.is_empty());
+
+    let mut unpinned_df = ListDynamicFieldsRequest::default();
+    unpinned_df.parent = Some(ObjectID::from_single_byte(5).to_string());
+    client
+        .state_client()
+        .list_dynamic_fields(unpinned_df)
+        .await
+        .unwrap();
 }
 
 /// A cursor-paged listing started without `at_checkpoint` pins to the first page's checkpoint and
@@ -312,9 +342,9 @@ async fn test_paging_across_checkpoints_stays_pinned_while_state_changes() {
     let transfer_amount = 1_000_000;
     let (last_id, last_version, _, last_digest) = expected_objects.last().unwrap();
     let gas_ref = (
-        ObjectID::from_str(last_id).unwrap(),
+        last_id.parse::<ObjectID>().unwrap(),
         SequenceNumber::from_u64(*last_version),
-        ObjectDigest::from_str(last_digest).unwrap(),
+        last_digest.parse::<ObjectDigest>().unwrap(),
     );
     let gas_price = cluster.get_reference_gas_price().await;
     let tx_data = TestTransactionBuilder::new(sender, gas_ref, gas_price)
@@ -470,6 +500,61 @@ async fn test_paging_across_checkpoints_stays_pinned_while_state_changes() {
         QueryEndReason::CheckpointBound
     );
 
+    // Pinned ListObjects on a mutated Coin<SUI> returns the pre-transfer version at `initial_hi`
+    // and the updated version at `tx_checkpoint`.
+    let mut coin_tf = ObjectTypeFilter::default();
+    coin_tf.object_type = Some(format!("0x2::coin::Coin<{SUI_COIN_TYPE}>"));
+    let mut coin_lit = ObjectLiteral::default();
+    coin_lit.predicate = Some(object_literal::Predicate::ObjectType(coin_tf));
+    let mut coin_term = ObjectTerm::default();
+    coin_term.literals = vec![coin_lit];
+    let mut coin_filter = ObjectFilter::default();
+    coin_filter.terms = vec![coin_term];
+    let mut coin_opts = QueryOptions::default();
+    coin_opts.limit = Some(1000);
+
+    let mut coin_req_before = ListObjectsRequest::default();
+    coin_req_before.filter = Some(coin_filter.clone());
+    coin_req_before.at_checkpoint = Some(initial_hi);
+    coin_req_before.read_mask = Some(FieldMask::from_str("object_id,version"));
+    coin_req_before.options = Some(coin_opts.clone());
+    let coin_frames_before: Vec<_> = client
+        .state_client()
+        .list_objects(coin_req_before)
+        .await
+        .unwrap()
+        .into_inner()
+        .try_collect()
+        .await
+        .unwrap();
+    let pinned_gas_before = coin_frames_before
+        .iter()
+        .filter_map(|f| f.object.as_ref())
+        .find(|o| o.object_id() == last_id.as_str())
+        .expect("mutated gas coin should appear in pinned ListObjects at initial_hi");
+    assert_eq!(pinned_gas_before.version(), *last_version);
+
+    let mut coin_req_after = ListObjectsRequest::default();
+    coin_req_after.filter = Some(coin_filter);
+    coin_req_after.at_checkpoint = Some(tx_checkpoint);
+    coin_req_after.read_mask = Some(FieldMask::from_str("object_id,version"));
+    coin_req_after.options = Some(coin_opts);
+    let coin_frames_after: Vec<_> = client
+        .state_client()
+        .list_objects(coin_req_after)
+        .await
+        .unwrap()
+        .into_inner()
+        .try_collect()
+        .await
+        .unwrap();
+    let pinned_gas_after = coin_frames_after
+        .iter()
+        .filter_map(|f| f.object.as_ref())
+        .find(|o| o.object_id() == last_id.as_str())
+        .expect("mutated gas coin should appear in pinned ListObjects at tx_checkpoint");
+    assert!(pinned_gas_after.version() > *last_version);
+
     // OwnerKind::Shared lists shared objects including 0x5 (SuiSystemState).
     let mut shared_req = ListOwnedObjectsRequest::default();
     shared_req.owner_kind = Some(OwnerKind::Shared as i32);
@@ -535,7 +620,10 @@ async fn test_at_checkpoint_below_and_above_window() {
         .with(|node| node.state().name);
     cluster.stop_node(&default_fn);
     cluster.stop_all_validators().await;
+    // Require `synced == executed == range.end()` to stay unchanged across several consecutive
+    // polls so any in-flight simulated network packets drain before freezing `(lo, hi)`.
     let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+    let mut stable: Option<(u64, u64, u32)> = None;
     let (lo, hi) = loop {
         let (synced, executed, range) = snapshot_fn.sui_node.with(|node| {
             let state = node.state();
@@ -556,7 +644,17 @@ async fn test_at_checkpoint_below_and_above_window() {
             && synced == Some(exec)
             && *range.end() == exec
         {
-            break (*range.start(), *range.end());
+            let (cur_lo, cur_hi) = (*range.start(), *range.end());
+            let count = match stable {
+                Some((prev_lo, prev_hi, n)) if prev_lo == cur_lo && prev_hi == cur_hi => n + 1,
+                _ => 1,
+            };
+            if count >= 5 {
+                break (cur_lo, cur_hi);
+            }
+            stable = Some((cur_lo, cur_hi, count));
+        } else {
+            stable = None;
         }
         assert!(
             tokio::time::Instant::now() < deadline,

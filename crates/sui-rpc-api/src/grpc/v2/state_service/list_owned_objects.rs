@@ -120,14 +120,17 @@ pub fn list_owned_objects(
                 MAX_PAGE_SIZE,
                 extract_key,
             )?;
-            let (lower, upper) = opts.bounds();
+            let pin = opts.pin;
+            let descending = opts.descending;
+            let limit = opts.limit;
+            let (lower, upper, exhausted_end_reason) = opts.into_bounds();
             (
-                Some(opts.pin),
+                Some(pin),
                 lower,
                 upper,
-                opts.descending,
-                opts.limit,
-                Some(opts.exhausted_end_reason()),
+                descending,
+                limit,
+                Some(exhausted_end_reason),
                 None,
             )
         } else {
@@ -232,13 +235,13 @@ pub fn list_owned_objects(
                 object_id: object_info.object_id,
             };
             if exhausted_end_reason.is_some() {
-                cursors.push(
-                    StateCursor {
-                        checkpoint: pinned.checkpoint,
-                        key: StateCursorKey::OwnedObjects { owner, key },
-                    }
-                    .encode(),
-                );
+                let cursor = StateCursor {
+                    checkpoint: pinned.checkpoint,
+                    key: StateCursorKey::OwnedObjects { owner, key },
+                }
+                .encode();
+                size_bytes += cursor.len();
+                cursors.push(cursor);
             } else {
                 last_key = Some(key);
             }
@@ -412,7 +415,7 @@ mod tests {
 
     #[test]
     fn owner_kinds_and_type_filter_levels() {
-        let (_dir, store, service) = TestStateStore::open(5);
+        let (store, service) = TestStateStore::open(5);
         let alice = test_address(0x10);
         let parent = test_object_id(0x20);
 
@@ -543,7 +546,7 @@ mod tests {
 
     #[test]
     fn coin_ordering_reverse_and_size_limit_item_limit_end_reason() {
-        let (_dir, store, service) = TestStateStore::open(5);
+        let (store, service) = TestStateStore::open(5);
         let alice = test_address(0x10);
         let sui = struct_tag("0x2::sui::SUI");
         // Insert three SUI coins with balances 100, 500, 200.
@@ -611,7 +614,7 @@ mod tests {
 
     #[test]
     fn pinned_loads_exact_version_and_refuses_missing_while_unpinned_skips() {
-        let (_dir, store, service) = TestStateStore::open(5);
+        let (store, service) = TestStateStore::open(5);
         let alice = test_address(0x10);
         let id = test_object_id(1);
         let v1 = make_coin_object(
