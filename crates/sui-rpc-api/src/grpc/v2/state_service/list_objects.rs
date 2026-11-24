@@ -20,6 +20,7 @@ use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_types::storage::ObjectByTypeInfo;
 use sui_types::storage::ObjectByTypeKey;
 use sui_types::storage::OwnedObjectFilter;
+use tokio_util::sync::CancellationToken;
 
 use crate::Result;
 use crate::RpcError;
@@ -91,15 +92,9 @@ pub(super) async fn list_objects(
     // opening the stream so pre-stream refusals return directly as gRPC status errors.
     let pinned = {
         let service = service.clone();
-        let checkpoint = opts.checkpoint;
-        let pin_source = opts.pin_source;
+        let pin = opts.pin;
         tokio::task::spawn_blocking(move || {
-            resolve_pinned(
-                service.reader.inner().as_ref(),
-                checkpoint,
-                pin_source,
-                true,
-            )
+            resolve_pinned(service.reader.inner().as_ref(), pin, true)
         })
         .await
         .map_err(|e| {
@@ -117,6 +112,8 @@ pub(super) async fn list_objects(
     let mut remaining = opts.limit;
 
     let stream = async_stream::try_stream! {
+        let cancel = CancellationToken::new();
+        let _cancel_guard = cancel.clone().drop_guard();
         loop {
             let chunk_limit = remaining.min(CHUNK_SIZE);
             let chunk_service = service.clone();
@@ -125,6 +122,7 @@ pub(super) async fn list_objects(
             let chunk_mask = read_mask.clone();
             let chunk_lower = lower.clone();
             let chunk_upper = upper.clone();
+            let chunk_cancel = cancel.clone();
 
             let ObjectsChunk { items, last_key } = tokio::task::spawn_blocking(move || {
                 read_chunk(
@@ -137,6 +135,7 @@ pub(super) async fn list_objects(
                     chunk_upper,
                     descending,
                     chunk_limit,
+                    &chunk_cancel,
                 )
             })
             .await
@@ -145,26 +144,18 @@ pub(super) async fn list_objects(
             })??;
 
             let count = items.len();
-            if count == remaining {
-                let mut iter = items.into_iter().peekable();
-                while let Some((object, cursor)) = iter.next() {
-                    let mut frame = ListObjectsResponse::default()
-                        .with_object(object)
-                        .with_cursor(cursor);
-                    if iter.peek().is_none() {
-                        frame.end = Some(
-                            QueryEnd::default().with_reason(QueryEndReason::ItemLimit),
-                        );
-                    }
-                    yield frame;
-                }
-                break;
-            }
-
-            for (object, cursor) in items {
-                yield ListObjectsResponse::default()
+            let hit_limit = count == remaining;
+            for (idx, (object, cursor)) in items.into_iter().enumerate() {
+                let mut frame = ListObjectsResponse::default()
                     .with_object(object)
                     .with_cursor(cursor);
+                if hit_limit && idx + 1 == count {
+                    frame.end = Some(QueryEnd::default().with_reason(QueryEndReason::ItemLimit));
+                }
+                yield frame;
+            }
+            if hit_limit {
+                break;
             }
 
             if count < chunk_limit {
@@ -202,7 +193,11 @@ fn read_chunk(
     upper: Bound<ObjectByTypeKey>,
     descending: bool,
     chunk_limit: usize,
+    cancel: &CancellationToken,
 ) -> Result<ObjectsChunk> {
+    if cancel.is_cancelled() {
+        return Err(RpcError::new(tonic::Code::Cancelled, "request cancelled"));
+    }
     let reader = service.reader.inner();
     let render_context = RenderContext::empty(reader);
     let mut iter = pinned
@@ -212,6 +207,9 @@ fn read_chunk(
     let mut last_key = None;
 
     while items.len() < chunk_limit {
+        if cancel.is_cancelled() {
+            return Err(RpcError::new(tonic::Code::Cancelled, "request cancelled"));
+        }
         let Some(info) = iter
             .next()
             .transpose()
@@ -233,15 +231,19 @@ fn read_chunk(
             object_by_type_to_proto(&info, read_mask)
         };
 
-        let key = ObjectByTypeKey {
-            object_type: info.object_type,
-            object_id: info.object_id,
-        };
-        let cursor = StateCursor {
+        let state_cursor = StateCursor {
             checkpoint: pinned.checkpoint,
-            key: StateCursorKey::Objects { key: key.clone() },
-        }
-        .encode();
+            key: StateCursorKey::Objects {
+                key: ObjectByTypeKey {
+                    object_type: info.object_type,
+                    object_id: info.object_id,
+                },
+            },
+        };
+        let cursor = state_cursor.encode();
+        let StateCursorKey::Objects { key } = state_cursor.key else {
+            unreachable!();
+        };
         last_key = Some(key);
         items.push((object, cursor));
     }
@@ -460,16 +462,125 @@ mod tests {
             tonic::Code::InvalidArgument
         );
 
-        // Missing object version fails stream with pruning_race and does not emit QueryEnd.
+        // Missing object version fails stream with pruning_race and emits no QueryEnd frame.
         store.drop_object_version(test_object_id(1), SequenceNumber::from_u64(1));
         let mut req_race = ListObjectsRequest::default();
         req_race.at_checkpoint = Some(10);
         req_race.read_mask = Some(FieldMask::from_str("object_id,contents"));
+        let mut stream = list_objects(service.clone(), req_race).await.unwrap();
+        let mut stream_err = None;
+        while let Some(item) = stream.next().await {
+            match item {
+                Ok(frame) => assert!(
+                    frame.end.is_none(),
+                    "failing stream must never emit QueryEnd"
+                ),
+                Err(err) => {
+                    stream_err = Some(err);
+                    break;
+                }
+            }
+        }
         assert_refusal(
-            collect_frames(&service, req_race).await.unwrap_err(),
+            stream_err.expect("expected pruning_race error"),
             tonic::Code::Unavailable,
             ErrorReason::NotReady,
             "pruning_race",
         );
+    }
+
+    #[tokio::test]
+    async fn streams_across_multiple_64_item_chunks_and_observes_cancellation() {
+        let (_dir, store, service) = TestStateStore::open(5);
+        let alice = test_address(1);
+        let type_a = struct_tag("0x1::a::A");
+        let type_b = struct_tag("0x2::b::B");
+        let mut expected_asc = Vec::with_capacity(130);
+        for i in 1u8..=130 {
+            let id = test_object_id(i);
+            let ty = if i <= 65 {
+                type_a.clone()
+            } else {
+                type_b.clone()
+            };
+            store.put_object(make_struct_object(
+                id,
+                1,
+                Owner::AddressOwner(alice),
+                ty,
+                dummy_struct_bytes(id, i as u64),
+            ));
+            expected_asc.push(id.to_canonical_string(true));
+        }
+        store.take_snapshot(1);
+
+        // Full ascending stream (>2 chunks) ends with an empty CHECKPOINT_BOUND frame.
+        let mut opts = QueryOptions::default();
+        opts.limit = Some(1000);
+        let mut req = ListObjectsRequest::default();
+        req.at_checkpoint = Some(1);
+        req.options = Some(opts);
+        let frames = collect_frames(&service, req).await.unwrap();
+        assert_eq!(frames.len(), 131);
+        let got_asc: Vec<_> = frames[..130]
+            .iter()
+            .map(|f| {
+                assert!(f.end.is_none());
+                f.object.as_ref().unwrap().object_id().to_owned()
+            })
+            .collect();
+        assert_eq!(got_asc, expected_asc);
+        assert!(frames[130].object.is_none());
+        assert_eq!(
+            frames[130].end.as_ref().unwrap().reason(),
+            QueryEndReason::CheckpointBound
+        );
+
+        // Descending stream hitting exact 2-chunk boundary (128 = 2 * CHUNK_SIZE) puts ITEM_LIMIT
+        // on frame 128 with no duplicates and no trailing empty frame.
+        let mut desc_opts = QueryOptions::default();
+        desc_opts.limit = Some(128);
+        desc_opts.ordering = Some(Ordering::Descending as i32);
+        let mut desc_req = ListObjectsRequest::default();
+        desc_req.at_checkpoint = Some(1);
+        desc_req.options = Some(desc_opts);
+        let desc_frames = collect_frames(&service, desc_req).await.unwrap();
+        assert_eq!(desc_frames.len(), 128);
+        let got_desc: Vec<_> = desc_frames
+            .iter()
+            .map(|f| f.object.as_ref().unwrap().object_id().to_owned())
+            .collect();
+        let expected_desc: Vec<_> = expected_asc.iter().rev().take(128).cloned().collect();
+        assert_eq!(got_desc, expected_desc);
+        assert!(desc_frames[..127].iter().all(|f| f.end.is_none()));
+        assert_eq!(
+            desc_frames[127].end.as_ref().unwrap().reason(),
+            QueryEndReason::ItemLimit
+        );
+
+        // A cancelled token makes `read_chunk` bail immediately with Cancelled.
+        let pinned = resolve_pinned(
+            service.reader.inner().as_ref(),
+            super::super::checkpoint::PinSource::AtCheckpoint(1),
+            true,
+        )
+        .unwrap();
+        let cancel = CancellationToken::new();
+        cancel.cancel();
+        let err = read_chunk(
+            &service,
+            &pinned,
+            None,
+            &FieldMaskTree::from(FieldMask::from_str("object_id")),
+            false,
+            Bound::Unbounded,
+            Bound::Unbounded,
+            false,
+            CHUNK_SIZE,
+            &cancel,
+        )
+        .err()
+        .unwrap();
+        assert_eq!(err.code(), tonic::Code::Cancelled);
     }
 }

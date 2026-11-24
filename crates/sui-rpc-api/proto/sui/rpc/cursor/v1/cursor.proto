@@ -15,8 +15,8 @@ enum CursorKind {
     CURSOR_KIND_BOUNDARY = 2;
 }
 
-// Pagination cursor for ledger-history endpoints. The cursor scope is encoded
-// by which `position` member is set.
+// Pagination cursor for ledger-history and state-service endpoints. The cursor
+// scope is encoded by which `position` member is set.
 message CursorToken {
     // Tags 1-4 belonged to an earlier version of this schema; reserved so
     // those bytes are never misread.
@@ -121,8 +121,8 @@ message StatePosition {
     // BCS-encoded Move `StructTag`: coin type (`BALANCES`) or object type
     // (`OWNED_OBJECTS`, `DYNAMIC_FIELDS`, `OBJECTS`). Required.
     optional bytes move_type = 5;
-    // Coin balance for coin objects in `OWNED_OBJECTS`; unset for non-coins
-    // and all other listings.
+    // Coin balance for coin objects in `OWNED_OBJECTS` and `DYNAMIC_FIELDS`;
+    // unset for non-coins and all other listings.
     optional uint64 balance = 6;
     // 32-byte object ID (`OWNED_OBJECTS`, `DYNAMIC_FIELDS`, `OBJECTS`); unset
     // for `BALANCES`.

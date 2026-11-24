@@ -3,6 +3,11 @@
 
 use std::ops::Bound;
 
+use crate::Result;
+use crate::RpcError;
+use crate::RpcService;
+use crate::grpc::v2::render::RenderContext;
+use crate::reader::indexes_disabled;
 use bytes::Bytes;
 use move_core_types::language_storage::StructTag;
 use prost::Message;
@@ -22,20 +27,13 @@ use sui_sdk_types::Address;
 use sui_types::base_types::ObjectID;
 use sui_types::object::Object;
 use sui_types::storage::DynamicFieldEntry;
+use sui_types::storage::DynamicFieldFilter;
 use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::OwnedObjectOwner;
-
-use crate::Result;
-use crate::RpcError;
-use crate::RpcService;
-use crate::grpc::v2::render::RenderContext;
-use crate::reader::indexes_disabled;
 
 use super::checkpoint::PinSource;
 use super::checkpoint::PinnedStateRead;
 use super::checkpoint::resolve_pinned;
-use super::checkpoint::resolve_state_read;
-use super::cursor::DecodedPageToken;
 use super::cursor::StateCursor;
 use super::cursor::StateCursorKey;
 use super::cursor::decode_page_token;
@@ -55,8 +53,7 @@ pub fn list_dynamic_fields(
     request: ListDynamicFieldsRequest,
 ) -> Result<ListDynamicFieldsResponse> {
     let reader = service.reader.inner();
-    reader.indexes().ok_or_else(indexes_disabled)?;
-
+    let current_indexes = reader.indexes().ok_or_else(indexes_disabled)?;
     let parent: Address = request
         .parent
         .as_ref()
@@ -91,10 +88,7 @@ pub fn list_dynamic_fields(
     };
 
     let extract_key = |field: &str, key: StateCursorKey| match key {
-        StateCursorKey::DynamicFields {
-            parent: cur_parent,
-            key,
-        } if cur_parent == parent_id => Ok(key),
+        StateCursorKey::DynamicFields { key } if key.parent == parent_id => Ok(key),
         _ => Err(wrong_cursor_scope(
             field,
             "cursor does not match this ListDynamicFields parent",
@@ -110,111 +104,54 @@ pub fn list_dynamic_fields(
             MAX_PAGE_SIZE,
             extract_key,
         )?;
-        let pinned = resolve_pinned(reader.as_ref(), opts.checkpoint, opts.pin_source, true)?;
-
         let (lower, upper) = opts.bounds();
-        let mut iter = pinned.indexes.dynamic_field_iter(
+        return list_dynamic_fields_pinned(
+            service,
             parent_id,
             filter.as_ref(),
+            &read_mask,
+            opts.pin,
             lower,
             upper,
             opts.descending,
-        )?;
-        let mut dynamic_fields = Vec::with_capacity(opts.limit);
-        let mut cursors = Vec::with_capacity(opts.limit);
-        let render_context = RenderContext::empty(reader);
-        let mut size_bytes = 0;
-        let mut hit_limit = false;
-
-        while let Some(entry) = iter
-            .next()
-            .transpose()
-            .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
-        {
-            let dynamic_field =
-                get_dynamic_field_pinned(service, &pinned, &entry, &read_mask, &render_context)?;
-            let cursor = StateCursor {
-                checkpoint: pinned.checkpoint,
-                key: StateCursorKey::DynamicFields {
-                    parent: parent_id,
-                    key: entry.key(),
-                },
-            }
-            .encode();
-
-            size_bytes += dynamic_field.encoded_len();
-            dynamic_fields.push(dynamic_field);
-            cursors.push(cursor);
-
-            if dynamic_fields.len() >= opts.limit || size_bytes >= MAX_PAGE_SIZE_BYTES {
-                hit_limit = true;
-                break;
-            }
-        }
-
-        pinned.check_object_floor(reader.as_ref())?;
-
-        let end_reason = if hit_limit {
-            QueryEndReason::ItemLimit
-        } else {
-            opts.exhausted_end_reason()
-        };
-        let mut message = ListDynamicFieldsResponse::default();
-        message.dynamic_fields = dynamic_fields;
-        message.cursors = cursors;
-        message.end = Some(QueryEnd::default().with_reason(end_reason));
-        return Ok(message);
+            opts.limit,
+            Some(opts.exhausted_end_reason()),
+        );
     }
 
     let page_size = request
         .page_size
         .map(|s| (s as usize).clamp(1, MAX_PAGE_SIZE))
         .unwrap_or(DEFAULT_PAGE_SIZE);
-    let page_token = request
-        .page_token
-        .as_deref()
-        .map(|token| {
-            decode_page_token::<LegacyPageToken, DynamicFieldKey, _, _>(
-                token,
-                request.at_checkpoint,
-                |t| t.parent == parent,
-                extract_key,
-            )
-        })
-        .transpose()?;
+    let (pin, lower) = decode_page_token::<LegacyPageToken, DynamicFieldKey, _, _, _>(
+        request.page_token.as_deref(),
+        request.at_checkpoint,
+        |t| t.parent == parent,
+        |t| DynamicFieldKey {
+            parent: parent_id,
+            field_id: t.field_id.into(),
+            object_type: t.object_type,
+            balance: None,
+        },
+        extract_key,
+    )?;
 
-    let (checkpoint, pin, pin_source, lower) = match page_token {
-        Some(DecodedPageToken::Legacy(token)) => (
-            None,
-            false,
-            PinSource::AtCheckpoint,
-            Bound::Included(DynamicFieldKey {
-                parent: parent_id,
-                field_id: token.field_id.into(),
-                object_type: token.object_type,
-            }),
-        ),
-        Some(DecodedPageToken::Pinned { checkpoint, key }) => (
-            Some(checkpoint),
-            true,
-            if request.at_checkpoint.is_some() {
-                PinSource::AtCheckpoint
-            } else {
-                PinSource::Cursor
-            },
-            Bound::Excluded(key),
-        ),
-        None => (
-            request.at_checkpoint,
-            request.at_checkpoint.is_some(),
-            PinSource::AtCheckpoint,
+    if let Some(pin) = pin {
+        return list_dynamic_fields_pinned(
+            service,
+            parent_id,
+            filter.as_ref(),
+            &read_mask,
+            pin,
+            lower,
             Bound::Unbounded,
-        ),
-    };
+            false,
+            page_size,
+            None,
+        );
+    }
 
-    let target = resolve_state_read(service, checkpoint, pin, pin_source, true)?;
-
-    let mut iter = target.indexes().dynamic_field_iter(
+    let mut iter = current_indexes.dynamic_field_iter(
         parent_id,
         filter.as_ref(),
         lower,
@@ -224,29 +161,22 @@ pub fn list_dynamic_fields(
     let mut dynamic_fields = Vec::with_capacity(page_size);
     let render_context = RenderContext::empty(reader);
     let mut size_bytes = 0;
-    let mut last_key: Option<DynamicFieldKey> = None;
 
     while let Some(entry) = iter
         .next()
         .transpose()
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
     {
-        let dynamic_field = if let Some(pinned) = target.pinned() {
-            get_dynamic_field_pinned(service, pinned, &entry, &read_mask, &render_context)?
-        } else {
-            let Some(dynamic_field) = get_dynamic_field_current(
-                service,
-                &entry.parent,
-                &entry.field_id,
-                &read_mask,
-                &render_context,
-            ) else {
-                continue;
-            };
-            dynamic_field
+        let Some(dynamic_field) = get_dynamic_field_current(
+            service,
+            &entry.parent,
+            &entry.field_id,
+            &read_mask,
+            &render_context,
+        ) else {
+            continue;
         };
 
-        last_key = Some(entry.key());
         size_bytes += dynamic_field.encoded_len();
         dynamic_fields.push(dynamic_field);
 
@@ -260,32 +190,110 @@ pub fn list_dynamic_fields(
         .transpose()
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
 
-    if let Some(pinned) = target.pinned() {
-        pinned.check_object_floor(reader.as_ref())?;
-    }
-
     let next_page_token = next_entry.map(|cursor| {
-        if let Some(pinned) = target.pinned() {
-            StateCursor {
-                checkpoint: pinned.checkpoint,
-                key: StateCursorKey::DynamicFields {
-                    parent: parent_id,
-                    key: last_key.expect("next row only peeked after non-empty page"),
-                },
-            }
-            .encode()
-        } else {
-            encode_legacy_page_token(LegacyPageToken {
-                parent,
-                field_id: cursor.field_id.into(),
-                object_type: cursor.object_type,
-            })
-        }
+        encode_legacy_page_token(LegacyPageToken {
+            parent,
+            field_id: cursor.field_id.into(),
+            object_type: cursor.object_type,
+        })
     });
 
     let mut message = ListDynamicFieldsResponse::default();
     message.dynamic_fields = dynamic_fields;
     message.next_page_token = next_page_token;
+    Ok(message)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn list_dynamic_fields_pinned(
+    service: &RpcService,
+    parent_id: ObjectID,
+    filter: Option<&DynamicFieldFilter>,
+    read_mask: &FieldMaskTree,
+    pin: PinSource,
+    lower: Bound<DynamicFieldKey>,
+    upper: Bound<DynamicFieldKey>,
+    descending: bool,
+    limit: usize,
+    exhausted_end_reason: Option<QueryEndReason>,
+) -> Result<ListDynamicFieldsResponse> {
+    let reader = service.reader.inner();
+    let pinned = resolve_pinned(reader.as_ref(), pin, true)?;
+    let mut iter = pinned
+        .indexes
+        .dynamic_field_iter(parent_id, filter, lower, upper, descending)?;
+    let mut dynamic_fields = Vec::with_capacity(limit);
+    let mut cursors = if exhausted_end_reason.is_some() {
+        Vec::with_capacity(limit)
+    } else {
+        Vec::new()
+    };
+    let render_context = RenderContext::empty(reader);
+    let mut size_bytes = 0;
+    let mut hit_limit = false;
+    let mut last_key: Option<DynamicFieldKey> = None;
+
+    while let Some(entry) = iter
+        .next()
+        .transpose()
+        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+    {
+        let dynamic_field =
+            get_dynamic_field_pinned(service, &pinned, &entry, read_mask, &render_context)?;
+        let key = entry.into_key();
+        if exhausted_end_reason.is_some() {
+            cursors.push(
+                StateCursor {
+                    checkpoint: pinned.checkpoint,
+                    key: StateCursorKey::DynamicFields { key },
+                }
+                .encode(),
+            );
+        } else {
+            last_key = Some(key);
+        }
+
+        size_bytes += dynamic_field.encoded_len();
+        dynamic_fields.push(dynamic_field);
+
+        if dynamic_fields.len() >= limit || size_bytes >= MAX_PAGE_SIZE_BYTES {
+            hit_limit = true;
+            break;
+        }
+    }
+
+    let has_more = if exhausted_end_reason.is_none() && hit_limit {
+        iter.next()
+            .transpose()
+            .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+            .is_some()
+    } else {
+        false
+    };
+
+    pinned.check_object_floor(reader.as_ref())?;
+
+    let mut message = ListDynamicFieldsResponse::default();
+    message.dynamic_fields = dynamic_fields;
+    if let Some(exhausted_reason) = exhausted_end_reason {
+        let end_reason = if hit_limit {
+            QueryEndReason::ItemLimit
+        } else {
+            exhausted_reason
+        };
+        message.cursors = cursors;
+        message.end = Some(QueryEnd::default().with_reason(end_reason));
+    } else if has_more {
+        message.next_page_token = Some(
+            StateCursor {
+                checkpoint: pinned.checkpoint,
+                key: StateCursorKey::DynamicFields {
+                    key: last_key.expect("next row only peeked after non-empty page"),
+                },
+            }
+            .encode(),
+        );
+    }
     Ok(message)
 }
 
@@ -438,16 +446,25 @@ fn load_dynamic_field_pinned(
                 )
             })?;
 
-        let reader = service.reader.inner();
-        let child_object = reader
-            .get_object_by_key(&child_id, child_info.version)
-            .ok_or_else(|| {
-                pinned.missing_object_error(reader.as_ref(), child_id, child_info.version)
-            })?;
-        populate_child_object(service, &child_object, read_mask, message, render_context)
-            .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
-    }
+        if read_mask.contains(DynamicField::VALUE_TYPE_FIELD) {
+            let type_tag = sui_types::TypeTag::from(child_info.object_type);
+            message.value_type = Some(type_tag.to_canonical_string(true));
+        }
 
+        if let Some(submask) = read_mask.subtree(DynamicField::CHILD_OBJECT_FIELD) {
+            let reader = service.reader.inner();
+            let child_object = reader
+                .get_object_by_key(&child_id, child_info.version)
+                .ok_or_else(|| {
+                    pinned.missing_object_error(reader.as_ref(), child_id, child_info.version)
+                })?;
+            message.set_child_object(service.render_object_to_proto(
+                &child_object,
+                &submask,
+                render_context,
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -791,8 +808,21 @@ mod tests {
         store.put_object(child_v1);
         store.take_snapshot(1);
 
-        // Drop child version -> pinned read requesting child_object refuses with pruning_race.
+        // Drop child version -> pinned read requesting only `value_type` still succeeds from the
+        // snapshot index without loading the child object, while `child_object` refuses with
+        // `pruning_race`.
         store.drop_object_version(child_id, SequenceNumber::from_u64(1));
+        let mut value_type_only = ListDynamicFieldsRequest::default();
+        value_type_only.parent = Some(parent.to_string());
+        value_type_only.at_checkpoint = Some(1);
+        value_type_only.read_mask = Some(FieldMask::from_str("kind,value_type"));
+        let vt_resp = list_dynamic_fields(&service, value_type_only).unwrap();
+        assert_eq!(vt_resp.dynamic_fields.len(), 1);
+        assert_eq!(
+            vt_resp.dynamic_fields[0].value_type(),
+            struct_tag("0x9::item::Widget").to_canonical_string(true)
+        );
+
         let mut pinned_req = ListDynamicFieldsRequest::default();
         pinned_req.parent = Some(parent.to_string());
         pinned_req.at_checkpoint = Some(1);
@@ -803,7 +833,6 @@ mod tests {
             ErrorReason::NotReady,
             "pruning_race",
         );
-
         // Drop field version too -> pinned refuses with pruning_race, unpinned skips cleanly.
         store.drop_object_version(dof_field_id, SequenceNumber::from_u64(1));
         assert_refusal(
@@ -818,5 +847,62 @@ mod tests {
         unpinned_req.read_mask = Some(FieldMask::from_str("kind,field_object.version"));
         let unpinned = list_dynamic_fields(&service, unpinned_req).unwrap();
         assert!(unpinned.dynamic_fields.is_empty());
+    }
+
+    #[test]
+    fn cursor_paging_advances_past_coin_owned_by_parent_without_looping() {
+        let (_dir, store, service) = TestStateStore::open(5);
+        let parent = test_object_id(0xBB);
+        let rich = test_object_id(0x10);
+        let poor = test_object_id(0x11);
+        let sui_coin = struct_tag("0x2::sui::SUI");
+        store.put_object(
+            crate::grpc::v2::state_service::test_support::make_coin_object(
+                rich,
+                1,
+                Owner::ObjectOwner(parent.into()),
+                sui_coin.clone(),
+                500,
+            ),
+        );
+        store.put_object(
+            crate::grpc::v2::state_service::test_support::make_coin_object(
+                poor,
+                1,
+                Owner::ObjectOwner(parent.into()),
+                sui_coin,
+                100,
+            ),
+        );
+        store.take_snapshot(1);
+
+        let mut seen = Vec::new();
+        let mut after: Option<Bytes> = None;
+        for _ in 0..5 {
+            let mut opts = QueryOptions::default();
+            opts.limit = Some(1);
+            opts.after = after.clone();
+            let mut req = ListDynamicFieldsRequest::default();
+            req.parent = Some(parent.to_string());
+            req.at_checkpoint = Some(1);
+            req.options = Some(opts);
+            let page = list_dynamic_fields(&service, req).unwrap();
+            seen.extend(
+                page.dynamic_fields
+                    .iter()
+                    .map(|df| df.field_id().to_owned()),
+            );
+            if page.end.unwrap().reason() != QueryEndReason::ItemLimit {
+                break;
+            }
+            after = page.cursors.last().cloned();
+        }
+        assert_eq!(
+            seen,
+            vec![
+                rich.to_canonical_string(true),
+                poor.to_canonical_string(true),
+            ]
+        );
     }
 }

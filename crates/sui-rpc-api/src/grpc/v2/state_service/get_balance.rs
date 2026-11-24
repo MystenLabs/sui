@@ -24,8 +24,7 @@ use crate::RpcService;
 use crate::reader::indexes_disabled;
 
 use super::checkpoint::PinSource;
-use super::checkpoint::resolve_state_read;
-
+use super::checkpoint::resolve_pinned;
 /// Maximum number of balance lookups accepted in a single `BatchGetBalances` call.
 pub const MAX_BATCH_REQUESTS: usize = 1000;
 
@@ -35,39 +34,45 @@ struct ParsedBalanceRequest {
     at_checkpoint: Option<u64>,
 }
 
+fn field_violation(field: &str, batch_index: Option<usize>) -> FieldViolation {
+    let violation = FieldViolation::new(field);
+    match batch_index {
+        Some(idx) => violation.nested_at("requests", idx),
+        None => violation,
+    }
+}
+
 fn parse_balance_request(
     request: &GetBalanceRequest,
-    field_prefix: &str,
+    batch_index: Option<usize>,
 ) -> Result<ParsedBalanceRequest> {
-    let owner_field = format!("{field_prefix}owner");
     let owner = request
         .owner
         .as_ref()
         .ok_or_else(|| {
-            FieldViolation::new(&owner_field)
+            field_violation("owner", batch_index)
                 .with_description("missing owner")
                 .with_reason(ErrorReason::FieldMissing)
         })?
         .parse::<Address>()
         .map_err(|e| {
-            FieldViolation::new(&owner_field)
+            field_violation("owner", batch_index)
                 .with_description(format!("invalid owner: {e}"))
                 .with_reason(ErrorReason::FieldInvalid)
         })?;
     let owner = SuiAddress::from(owner);
 
-    let coin_type_field = format!("{field_prefix}coin_type");
     let coin_type = request
         .coin_type
         .as_ref()
         .ok_or_else(|| {
-            FieldViolation::new(&coin_type_field)
+            field_violation("coin_type", batch_index)
                 .with_description("missing coin_type")
                 .with_reason(ErrorReason::FieldMissing)
         })?
         .parse::<StructTag>()
         .map_err(|e| {
-            FieldViolation::new(&coin_type_field)
+            field_violation("coin_type", batch_index)
                 .with_description(format!("invalid coin_type: {e}"))
                 .with_reason(ErrorReason::FieldInvalid)
         })?;
@@ -83,28 +88,21 @@ fn parse_balance_request(
 
 #[tracing::instrument(skip(service))]
 pub fn get_balance(service: &RpcService, request: GetBalanceRequest) -> Result<GetBalanceResponse> {
-    service
-        .reader
-        .inner()
-        .indexes()
-        .ok_or_else(indexes_disabled)?;
+    let reader = service.reader.inner();
+    let current_indexes = reader.indexes().ok_or_else(indexes_disabled)?;
 
-    let parsed = parse_balance_request(&request, "")?;
+    let parsed = parse_balance_request(&request, None)?;
 
-    let target = resolve_state_read(
-        service,
-        parsed.at_checkpoint,
-        parsed.at_checkpoint.is_some(),
-        PinSource::AtCheckpoint,
-        false,
-    )?;
+    let balance_info = if let Some(cp) = parsed.at_checkpoint {
+        resolve_pinned(reader.as_ref(), PinSource::AtCheckpoint(cp), false)?
+            .indexes
+            .get_balance(&parsed.owner, &parsed.coin_type)?
+    } else {
+        current_indexes.get_balance(&parsed.owner, &parsed.coin_type)?
+    }
+    .unwrap_or_default();
 
-    let balance_info = target
-        .indexes()
-        .get_balance(&parsed.owner, &parsed.coin_type)?
-        .unwrap_or_default();
-
-    let balance = render_balance(service, parsed.owner, parsed.coin_type, balance_info);
+    let balance = render_balance(service, parsed.owner, &parsed.coin_type, balance_info);
 
     Ok(GetBalanceResponse::default().with_balance(balance))
 }
@@ -130,7 +128,7 @@ pub fn batch_get_balances(
         .requests
         .iter()
         .enumerate()
-        .map(|(i, item)| parse_balance_request(item, &format!("requests[{i}].")))
+        .map(|(i, item)| parse_balance_request(item, Some(i)))
         .collect::<Result<_>>()?;
 
     // Acquire each distinct checkpoint snapshot once so all items sharing a checkpoint read the
@@ -140,12 +138,7 @@ pub fn batch_get_balances(
         if let Some(cp) = item.at_checkpoint
             && !snapshots.contains_key(&cp)
         {
-            let pinned = super::checkpoint::resolve_pinned(
-                reader.as_ref(),
-                Some(cp),
-                PinSource::AtCheckpoint,
-                false,
-            )?;
+            let pinned = resolve_pinned(reader.as_ref(), PinSource::AtCheckpoint(cp), false)?;
             snapshots.insert(cp, pinned.indexes);
         }
     }
@@ -162,7 +155,7 @@ pub fn batch_get_balances(
         balances.push(render_balance(
             service,
             item.owner,
-            item.coin_type,
+            &item.coin_type,
             balance_info,
         ));
     }
@@ -175,7 +168,7 @@ pub fn batch_get_balances(
 pub(super) fn render_balance(
     _service: &RpcService,
     _owner: SuiAddress,
-    coin_type: CoreStructTag,
+    coin_type: &CoreStructTag,
     balance_info: BalanceInfo,
 ) -> Balance {
     let mut balance = Balance::default()

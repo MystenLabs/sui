@@ -80,7 +80,7 @@ pub(super) struct TestStateStore {
     db: Db,
     store: RpcStoreReader,
     objects: RwLock<BTreeMap<(ObjectID, SequenceNumber), Object>>,
-    packages: RwLock<BTreeMap<ObjectID, Object>>,
+    packages: BTreeMap<ObjectID, Object>,
     lowest_available_objects: AtomicU64,
 }
 
@@ -102,7 +102,7 @@ impl TestStateStore {
             db,
             store,
             objects: RwLock::new(BTreeMap::new()),
-            packages: RwLock::new(packages),
+            packages,
             lowest_available_objects: AtomicU64::new(0),
         });
         let service = RpcService::new(state.clone());
@@ -110,14 +110,14 @@ impl TestStateStore {
     }
 
     pub(super) fn put_object(&self, object: Object) {
-        self.apply_object_change(None, Some(object));
+        self.apply_object_change(None, object);
     }
 
     pub(super) fn replace_object(&self, old: &Object, new: Object) {
-        self.apply_object_change(Some(old), Some(new));
+        self.apply_object_change(Some(old), new);
     }
 
-    fn apply_object_change(&self, old: Option<&Object>, new: Option<Object>) {
+    fn apply_object_change(&self, old: Option<&Object>, new: Object) {
         let mut batch = self.db.batch();
         if let Some(old) = old {
             if let Some((key, _)) = owner_schema::store(old) {
@@ -131,22 +131,20 @@ impl TestStateStore {
                     .unwrap();
             }
         }
-        if let Some(new) = new {
-            if let Some((key, value)) = owner_schema::store(&new) {
-                batch
-                    .put(&self.store.schema().object_by_owner, &key, &value)
-                    .unwrap();
-            }
-            if let Some((key, value)) = type_schema::store(&new) {
-                batch
-                    .put(&self.store.schema().object_by_type, &key, &value)
-                    .unwrap();
-            }
-            self.objects
-                .write()
-                .unwrap()
-                .insert((new.id(), new.version()), new);
+        if let Some((key, value)) = owner_schema::store(&new) {
+            batch
+                .put(&self.store.schema().object_by_owner, &key, &value)
+                .unwrap();
         }
+        if let Some((key, value)) = type_schema::store(&new) {
+            batch
+                .put(&self.store.schema().object_by_type, &key, &value)
+                .unwrap();
+        }
+        self.objects
+            .write()
+            .unwrap()
+            .insert((new.id(), new.version()), new);
         batch.commit().unwrap();
     }
 
@@ -466,8 +464,6 @@ impl BackingPackageStore for TestStateStore {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         Ok(self
             .packages
-            .read()
-            .unwrap()
             .get(package_id)
             .cloned()
             .map(PackageObject::new))
@@ -617,22 +613,18 @@ impl RpcStateReader for TestStateStore {
     }
 }
 
-#[allow(dead_code)]
 pub(super) fn struct_tag(s: &str) -> StructTag {
     sui_types::parse_sui_struct_tag(s).unwrap()
 }
 
-#[allow(dead_code)]
 pub(super) fn test_address(byte: u8) -> SuiAddress {
     SuiAddress::from(ObjectID::from_single_byte(byte))
 }
 
-#[allow(dead_code)]
 pub(super) fn test_object_id(byte: u8) -> ObjectID {
     ObjectID::from_single_byte(byte)
 }
 
-#[allow(dead_code)]
 pub(super) fn dummy_struct_bytes(id: ObjectID, payload: u64) -> Vec<u8> {
     let mut bcs = Vec::with_capacity(ObjectID::LENGTH + 8);
     bcs.extend_from_slice(id.as_ref());

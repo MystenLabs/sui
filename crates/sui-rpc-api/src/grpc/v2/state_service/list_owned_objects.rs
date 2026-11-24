@@ -33,8 +33,6 @@ use crate::reader::indexes_disabled;
 
 use super::checkpoint::PinSource;
 use super::checkpoint::resolve_pinned;
-use super::checkpoint::resolve_state_read;
-use super::cursor::DecodedPageToken;
 use super::cursor::StateCursor;
 use super::cursor::StateCursorKey;
 use super::cursor::decode_page_token;
@@ -55,8 +53,7 @@ pub fn list_owned_objects(
     request: ListOwnedObjectsRequest,
 ) -> Result<ListOwnedObjectsResponse> {
     let reader = service.reader.inner();
-    reader.indexes().ok_or_else(indexes_disabled)?;
-
+    let current_indexes = reader.indexes().ok_or_else(indexes_disabled)?;
     let owner = parse_owner(request.owner_kind, request.owner.as_deref())?;
 
     let object_type: Option<StructTypePattern> = request
@@ -122,78 +119,20 @@ pub fn list_owned_objects(
             MAX_PAGE_SIZE,
             extract_key,
         )?;
-        let pinned = resolve_pinned(reader.as_ref(), opts.checkpoint, opts.pin_source, true)?;
-
         let (lower, upper) = opts.bounds();
-        let mut iter = pinned.indexes.owned_objects_iter(
+        return list_owned_objects_pinned(
+            service,
             owner,
             filter.as_ref(),
+            &read_mask,
+            should_load,
+            opts.pin,
             lower,
             upper,
             opts.descending,
-        )?;
-        let mut objects = Vec::with_capacity(opts.limit);
-        let mut cursors = Vec::with_capacity(opts.limit);
-        let render_context = RenderContext::empty(reader);
-        let mut size_bytes = 0;
-        let mut hit_limit = false;
-
-        while let Some(object_info) = iter
-            .next()
-            .transpose()
-            .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
-        {
-            let object = if should_load {
-                let Some(object) =
-                    reader.get_object_by_key(&object_info.object_id, object_info.version)
-                else {
-                    return Err(pinned.missing_object_error(
-                        reader.as_ref(),
-                        object_info.object_id,
-                        object_info.version,
-                    ));
-                };
-                service.render_object_to_proto(&object, &read_mask, &render_context)
-            } else {
-                owned_object_to_proto(&object_info, &read_mask)
-            };
-
-            let cursor = StateCursor {
-                checkpoint: pinned.checkpoint,
-                key: StateCursorKey::OwnedObjects {
-                    owner,
-                    key: OwnedObjectKey {
-                        object_type: object_info.object_type,
-                        balance: object_info.balance,
-                        object_id: object_info.object_id,
-                    },
-                },
-            }
-            .encode();
-
-            size_bytes += object.encoded_len();
-            objects.push(object);
-            cursors.push(cursor);
-
-            if objects.len() >= opts.limit || size_bytes >= MAX_PAGE_SIZE_BYTES {
-                hit_limit = true;
-                break;
-            }
-        }
-
-        // Re-check object pruning floor after reads to catch pruning that raced with object loads.
-        pinned.check_object_floor(reader.as_ref())?;
-
-        let end_reason = if hit_limit {
-            QueryEndReason::ItemLimit
-        } else {
-            opts.exhausted_end_reason()
-        };
-        let mut message = ListOwnedObjectsResponse::default();
-        message.objects = objects;
-        message.cursors = cursors;
-        message.end = Some(QueryEnd::default().with_reason(end_reason));
-        return Ok(message);
+            opts.limit,
+            Some(opts.exhausted_end_reason()),
+        );
     }
 
     // Non-ADDRESS owner kinds require cursor paging (`options`) or a checkpoint-pinned read
@@ -217,54 +156,41 @@ pub fn list_owned_objects(
         .page_size
         .map(|s| (s as usize).clamp(1, MAX_PAGE_SIZE))
         .unwrap_or(DEFAULT_PAGE_SIZE);
-    let page_token = request
-        .page_token
-        .as_deref()
-        .map(|token| {
-            decode_page_token::<LegacyPageToken, OwnedObjectKey, _, _>(
-                token,
-                request.at_checkpoint,
-                |t| {
-                    matches!(owner, OwnedObjectOwner::Address(addr) if Address::from(addr) == t.owner)
-                        && t.object_type == legacy_struct_tag
-                },
-                extract_key,
-            )
-        })
-        .transpose()?;
+    let (pin, lower) = decode_page_token::<LegacyPageToken, OwnedObjectKey, _, _, _>(
+        request.page_token.as_deref(),
+        request.at_checkpoint,
+        |t| {
+            matches!(owner, OwnedObjectOwner::Address(addr) if Address::from(addr) == t.owner)
+                && t.object_type == legacy_struct_tag
+        },
+        |t| OwnedObjectKey {
+            object_type: t.inner.object_type,
+            balance: t.inner.balance,
+            object_id: t.inner.object_id,
+        },
+        extract_key,
+    )?;
 
-    let (checkpoint, pin, pin_source, lower) = match page_token {
-        Some(DecodedPageToken::Legacy(token)) => (
-            None,
-            false,
-            PinSource::AtCheckpoint,
-            Bound::Included(OwnedObjectKey {
-                object_type: token.inner.object_type,
-                balance: token.inner.balance,
-                object_id: token.inner.object_id,
-            }),
-        ),
-        Some(DecodedPageToken::Pinned { checkpoint, key }) => (
-            Some(checkpoint),
-            true,
-            if request.at_checkpoint.is_some() {
-                PinSource::AtCheckpoint
-            } else {
-                PinSource::Cursor
-            },
-            Bound::Excluded(key),
-        ),
-        None => (
-            request.at_checkpoint,
-            request.at_checkpoint.is_some(),
-            PinSource::AtCheckpoint,
+    if let Some(pin) = pin {
+        return list_owned_objects_pinned(
+            service,
+            owner,
+            filter.as_ref(),
+            &read_mask,
+            should_load,
+            pin,
+            lower,
             Bound::Unbounded,
-        ),
+            false,
+            page_size,
+            None,
+        );
+    }
+
+    let OwnedObjectOwner::Address(addr) = owner else {
+        unreachable!("non-ADDRESS owner kinds are always pinned");
     };
-
-    let target = resolve_state_read(service, checkpoint, pin, pin_source, true)?;
-
-    let mut iter = target.indexes().owned_objects_iter(
+    let mut iter = current_indexes.owned_objects_iter(
         owner,
         filter.as_ref(),
         lower,
@@ -274,7 +200,6 @@ pub fn list_owned_objects(
     let mut objects = Vec::with_capacity(page_size);
     let render_context = RenderContext::empty(reader);
     let mut size_bytes = 0;
-    let mut last_key: Option<OwnedObjectKey> = None;
 
     while let Some(object_info) = iter
         .next()
@@ -285,13 +210,6 @@ pub fn list_owned_objects(
             let Some(object) =
                 reader.get_object_by_key(&object_info.object_id, object_info.version)
             else {
-                if let Some(pinned) = target.pinned() {
-                    return Err(pinned.missing_object_error(
-                        reader.as_ref(),
-                        object_info.object_id,
-                        object_info.version,
-                    ));
-                }
                 tracing::debug!(
                     "unable to find object {}:{} while iterating through owned objects",
                     object_info.object_id,
@@ -305,11 +223,6 @@ pub fn list_owned_objects(
             owned_object_to_proto(&object_info, &read_mask)
         };
 
-        last_key = Some(OwnedObjectKey {
-            object_type: object_info.object_type,
-            balance: object_info.balance,
-            object_id: object_info.object_id,
-        });
         size_bytes += object.encoded_len();
         objects.push(object);
 
@@ -323,30 +236,12 @@ pub fn list_owned_objects(
         .transpose()
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
 
-    if let Some(pinned) = target.pinned() {
-        pinned.check_object_floor(reader.as_ref())?;
-    }
-
     let next_page_token = next_row.map(|cursor| {
-        if let Some(pinned) = target.pinned() {
-            StateCursor {
-                checkpoint: pinned.checkpoint,
-                key: StateCursorKey::OwnedObjects {
-                    owner,
-                    key: last_key.expect("next row only peeked after non-empty page"),
-                },
-            }
-            .encode()
-        } else {
-            let OwnedObjectOwner::Address(addr) = owner else {
-                unreachable!("non-ADDRESS owner kinds are always pinned");
-            };
-            encode_legacy_page_token(LegacyPageToken {
-                owner: addr.into(),
-                object_type: legacy_struct_tag,
-                inner: cursor,
-            })
-        }
+        encode_legacy_page_token(LegacyPageToken {
+            owner: addr.into(),
+            object_type: legacy_struct_tag,
+            inner: cursor,
+        })
     });
 
     let mut message = ListOwnedObjectsResponse::default();
@@ -355,49 +250,136 @@ pub fn list_owned_objects(
     Ok(message)
 }
 
-fn parse_owner(owner_kind: Option<i32>, owner: Option<&str>) -> Result<OwnedObjectOwner> {
-    let kind = match owner_kind {
-        None => OwnerKind::Address,
-        Some(raw) => match OwnerKind::try_from(raw) {
-            Ok(OwnerKind::Address) => OwnerKind::Address,
-            Ok(OwnerKind::Object) => OwnerKind::Object,
-            Ok(OwnerKind::Shared) => OwnerKind::Shared,
-            Ok(OwnerKind::Immutable) => OwnerKind::Immutable,
-            Ok(_) | Err(_) => {
-                return Err(FieldViolation::new("owner_kind")
-                    .with_description(
-                        "owner_kind must be one of ADDRESS, OBJECT, SHARED, or IMMUTABLE",
-                    )
-                    .with_reason(ErrorReason::FieldInvalid)
-                    .into());
-            }
-        },
+#[allow(clippy::too_many_arguments)]
+fn list_owned_objects_pinned(
+    service: &RpcService,
+    owner: OwnedObjectOwner,
+    filter: Option<&OwnedObjectFilter>,
+    read_mask: &FieldMaskTree,
+    should_load: bool,
+    pin: PinSource,
+    lower: Bound<OwnedObjectKey>,
+    upper: Bound<OwnedObjectKey>,
+    descending: bool,
+    limit: usize,
+    exhausted_end_reason: Option<QueryEndReason>,
+) -> Result<ListOwnedObjectsResponse> {
+    let reader = service.reader.inner();
+    let pinned = resolve_pinned(reader.as_ref(), pin, true)?;
+    let mut iter = pinned
+        .indexes
+        .owned_objects_iter(owner, filter, lower, upper, descending)?;
+    let mut objects = Vec::with_capacity(limit);
+    let mut cursors = if exhausted_end_reason.is_some() {
+        Vec::with_capacity(limit)
+    } else {
+        Vec::new()
+    };
+    let render_context = RenderContext::empty(reader);
+    let mut size_bytes = 0;
+    let mut hit_limit = false;
+    let mut last_key: Option<OwnedObjectKey> = None;
+
+    while let Some(object_info) = iter
+        .next()
+        .transpose()
+        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+    {
+        let object = if should_load {
+            let Some(object) =
+                reader.get_object_by_key(&object_info.object_id, object_info.version)
+            else {
+                return Err(pinned.missing_object_error(
+                    reader.as_ref(),
+                    object_info.object_id,
+                    object_info.version,
+                ));
+            };
+            service.render_object_to_proto(&object, read_mask, &render_context)
+        } else {
+            owned_object_to_proto(&object_info, read_mask)
+        };
+
+        let key = OwnedObjectKey {
+            object_type: object_info.object_type,
+            balance: object_info.balance,
+            object_id: object_info.object_id,
+        };
+        if exhausted_end_reason.is_some() {
+            cursors.push(
+                StateCursor {
+                    checkpoint: pinned.checkpoint,
+                    key: StateCursorKey::OwnedObjects { owner, key },
+                }
+                .encode(),
+            );
+        } else {
+            last_key = Some(key);
+        }
+
+        size_bytes += object.encoded_len();
+        objects.push(object);
+
+        if objects.len() >= limit || size_bytes >= MAX_PAGE_SIZE_BYTES {
+            hit_limit = true;
+            break;
+        }
+    }
+
+    let has_more = if exhausted_end_reason.is_none() && hit_limit {
+        iter.next()
+            .transpose()
+            .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+            .is_some()
+    } else {
+        false
     };
 
-    match kind {
-        OwnerKind::Address => {
-            let addr: Address = owner
-                .ok_or_else(|| FieldViolation::new("owner").with_reason(ErrorReason::FieldMissing))?
-                .parse()
-                .map_err(|e| {
-                    FieldViolation::new("owner")
-                        .with_description(format!("invalid owner: {e}"))
-                        .with_reason(ErrorReason::FieldInvalid)
-                })?;
-            Ok(OwnedObjectOwner::Address(addr.into()))
-        }
-        OwnerKind::Object => {
-            let addr: Address = owner
-                .ok_or_else(|| FieldViolation::new("owner").with_reason(ErrorReason::FieldMissing))?
-                .parse()
-                .map_err(|e| {
-                    FieldViolation::new("owner")
-                        .with_description(format!("invalid owner: {e}"))
-                        .with_reason(ErrorReason::FieldInvalid)
-                })?;
-            Ok(OwnedObjectOwner::Object(addr.into()))
-        }
-        OwnerKind::Shared => {
+    // Re-check object pruning floor after reads to catch pruning that raced with object loads.
+    pinned.check_object_floor(reader.as_ref())?;
+
+    let mut message = ListOwnedObjectsResponse::default();
+    message.objects = objects;
+    if let Some(exhausted_reason) = exhausted_end_reason {
+        let end_reason = if hit_limit {
+            QueryEndReason::ItemLimit
+        } else {
+            exhausted_reason
+        };
+        message.cursors = cursors;
+        message.end = Some(QueryEnd::default().with_reason(end_reason));
+    } else if has_more {
+        message.next_page_token = Some(
+            StateCursor {
+                checkpoint: pinned.checkpoint,
+                key: StateCursorKey::OwnedObjects {
+                    owner,
+                    key: last_key.expect("next row only peeked after non-empty page"),
+                },
+            }
+            .encode(),
+        );
+    }
+    Ok(message)
+}
+
+fn parse_owner(owner_kind: Option<i32>, owner: Option<&str>) -> Result<OwnedObjectOwner> {
+    let parse_address = |owner: Option<&str>| -> Result<Address> {
+        owner
+            .ok_or_else(|| FieldViolation::new("owner").with_reason(ErrorReason::FieldMissing))?
+            .parse()
+            .map_err(|e| {
+                FieldViolation::new("owner")
+                    .with_description(format!("invalid owner: {e}"))
+                    .with_reason(ErrorReason::FieldInvalid)
+                    .into()
+            })
+    };
+
+    match owner_kind.map_or(Ok(OwnerKind::Address), OwnerKind::try_from) {
+        Ok(OwnerKind::Address) => Ok(OwnedObjectOwner::Address(parse_address(owner)?.into())),
+        Ok(OwnerKind::Object) => Ok(OwnedObjectOwner::Object(parse_address(owner)?.into())),
+        Ok(OwnerKind::Shared) => {
             if owner.is_some() {
                 return Err(FieldViolation::new("owner")
                     .with_description("owner must be unset when owner_kind is SHARED")
@@ -406,7 +388,7 @@ fn parse_owner(owner_kind: Option<i32>, owner: Option<&str>) -> Result<OwnedObje
             }
             Ok(OwnedObjectOwner::Shared)
         }
-        OwnerKind::Immutable => {
+        Ok(OwnerKind::Immutable) => {
             if owner.is_some() {
                 return Err(FieldViolation::new("owner")
                     .with_description("owner must be unset when owner_kind is IMMUTABLE")
@@ -415,7 +397,10 @@ fn parse_owner(owner_kind: Option<i32>, owner: Option<&str>) -> Result<OwnedObje
             }
             Ok(OwnedObjectOwner::Immutable)
         }
-        _ => unreachable!(),
+        _ => Err(FieldViolation::new("owner_kind")
+            .with_description("owner_kind must be one of ADDRESS, OBJECT, SHARED, or IMMUTABLE")
+            .with_reason(ErrorReason::FieldInvalid)
+            .into()),
     }
 }
 

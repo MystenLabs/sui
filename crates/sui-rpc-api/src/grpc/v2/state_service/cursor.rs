@@ -44,7 +44,6 @@ pub(super) enum StateCursorKey {
         key: OwnedObjectKey,
     },
     DynamicFields {
-        parent: ObjectID,
         key: DynamicFieldKey,
     },
     Objects {
@@ -95,13 +94,13 @@ impl StateCursor {
                     object_id: Some(key.object_id.to_vec()),
                 }
             }
-            StateCursorKey::DynamicFields { parent, key } => grpc::StatePosition {
+            StateCursorKey::DynamicFields { key } => grpc::StatePosition {
                 checkpoint: Some(self.checkpoint),
                 listing: grpc::StateListing::DynamicFields as i32,
                 owner_kind: grpc::StateOwnerKind::Unspecified as i32,
-                owner: Some(parent.to_vec()),
+                owner: Some(key.parent.to_vec()),
                 move_type: Some(bcs::to_bytes(&key.object_type).expect("StructTag BCS encodes")),
-                balance: None,
+                balance: key.balance,
                 object_id: Some(key.field_id.to_vec()),
             },
             StateCursorKey::Objects { key } => grpc::StatePosition {
@@ -149,9 +148,11 @@ impl StateCursor {
             .move_type
             .as_deref()
             .ok_or_else(|| invalid("cursor missing type"))?;
+        // Cap one level below `MAX_CONTAINER_DEPTH` so `ListBalances` can wrap the `StructTag` in
+        // `TypeTag::Struct` without overflowing BCS depth during index-key re-encoding.
         let move_type: StructTag =
-            bcs::from_bytes(move_type_bytes).map_err(|_| invalid("invalid cursor type"))?;
-
+            bcs::from_bytes_with_limit(move_type_bytes, bcs::MAX_CONTAINER_DEPTH - 1)
+                .map_err(|_| invalid("invalid cursor type"))?;
         let listing = grpc::StateListing::try_from(state.listing)
             .map_err(|_| invalid("invalid cursor listing"))?;
 
@@ -206,19 +207,17 @@ impl StateCursor {
                 }
             }
             grpc::StateListing::DynamicFields => {
-                if state.owner_kind != grpc::StateOwnerKind::Unspecified as i32
-                    || state.balance.is_some()
-                {
+                if state.owner_kind != grpc::StateOwnerKind::Unspecified as i32 {
                     return Err(invalid("invalid dynamic-field cursor"));
                 }
                 let parent = decode_object_id(state.owner.as_deref(), field)?;
                 let field_id = decode_object_id(state.object_id.as_deref(), field)?;
                 StateCursorKey::DynamicFields {
-                    parent,
                     key: DynamicFieldKey {
                         parent,
                         field_id,
                         object_type: move_type,
+                        balance: state.balance,
                     },
                 }
             }
@@ -281,10 +280,7 @@ pub(super) struct StateQueryOptions<K> {
     pub(super) descending: bool,
     pub(super) after: Option<K>,
     pub(super) before: Option<K>,
-    /// Explicit checkpoint from `at_checkpoint` or from a cursor, or `None` to select the newest
-    /// servable checkpoint.
-    pub(super) checkpoint: Option<u64>,
-    pub(super) pin_source: PinSource,
+    pub(super) pin: PinSource,
 }
 
 impl<K> StateQueryOptions<K> {
@@ -415,10 +411,10 @@ where
             .into());
     }
 
-    let (checkpoint, pin_source) = match (at_checkpoint, cursor_checkpoint) {
-        (Some(cp), _) => (Some(cp), PinSource::AtCheckpoint),
-        (None, Some(cp)) => (Some(cp), PinSource::Cursor),
-        (None, None) => (None, PinSource::Latest),
+    let pin = match (at_checkpoint, cursor_checkpoint) {
+        (Some(cp), _) => PinSource::AtCheckpoint(cp),
+        (None, Some(cp)) => PinSource::Cursor(cp),
+        (None, None) => PinSource::Latest,
     };
 
     Ok(StateQueryOptions {
@@ -426,36 +422,33 @@ where
         descending,
         after: after.map(|(_, k)| k),
         before: before.map(|(_, k)| k),
-        checkpoint,
-        pin_source,
+        pin,
     })
 }
 
-/// Decoded legacy `page_token`: either a bare-BCS unpinned token (current state, inclusive seek)
-/// or a checkpoint-pinned `CursorToken` (pinned snapshot, exclusive seek strictly after the
-/// previous page's last item).
-pub(super) enum DecodedPageToken<L, K> {
-    Legacy(L),
-    Pinned { checkpoint: u64, key: K },
-}
-
-/// Decode a `page_token`, applying the legacy BCS fallback rule:
+/// Decode an optional `page_token` together with `at_checkpoint`, returning `(pin, lower_bound)`.
 ///
-/// Treat `bytes` as a legacy bare-BCS token only if strict `bcs::from_bytes` (consuming every
+/// Treats `bytes` as a legacy bare-BCS token only if strict `bcs::from_bytes` (consuming every
 /// byte) succeeds AND `legacy_matches` accepts the decoded owner/parent. Anything else must
 /// decode as a `CursorToken` carrying a `StatePosition` with its checkpoint set and matching the
 /// listing's scope and `at_checkpoint`, or `INVALID_ARGUMENT`.
-pub(super) fn decode_page_token<L, K, LegacyMatches, ExtractKey>(
-    bytes: &[u8],
+pub(super) fn decode_page_token<L, K, LegacyMatches, LegacyKey, ExtractKey>(
+    bytes: Option<&[u8]>,
     at_checkpoint: Option<u64>,
     legacy_matches: LegacyMatches,
+    legacy_key: LegacyKey,
     extract_key: ExtractKey,
-) -> Result<DecodedPageToken<L, K>>
+) -> Result<(Option<PinSource>, Bound<K>)>
 where
     L: DeserializeOwned,
     LegacyMatches: FnOnce(&L) -> bool,
+    LegacyKey: FnOnce(L) -> K,
     ExtractKey: FnOnce(&str, StateCursorKey) -> Result<K>,
 {
+    let Some(bytes) = bytes else {
+        return Ok((at_checkpoint.map(PinSource::AtCheckpoint), Bound::Unbounded));
+    };
+
     if let Ok(legacy) = bcs::from_bytes::<L>(bytes)
         && legacy_matches(&legacy)
     {
@@ -465,26 +458,25 @@ where
                 .with_reason(ErrorReason::FieldInvalid)
                 .into());
         }
-        return Ok(DecodedPageToken::Legacy(legacy));
+        return Ok((None, Bound::Included(legacy_key(legacy))));
     }
 
     let cursor = StateCursor::decode("page_token", bytes)?;
     let key = extract_key("page_token", cursor.key)?;
-    if let Some(req_cp) = at_checkpoint
-        && req_cp != cursor.checkpoint
-    {
-        return Err(FieldViolation::new("page_token")
-            .with_description(format!(
-                "page_token checkpoint {} does not match at_checkpoint {req_cp}",
-                cursor.checkpoint
-            ))
-            .with_reason(ErrorReason::FieldInvalid)
-            .into());
-    }
-    Ok(DecodedPageToken::Pinned {
-        checkpoint: cursor.checkpoint,
-        key,
-    })
+    let pin = match at_checkpoint {
+        Some(req_cp) if req_cp != cursor.checkpoint => {
+            return Err(FieldViolation::new("page_token")
+                .with_description(format!(
+                    "page_token checkpoint {} does not match at_checkpoint {req_cp}",
+                    cursor.checkpoint
+                ))
+                .with_reason(ErrorReason::FieldInvalid)
+                .into());
+        }
+        Some(req_cp) => PinSource::AtCheckpoint(req_cp),
+        None => PinSource::Cursor(cursor.checkpoint),
+    };
+    Ok((Some(pin), Bound::Excluded(key)))
 }
 
 pub(super) fn wrong_cursor_scope(field: &str, message: &str) -> RpcError {
@@ -496,17 +488,13 @@ pub(super) fn wrong_cursor_scope(field: &str, message: &str) -> RpcError {
 
 #[cfg(test)]
 mod tests {
+    use move_core_types::language_storage::TypeTag;
+
     use super::*;
+    use crate::grpc::v2::state_service::test_support::struct_tag as tag;
+    use crate::grpc::v2::state_service::test_support::test_address as addr;
     use crate::ledger_history::cursor::CursorToken as LedgerCursorToken;
     use crate::ledger_history::cursor::Position as LedgerPosition;
-
-    fn tag(s: &str) -> StructTag {
-        sui_types::parse_sui_struct_tag(s).unwrap()
-    }
-
-    fn addr(byte: u8) -> SuiAddress {
-        SuiAddress::from(ObjectID::from_single_byte(byte))
-    }
 
     #[test]
     fn roundtrips_all_state_cursor_variants() {
@@ -565,11 +553,22 @@ mod tests {
             StateCursor {
                 checkpoint: 46,
                 key: StateCursorKey::DynamicFields {
-                    parent: ObjectID::from_single_byte(8),
                     key: DynamicFieldKey {
                         parent: ObjectID::from_single_byte(8),
                         field_id: ObjectID::from_single_byte(9),
                         object_type: tag("0x2::dynamic_field::Field<u64, u64>"),
+                        balance: None,
+                    },
+                },
+            },
+            StateCursor {
+                checkpoint: 46,
+                key: StateCursorKey::DynamicFields {
+                    key: DynamicFieldKey {
+                        parent: ObjectID::from_single_byte(8),
+                        field_id: ObjectID::from_single_byte(11),
+                        object_type: tag("0x2::coin::Coin<0x2::sui::SUI>"),
+                        balance: Some(500),
                     },
                 },
             },
@@ -634,6 +633,49 @@ mod tests {
                 .code(),
             tonic::Code::InvalidArgument
         );
+        // A depth-500 StructTag cannot be re-encoded inside TypeTag::Struct (depth 501) and must
+        // be rejected as InvalidArgument rather than failing later with Internal.
+        let make_nested_tag = |vector_layers: usize| {
+            let mut inner = TypeTag::Bool;
+            for _ in 0..vector_layers {
+                inner = TypeTag::Vector(Box::new(inner));
+            }
+            let mut base = tag("0x2::coin::Coin<0x2::sui::SUI>");
+            base.type_params = vec![inner];
+            base
+        };
+        let wrap_balance_cursor = |move_type: &StructTag| {
+            grpc::CursorToken {
+                kind: grpc::CursorKind::Item as i32,
+                public_position: None,
+                position: Some(grpc::cursor_token::Position::State(grpc::StatePosition {
+                    checkpoint: Some(1),
+                    listing: grpc::StateListing::Balances as i32,
+                    owner_kind: grpc::StateOwnerKind::Unspecified as i32,
+                    owner: Some(addr(1).to_vec()),
+                    move_type: Some(bcs::to_bytes(move_type).unwrap()),
+                    balance: None,
+                    object_id: None,
+                })),
+            }
+            .encode_to_vec()
+        };
+        // StructTag(1) + 498 Vector layers + Bool(1) = depth 500 -> rejected.
+        let depth_500 = wrap_balance_cursor(&make_nested_tag(498));
+        assert_eq!(
+            StateCursor::decode("options.after", &depth_500)
+                .unwrap_err()
+                .code(),
+            tonic::Code::InvalidArgument
+        );
+        // StructTag(1) + 497 Vector layers + Bool(1) = depth 499 -> accepted and re-encodes inside
+        // TypeTag::Struct (depth 500).
+        let depth_499 = wrap_balance_cursor(&make_nested_tag(497));
+        let decoded = StateCursor::decode("options.after", &depth_499).unwrap();
+        let StateCursorKey::Balances { coin_type, .. } = decoded.key else {
+            panic!("expected Balances cursor");
+        };
+        assert!(bcs::to_bytes(&TypeTag::Struct(Box::new(coin_type))).is_ok());
     }
 
     #[test]
@@ -652,24 +694,27 @@ mod tests {
         };
         let bytes = bcs::to_bytes(&legacy).unwrap();
 
-        // Matching owner, unpinned -> Legacy.
-        let decoded = decode_page_token::<LegacyBalance, StructTag, _, _>(
-            &bytes,
+        // Matching owner, unpinned -> (None, Included(coin_type)).
+        let (pin, lower) = decode_page_token::<LegacyBalance, StructTag, _, _, _>(
+            Some(&bytes),
             None,
             |t| t.owner == owner,
+            |t| t.coin_type,
             |f, _| Err(wrong_cursor_scope(f, "wrong")),
         )
         .unwrap();
-        assert!(matches!(decoded, DecodedPageToken::Legacy(l) if l == legacy));
+        assert_eq!(pin, None);
+        assert_eq!(lower, Bound::Included(legacy.coin_type.clone()));
 
         // Trailing garbage byte fails strict BCS and falls through to CursorToken -> InvalidArgument.
         let mut with_trailing = bytes.clone();
         with_trailing.push(0);
         assert_eq!(
-            decode_page_token::<LegacyBalance, StructTag, _, _>(
-                &with_trailing,
+            decode_page_token::<LegacyBalance, StructTag, _, _, _>(
+                Some(&with_trailing),
                 None,
                 |t| t.owner == owner,
+                |t| t.coin_type,
                 |f, _| Err(wrong_cursor_scope(f, "wrong")),
             )
             .err()
@@ -680,10 +725,11 @@ mod tests {
 
         // Different owner fails legacy match and falls through -> InvalidArgument.
         assert_eq!(
-            decode_page_token::<LegacyBalance, StructTag, _, _>(
-                &bytes,
+            decode_page_token::<LegacyBalance, StructTag, _, _, _>(
+                Some(&bytes),
                 None,
                 |t| t.owner == other,
+                |t| t.coin_type,
                 |f, _| Err(wrong_cursor_scope(f, "wrong")),
             )
             .err()
@@ -694,10 +740,11 @@ mod tests {
 
         // Legacy token combined with at_checkpoint -> InvalidArgument.
         assert_eq!(
-            decode_page_token::<LegacyBalance, StructTag, _, _>(
-                &bytes,
+            decode_page_token::<LegacyBalance, StructTag, _, _, _>(
+                Some(&bytes),
                 Some(10),
                 |t| t.owner == owner,
+                |t| t.coin_type,
                 |f, _| Err(wrong_cursor_scope(f, "wrong")),
             )
             .err()
@@ -706,7 +753,7 @@ mod tests {
             tonic::Code::InvalidArgument
         );
 
-        // Pinned CursorToken decodes as Pinned and validates checkpoint match.
+        // Pinned CursorToken decodes as pinned and validates checkpoint match.
         let pinned_bytes = StateCursor {
             checkpoint: 10,
             key: StateCursorKey::Balances {
@@ -722,24 +769,35 @@ mod tests {
             } if cur_owner == owner => Ok(coin_type),
             _ => Err(wrong_cursor_scope(field, "wrong scope")),
         };
-        let decoded = decode_page_token::<LegacyBalance, StructTag, _, _>(
-            &pinned_bytes,
+        let (pin, lower) = decode_page_token::<LegacyBalance, StructTag, _, _, _>(
+            Some(&pinned_bytes),
             Some(10),
             |t| t.owner == owner,
+            |t| t.coin_type,
             extract,
         )
         .unwrap();
-        assert!(matches!(
-            decoded,
-            DecodedPageToken::Pinned { checkpoint: 10, .. }
-        ));
+        assert_eq!(pin, Some(PinSource::AtCheckpoint(10)));
+        assert_eq!(lower, Bound::Excluded(tag("0x2::sui::SUI")));
+
+        // Without at_checkpoint, pinned CursorToken pins with PinSource::Cursor.
+        let (pin, _) = decode_page_token::<LegacyBalance, StructTag, _, _, _>(
+            Some(&pinned_bytes),
+            None,
+            |t| t.owner == owner,
+            |t| t.coin_type,
+            extract,
+        )
+        .unwrap();
+        assert_eq!(pin, Some(PinSource::Cursor(10)));
 
         // Mismatched at_checkpoint -> InvalidArgument.
         assert_eq!(
-            decode_page_token::<LegacyBalance, StructTag, _, _>(
-                &pinned_bytes,
+            decode_page_token::<LegacyBalance, StructTag, _, _, _>(
+                Some(&pinned_bytes),
                 Some(11),
                 |t| t.owner == owner,
+                |t| t.coin_type,
                 extract,
             )
             .err()
@@ -788,8 +846,7 @@ mod tests {
         opts.ordering = Some(ORDERING_DESCENDING);
         opts.limit = Some(5000);
         let parsed = parse_query_options(Some(&opts), None, 50, 1000, extract).unwrap();
-        assert_eq!(parsed.checkpoint, Some(10));
-        assert_eq!(parsed.pin_source, PinSource::Cursor);
+        assert_eq!(parsed.pin, PinSource::Cursor(10));
         assert_eq!(parsed.limit, 1000);
         assert!(parsed.descending);
         assert_eq!(parsed.exhausted_end_reason(), QueryEndReason::CursorBound);

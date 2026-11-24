@@ -69,13 +69,9 @@ impl StateService for RpcService {
         &self,
         request: tonic::Request<ListObjectsRequest>,
     ) -> Result<tonic::Response<BoxStream<ListObjectsResponse>>, tonic::Status> {
-        let timeout = self
-            .config
-            .grpc_timeout()
-            .unwrap_or(DEFAULT_LIST_OBJECTS_TIMEOUT);
         serve_list_stream(
             "list_objects",
-            timeout,
+            DEFAULT_LIST_OBJECTS_TIMEOUT,
             list_objects::list_objects(self.clone(), request.into_inner()),
         )
         .await
