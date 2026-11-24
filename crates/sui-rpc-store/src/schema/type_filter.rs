@@ -39,6 +39,7 @@ use move_core_types::language_storage::StructTag;
 use sui_consistent_store::Encode;
 use sui_consistent_store::error::EncodeError;
 use sui_types::base_types::SuiAddress;
+use sui_types::storage::StructTypePattern;
 
 use crate::schema::primitives::write_uleb128;
 
@@ -60,6 +61,19 @@ pub enum TypeFilter {
     /// instantiation (e.g. `Coin<SUI>`, `Coin<USDC>`); otherwise
     /// it pins the full instantiation.
     Type(StructTag),
+}
+
+impl From<&StructTypePattern> for TypeFilter {
+    fn from(pattern: &StructTypePattern) -> Self {
+        match pattern {
+            StructTypePattern::Package(package) => TypeFilter::Package((*package).into()),
+            StructTypePattern::Module { package, module } => TypeFilter::Module {
+                package: (*package).into(),
+                module: module.clone(),
+            },
+            StructTypePattern::Type(tag) => TypeFilter::Type(tag.clone()),
+        }
+    }
 }
 
 impl Encode for TypeFilter {

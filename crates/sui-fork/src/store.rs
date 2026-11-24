@@ -47,6 +47,7 @@ use sui_types::storage::BackingStore;
 use sui_types::storage::BalanceInfo;
 use sui_types::storage::BalanceIterator;
 use sui_types::storage::CoinInfo;
+use sui_types::storage::DynamicFieldFilter;
 use sui_types::storage::DynamicFieldIteratorItem;
 use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::EpochInfo;
@@ -56,6 +57,7 @@ use sui_types::storage::LedgerTxSeqDigestIterator;
 use sui_types::storage::ObjectKey;
 use sui_types::storage::ObjectOrTombstone;
 use sui_types::storage::ObjectStore;
+use sui_types::storage::OwnedObjectFilter;
 use sui_types::storage::OwnedObjectInfo;
 use sui_types::storage::PackageObject;
 use sui_types::storage::ParentSync;
@@ -675,12 +677,9 @@ impl ForkStore {
     pub(crate) fn get_owned_object_infos(
         &self,
         owner: SuiAddress,
-        object_type: Option<StructTag>,
-        cursor: Option<OwnedObjectInfo>,
     ) -> StorageResult<Vec<OwnedObjectInfo>> {
         let local_store = self.local_store();
-        let iter =
-            RpcIndexes::owned_objects_iter(local_store.reader(), owner, object_type, cursor)?;
+        let iter = RpcIndexes::owned_objects_iter(local_store.reader(), owner, None, None)?;
         iter.collect::<Result<Vec<_>, _>>()
             .map_err(|e| StorageError::custom(e.to_string()))
     }
@@ -956,7 +955,7 @@ impl SimulatorStore for ForkStore {
     }
 
     fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = Object> + '_> {
-        let objects = match self.get_owned_object_infos(owner, None, None).map(|infos| {
+        let objects = match self.get_owned_object_infos(owner).map(|infos| {
             infos
                 .into_iter()
                 .filter_map(|info| {
@@ -1299,20 +1298,22 @@ impl RpcIndexes for ForkStore {
     fn owned_objects_iter(
         &self,
         owner: SuiAddress,
-        object_type: Option<StructTag>,
+        filter: Option<&OwnedObjectFilter>,
         cursor: Option<OwnedObjectInfo>,
     ) -> StorageResult<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>>
     {
         self.stock_reader()
-            .owned_objects_iter(owner, object_type, cursor)
+            .owned_objects_iter(owner, filter, cursor)
     }
 
     fn dynamic_field_iter(
         &self,
         parent: ObjectID,
+        filter: Option<&DynamicFieldFilter>,
         cursor: Option<DynamicFieldKey>,
     ) -> StorageResult<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>> {
-        self.stock_reader().dynamic_field_iter(parent, cursor)
+        self.stock_reader()
+            .dynamic_field_iter(parent, filter, cursor)
     }
 
     fn get_coin_info(&self, coin_type: &StructTag) -> StorageResult<Option<CoinInfo>> {

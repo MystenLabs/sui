@@ -3,4 +3,5 @@
 
 mod balance;
 mod get_coin_info;
+mod list_dynamic_fields;
 mod list_owned_objects;

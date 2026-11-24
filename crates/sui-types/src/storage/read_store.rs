@@ -20,7 +20,9 @@ use crate::messages_checkpoint::{
     VersionedFullCheckpointContents,
 };
 use crate::object::Object;
-use crate::storage::{BackingPackageStore, ObjectKey, ObjectOrTombstone};
+use crate::storage::{
+    BackingPackageStore, DynamicFieldFilter, ObjectKey, ObjectOrTombstone, OwnedObjectFilter,
+};
 use crate::transaction::{TransactionData, VerifiedTransaction};
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
@@ -920,22 +922,28 @@ pub struct LedgerBitmapBucket {
 pub trait RpcIndexes: Send + Sync {
     fn get_epoch_info(&self, epoch: EpochId) -> Result<Option<EpochInfo>>;
 
+    /// Iterate the live objects `owner` owns that `filter` matches (every
+    /// object when `filter` is `None`), in the order of the owned-object index:
+    /// by type, then by descending balance for coins, then by object id.
+    /// `cursor` resumes the scan at that entry, inclusive.
     fn owned_objects_iter(
         &self,
         owner: SuiAddress,
-        object_type: Option<StructTag>,
+        filter: Option<&OwnedObjectFilter>,
         cursor: Option<OwnedObjectInfo>,
     ) -> Result<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>>;
 
-    /// Iterate the dynamic fields owned by `parent`. Dynamic-field objects live
-    /// in the same owned-object index as address-owned objects (under the
-    /// object-owner key, sorted by `(type, object id)`), so the [`DynamicFieldKey`]
-    /// cursor carries the field's type alongside its id -- the full sort
-    /// position -- letting the scan seek straight to it, as in
+    /// Iterate the dynamic fields owned by `parent` that `filter` matches
+    /// (every field when `filter` is `None`). Dynamic-field objects live in
+    /// the same owned-object index as address-owned objects (under the
+    /// object-owner key, sorted by `(type, object id)`), so the
+    /// [`DynamicFieldKey`] cursor carries the field's type alongside its id --
+    /// the full sort position -- letting the scan seek straight to it, as in
     /// [`owned_objects_iter`](Self::owned_objects_iter).
     fn dynamic_field_iter(
         &self,
         parent: ObjectID,
+        filter: Option<&DynamicFieldFilter>,
         cursor: Option<DynamicFieldKey>,
     ) -> Result<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>>;
 

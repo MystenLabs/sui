@@ -41,6 +41,7 @@ use sui_types::object::MoveObject;
 use sui_types::object::ObjectInner;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::storage::OwnedObjectFilter;
 use sui_types::storage::RpcIndexes;
 use sui_types::transaction::GasData;
 use sui_types::transaction::Transaction;
@@ -111,6 +112,11 @@ fn find_gas_coin(config: &NetworkConfig, owner: SuiAddress) -> Object {
         .find(|obj| obj.owner == Owner::AddressOwner(owner) && obj.is_gas_coin())
         .expect("owner should have a gas coin in genesis")
         .clone()
+}
+
+/// Matches `Coin<SUI>` objects.
+fn gas_coins() -> OwnedObjectFilter {
+    OwnedObjectFilter::object_type(GasCoin::type_())
 }
 
 fn data_store() -> (tempfile::TempDir, ForkStore) {
@@ -407,7 +413,7 @@ async fn test_index_reads_are_seed_bounded_and_never_scan_the_remote() {
     // A seeded owner has the full derived surface: owner index, balance, and
     // balance iteration.
     let infos: Vec<_> =
-        RpcIndexes::owned_objects_iter(&reader, seeded_owner, Some(GasCoin::type_()), None)
+        RpcIndexes::owned_objects_iter(&reader, seeded_owner, Some(&gas_coins()), None)
             .expect("owned-object iterator should read the seeded index")
             .map(|result| result.expect("owned-object entry should decode"))
             .collect();
@@ -435,7 +441,7 @@ async fn test_index_reads_are_seed_bounded_and_never_scan_the_remote() {
     // reaching for the remote.
     let unseeded = SuiAddress::random_for_testing_only();
     assert_eq!(
-        RpcIndexes::owned_objects_iter(&reader, unseeded, Some(GasCoin::type_()), None)
+        RpcIndexes::owned_objects_iter(&reader, unseeded, Some(&gas_coins()), None)
             .expect("unseeded owner read should not error")
             .count(),
         0,
@@ -446,7 +452,7 @@ async fn test_index_reads_are_seed_bounded_and_never_scan_the_remote() {
             .is_none(),
     );
     assert_eq!(
-        RpcIndexes::dynamic_field_iter(&reader, ObjectID::random(), None)
+        RpcIndexes::dynamic_field_iter(&reader, ObjectID::random(), None, None)
             .expect("unseeded parent read should not error")
             .count(),
         0,
@@ -489,7 +495,7 @@ async fn test_seed_load_survives_restart_without_remote() {
 
         let reader = store.local_store().reader().clone();
         let infos: Vec<_> =
-            RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
+            RpcIndexes::owned_objects_iter(&reader, owner, Some(&gas_coins()), None)
                 .expect("owned-object iterator should read the seeded index")
                 .map(|result| result.expect("owned-object entry should decode"))
                 .collect();
@@ -510,11 +516,10 @@ async fn test_seed_load_survives_restart_without_remote() {
     load_seed_objects(&store, &manifest).expect("a resumed seed load must not touch the remote");
 
     let reader = store.local_store().reader().clone();
-    let infos: Vec<_> =
-        RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
-            .expect("owned-object iterator should read the reopened seed index")
-            .map(|result| result.expect("owned-object entry should decode"))
-            .collect();
+    let infos: Vec<_> = RpcIndexes::owned_objects_iter(&reader, owner, Some(&gas_coins()), None)
+        .expect("owned-object iterator should read the reopened seed index")
+        .map(|result| result.expect("owned-object entry should decode"))
+        .collect();
     assert_eq!(infos.len(), 1);
     assert_eq!(infos[0].object_id, object_id);
     assert_eq!(
@@ -539,7 +544,7 @@ fn test_rpc_dynamic_field_iter_reads_seeded_object_owner_index() {
     store.local_store().restore_seed_objects(&[child]).unwrap();
 
     let reader = store.local_store().reader().clone();
-    let fields: Vec<_> = RpcIndexes::dynamic_field_iter(&reader, parent, None)
+    let fields: Vec<_> = RpcIndexes::dynamic_field_iter(&reader, parent, None, None)
         .expect("dynamic-field iterator should read the seeded object-owner index")
         .map(|result| result.expect("dynamic-field row should decode"))
         .collect();
@@ -3050,11 +3055,10 @@ fn test_owned_objects_tracks_consensus_address_owner_writes() {
     store.local_store().restore_seed_objects(&[object]).unwrap();
 
     let reader = store.local_store().reader().clone();
-    let infos: Vec<_> =
-        RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
-            .expect("owned-object iterator should build")
-            .map(|result| result.expect("owned-object entry should decode"))
-            .collect();
+    let infos: Vec<_> = RpcIndexes::owned_objects_iter(&reader, owner, Some(&gas_coins()), None)
+        .expect("owned-object iterator should build")
+        .map(|result| result.expect("owned-object entry should decode"))
+        .collect();
     assert_eq!(infos.len(), 1);
     assert_eq!(infos[0].owner, owner);
     assert_eq!(infos[0].object_id, object_id);
@@ -3689,19 +3693,19 @@ fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
         .unwrap();
 
     let reader = store.local_store().reader().clone();
-    let infos: Vec<_> =
-        RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
-            .expect("owned-object iterator should build")
-            .map(|result| result.expect("owned-object entry should decode"))
-            .collect();
+    let infos: Vec<_> = RpcIndexes::owned_objects_iter(&reader, owner, Some(&gas_coins()), None)
+        .expect("owned-object iterator should build")
+        .map(|result| result.expect("owned-object entry should decode"))
+        .collect();
     assert_eq!(infos.len(), 2);
     assert!(infos[0].object_id < infos[1].object_id);
     assert!(infos.iter().all(|info| info.owner == owner));
     assert!(infos.iter().all(|info| info.balance == Some(1_000_000)));
 
-    let wrong_type = "0x2::clock::Clock".parse::<StructTag>().unwrap();
+    let wrong_type =
+        OwnedObjectFilter::object_type("0x2::clock::Clock".parse::<StructTag>().unwrap());
     assert_eq!(
-        RpcIndexes::owned_objects_iter(&reader, owner, Some(wrong_type), None)
+        RpcIndexes::owned_objects_iter(&reader, owner, Some(&wrong_type), None)
             .expect("owned-object iterator should build")
             .count(),
         0,
@@ -3710,15 +3714,11 @@ fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
     // The rpc-store cursor is inclusive: it carries the full sort position of
     // the first *unread* object, and the resumed scan seeks straight to it. So
     // resuming from `infos[1]` yields exactly that trailing object.
-    let page_from_cursor: Vec<_> = RpcIndexes::owned_objects_iter(
-        &reader,
-        owner,
-        Some(GasCoin::type_()),
-        Some(infos[1].clone()),
-    )
-    .expect("owned-object iterator should build")
-    .map(|result| result.expect("owned-object entry should decode"))
-    .collect();
+    let page_from_cursor: Vec<_> =
+        RpcIndexes::owned_objects_iter(&reader, owner, Some(&gas_coins()), Some(infos[1].clone()))
+            .expect("owned-object iterator should build")
+            .map(|result| result.expect("owned-object entry should decode"))
+            .collect();
     assert_eq!(page_from_cursor.len(), 1);
     assert_eq!(page_from_cursor[0].object_id, infos[1].object_id);
 }
@@ -3742,11 +3742,10 @@ fn test_cloned_store_shares_owned_object_snapshot_guard() {
     drop(local_snapshot_guard);
 
     let reader = cloned_store.local_store().reader().clone();
-    let infos: Vec<_> =
-        RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
-            .expect("owned-object iterator should build")
-            .map(|result| result.expect("owned-object entry should decode"))
-            .collect();
+    let infos: Vec<_> = RpcIndexes::owned_objects_iter(&reader, owner, Some(&gas_coins()), None)
+        .expect("owned-object iterator should build")
+        .map(|result| result.expect("owned-object entry should decode"))
+        .collect();
     assert_eq!(infos.len(), 1);
     assert_eq!(infos[0].object_id, object_id);
 }

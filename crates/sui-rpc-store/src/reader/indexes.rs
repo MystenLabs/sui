@@ -22,6 +22,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::storage::BalanceInfo;
 use sui_types::storage::BalanceIterator;
 use sui_types::storage::CoinInfo;
+use sui_types::storage::DynamicFieldFilter;
 use sui_types::storage::DynamicFieldIteratorItem;
 use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::EpochInfo;
@@ -32,6 +33,7 @@ use sui_types::storage::LedgerBitmapBucketIterator;
 use sui_types::storage::LedgerTxSeqDigest;
 use sui_types::storage::LedgerTxSeqDigestIterator;
 use sui_types::storage::ObjectVersionsIterator;
+use sui_types::storage::OwnedObjectFilter;
 use sui_types::storage::OwnedObjectInfo;
 use sui_types::storage::PackagePublishKey;
 use sui_types::storage::PackageVersionsIterator;
@@ -41,6 +43,9 @@ use sui_types::storage::error::Result as StorageResult;
 use typed_store_error::TypedStoreError;
 
 use crate::reader::RpcStoreReader;
+use crate::reader::key_ranges::FilteredScan;
+use crate::reader::key_ranges::dynamic_field_ranges;
+use crate::reader::key_ranges::owned_object_ranges;
 use crate::schema::type_filter::TypeFilter;
 
 enum BoundedBitmapIter<'d, K, V> {
@@ -159,33 +164,28 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
     fn owned_objects_iter(
         &self,
         owner: SuiAddress,
-        object_type: Option<StructTag>,
+        filter: Option<&OwnedObjectFilter>,
         cursor: Option<OwnedObjectInfo>,
     ) -> StorageResult<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>>
     {
         use crate::schema::object_by_owner::{Key, OwnerKind};
         let map = &self.schema().object_by_owner;
         let kind = OwnerKind::AddressOwner(owner);
+        let ranges =
+            owned_object_ranges(kind, filter).map_err(sui_types::storage::error::Error::custom)?;
         // When resuming, the page token carries the cursor object's full sort
         // position -- type, balance, and id -- so the scan seeks straight to it
-        // (inclusive) and stops at the end of the prefix. No post-filtering.
+        // (inclusive).
         let from = cursor.map(|c| Key {
             kind,
             type_: c.object_type,
             inverted_balance: c.balance.map(|b| !b),
             object_id: c.object_id,
         });
-        let iter = match (object_type, &from) {
-            (Some(struct_tag), Some(from)) => {
-                map.iter_prefix_from(&(kind, TypeFilter::Type(struct_tag)), from)
-            }
-            (Some(struct_tag), None) => map.iter_prefix(&(kind, TypeFilter::Type(struct_tag))),
-            (None, Some(from)) => map.iter_prefix_from(&kind, from),
-            (None, None) => map.iter_prefix(&kind),
-        }
-        .map_err(sui_types::storage::error::Error::custom)?;
+        let rows = FilteredScan::open(map, ranges, from.as_ref())
+            .map_err(sui_types::storage::error::Error::custom)?;
 
-        let mapped = iter.map(move |row| {
+        let mapped = rows.map(move |row| {
             let (key, value) = row.map_err(to_typed_store_err)?;
             Ok(OwnedObjectInfo {
                 owner,
@@ -202,6 +202,7 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
     fn dynamic_field_iter(
         &self,
         parent: ObjectID,
+        filter: Option<&DynamicFieldFilter>,
         cursor: Option<DynamicFieldKey>,
     ) -> StorageResult<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>> {
         use crate::schema::object_by_owner::{Key, OwnerKind};
@@ -213,19 +214,18 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         // always absent.
         let map = &self.schema().object_by_owner;
         let kind = OwnerKind::ObjectOwner(parent.into());
+        let ranges =
+            dynamic_field_ranges(kind, filter).map_err(sui_types::storage::error::Error::custom)?;
         let from = cursor.map(|c| Key {
             kind,
             type_: c.object_type,
             inverted_balance: None,
             object_id: c.field_id,
         });
-        let iter = match &from {
-            Some(from) => map.iter_prefix_from(&kind, from),
-            None => map.iter_prefix(&kind),
-        }
-        .map_err(sui_types::storage::error::Error::custom)?;
+        let rows = FilteredScan::open(map, ranges, from.as_ref())
+            .map_err(sui_types::storage::error::Error::custom)?;
 
-        let mapped = iter.map(move |row| {
+        let mapped = rows.map(move |row| {
             let (key, _value) = row.map_err(to_typed_store_err)?;
             Ok(DynamicFieldKey {
                 parent,
@@ -1217,7 +1217,9 @@ mod tests {
         let mut seen = Vec::new();
         let mut cursor = None;
         for _ in 0..fields.len() + 2 {
-            let mut iter = reader.dynamic_field_iter(parent, cursor.take()).unwrap();
+            let mut iter = reader
+                .dynamic_field_iter(parent, None, cursor.take())
+                .unwrap();
             for _ in 0..2 {
                 match iter.next() {
                     Some(res) => seen.push(res.unwrap().field_id),
@@ -1235,6 +1237,226 @@ mod tests {
         unique.sort();
         unique.dedup();
         assert_eq!(unique, fields, "every field, no gaps or duplicates");
+    }
+
+    /// Pages through `owner`'s objects that `filter` matches, `page_size` at a
+    /// time, resuming from the peeked next row as the handlers do.
+    fn page_owned_objects(
+        reader: &RpcStoreReader,
+        owner: sui_types::base_types::SuiAddress,
+        filter: &sui_types::storage::OwnedObjectFilter,
+        page_size: usize,
+    ) -> Vec<ObjectID> {
+        let mut seen = Vec::new();
+        let mut cursor = None;
+        for _ in 0..100 {
+            let mut iter = reader
+                .owned_objects_iter(owner, Some(filter), cursor.take())
+                .unwrap();
+            seen.extend(
+                iter.by_ref()
+                    .take(page_size)
+                    .map(|res| res.unwrap().object_id),
+            );
+            cursor = iter.next().transpose().unwrap();
+            if cursor.is_none() {
+                return seen;
+            }
+        }
+        panic!("pagination did not terminate");
+    }
+
+    #[test]
+    fn owned_objects_iter_excludes_negated_types_across_pages() {
+        use crate::schema::object_by_owner::{Key, OwnerKind};
+        use crate::schema::primitives::U64Varint;
+        use sui_types::base_types::SuiAddress;
+        use sui_types::storage::{FilterLiteral, OwnedObjectFilter};
+
+        let (_dir, db, reader) = setup();
+        let owner = SuiAddress::from(ObjectID::from_single_byte(0x10));
+        let neighbour = SuiAddress::from(ObjectID::from_single_byte(0x11));
+        let tag = |s: &str| sui_types::parse_sui_struct_tag(s).unwrap();
+
+        let mut batch = db.batch();
+        let mut put = |owner, type_: &str, balance: Option<u64>, id: u8| {
+            batch
+                .put(
+                    &reader.schema().object_by_owner,
+                    &Key {
+                        kind: OwnerKind::AddressOwner(owner),
+                        type_: tag(type_),
+                        inverted_balance: balance.map(|b| !b),
+                        object_id: ObjectID::from_single_byte(id),
+                    },
+                    &U64Varint(1),
+                )
+                .unwrap();
+        };
+        // Kept objects sort before and after the coins.
+        put(owner, "0x1::a::A", None, 1);
+        for id in 10..60 {
+            put(owner, "0x2::coin::Coin<0x2::sui::SUI>", Some(id as u64), id);
+        }
+        put(owner, "0x2::coin::CoinMetadata<0x2::sui::SUI>", None, 2);
+        for id in 60..70 {
+            put(
+                owner,
+                "0x2::coin::Coin<0xa::usdc::USDC>",
+                Some(id as u64),
+                id,
+            );
+        }
+        put(owner, "0xff::z::Z", None, 3);
+        put(neighbour, "0x1::a::A", None, 4);
+        batch.commit().unwrap();
+
+        let not_coin = OwnedObjectFilter {
+            terms: vec![vec![FilterLiteral {
+                negated: true,
+                predicate: "0x2::coin::Coin".parse().unwrap(),
+            }]],
+        };
+        let expected: Vec<ObjectID> = [1, 2, 3].map(ObjectID::from_single_byte).to_vec();
+        assert_eq!(page_owned_objects(&reader, owner, &not_coin, 1), expected);
+        assert_eq!(page_owned_objects(&reader, owner, &not_coin, 2), expected);
+
+        let usdc = OwnedObjectFilter::object_type(tag("0x2::coin::Coin<0xa::usdc::USDC>"));
+        // Richest coin first.
+        let expected: Vec<ObjectID> = (60..70).rev().map(ObjectID::from_single_byte).collect();
+        assert_eq!(page_owned_objects(&reader, owner, &usdc, 3), expected);
+
+        let literal = |negated, s: &str| FilterLiteral {
+            negated,
+            predicate: s.parse().unwrap(),
+        };
+        let either_end = OwnedObjectFilter {
+            terms: vec![
+                vec![literal(false, "0xff::z::Z")],
+                vec![literal(false, "0x1::a")],
+            ],
+        };
+        let expected: Vec<ObjectID> = [1, 3].map(ObjectID::from_single_byte).to_vec();
+        assert_eq!(page_owned_objects(&reader, owner, &either_end, 1), expected);
+        let contradiction = OwnedObjectFilter {
+            terms: vec![vec![
+                literal(false, "0x2::coin::Coin"),
+                literal(true, "0x2::coin::Coin"),
+            ]],
+        };
+        assert_eq!(
+            page_owned_objects(&reader, owner, &contradiction, 1),
+            vec![]
+        );
+
+        // A cursor past the filter's last range, e.g. a token from an
+        // unfiltered listing resumed under a narrower filter, yields nothing.
+        let last_object = reader
+            .owned_objects_iter(owner, None, None)
+            .unwrap()
+            .last()
+            .unwrap()
+            .unwrap();
+        assert_eq!(last_object.object_id, ObjectID::from_single_byte(3));
+        let only_a = OwnedObjectFilter::object_type(tag("0x1::a::A"));
+        assert_eq!(
+            reader
+                .owned_objects_iter(owner, Some(&only_a), Some(last_object))
+                .unwrap()
+                .count(),
+            0
+        );
+    }
+
+    #[test]
+    fn dynamic_field_iter_matches_unwrapped_name_types_across_pages() {
+        use crate::schema::object_by_owner::{Key, OwnerKind};
+        use crate::schema::primitives::U64Varint;
+        use move_core_types::language_storage::TypeTag;
+        use sui_types::dynamic_field::DynamicFieldInfo;
+        use sui_types::storage::{DynamicFieldFilter, DynamicFieldPredicate, FilterLiteral};
+
+        let (_dir, db, reader) = setup();
+        let parent = ObjectID::from_single_byte(0xAA);
+        let type_tag = |s: &str| sui_types::parse_sui_type_tag(s).unwrap();
+        let dynamic_field =
+            |name: &str| DynamicFieldInfo::dynamic_field_type(type_tag(name), TypeTag::U64);
+        let dynamic_object_field = |name: &str| {
+            DynamicFieldInfo::dynamic_field_type(
+                TypeTag::Struct(Box::new(DynamicFieldInfo::dynamic_object_field_wrapper(
+                    type_tag(name),
+                ))),
+                type_tag("0x2::object::ID"),
+            )
+        };
+
+        let fields = [
+            (dynamic_object_field("0xabc::m::Key"), 1),
+            (dynamic_object_field("0xabc::m::Key"), 2),
+            (dynamic_object_field("0x2::kiosk::Item"), 3),
+            (dynamic_object_field("0x2::kiosk::Item"), 4),
+            (dynamic_field("0x2::kiosk::Listing"), 5),
+            (dynamic_field("u64"), 6),
+            // The value object of a dynamic object field, owned by its `Field`.
+            (
+                sui_types::parse_sui_struct_tag("0x2::coin::Coin<0x2::sui::SUI>").unwrap(),
+                7,
+            ),
+        ];
+        let mut batch = db.batch();
+        for (type_, id) in &fields {
+            batch
+                .put(
+                    &reader.schema().object_by_owner,
+                    &Key {
+                        kind: OwnerKind::ObjectOwner(parent.into()),
+                        type_: type_.clone(),
+                        inverted_balance: None,
+                        object_id: ObjectID::from_single_byte(*id),
+                    },
+                    &U64Varint(1),
+                )
+                .unwrap();
+        }
+        batch.commit().unwrap();
+
+        let page = |filter: &DynamicFieldFilter| {
+            let mut seen = Vec::new();
+            let mut cursor = None;
+            for _ in 0..100 {
+                let mut iter = reader
+                    .dynamic_field_iter(parent, Some(filter), cursor.take())
+                    .unwrap();
+                seen.extend(iter.next().map(|res| res.unwrap().field_id));
+                cursor = iter.next().transpose().unwrap();
+                if cursor.is_none() {
+                    let mut ids: Vec<u8> =
+                        seen.iter().map(|id: &ObjectID| id.as_ref()[31]).collect();
+                    ids.sort();
+                    return ids;
+                }
+            }
+            panic!("pagination did not terminate");
+        };
+        let name = |s: &str| DynamicFieldFilter {
+            terms: vec![vec![FilterLiteral {
+                negated: false,
+                predicate: DynamicFieldPredicate::NameType(s.parse().unwrap()),
+            }]],
+        };
+
+        // Every dynamic object field's `Wrapper` is at `0x2`; the filter
+        // matches the wrapped name type, so the `0xabc` names stay out.
+        assert_eq!(page(&name("0x2")), vec![3, 4, 5]);
+        assert_eq!(page(&name("0x2::kiosk::Item")), vec![3, 4]);
+        assert_eq!(page(&name("u64")), vec![6]);
+        let inline_values = DynamicFieldFilter {
+            terms: vec![vec![FilterLiteral {
+                negated: true,
+                predicate: DynamicFieldPredicate::DynamicObjectField,
+            }]],
+        };
+        assert_eq!(page(&inline_values), vec![5, 6]);
     }
 
     #[test]

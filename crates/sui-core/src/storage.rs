@@ -35,12 +35,14 @@ use sui_types::object::Owner;
 use sui_types::storage::BalanceInfo;
 use sui_types::storage::BalanceIterator;
 use sui_types::storage::CoinInfo;
+use sui_types::storage::DynamicFieldFilter;
 use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::LedgerBitmapBucketIterator;
 use sui_types::storage::LedgerTxSeqDigest;
 use sui_types::storage::LedgerTxSeqDigestIterator;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::ObjectVersionsIterator;
+use sui_types::storage::OwnedObjectFilter;
 use sui_types::storage::OwnedObjectInfo;
 use sui_types::storage::RpcIndexes;
 use sui_types::storage::RpcStateReader;
@@ -1241,18 +1243,19 @@ impl RpcIndexes for RpcStoreReadStore {
     fn owned_objects_iter(
         &self,
         owner: SuiAddress,
-        object_type: Option<StructTag>,
+        filter: Option<&OwnedObjectFilter>,
         cursor: Option<OwnedObjectInfo>,
     ) -> Result<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>> {
-        self.reader.owned_objects_iter(owner, object_type, cursor)
+        self.reader.owned_objects_iter(owner, filter, cursor)
     }
 
     fn dynamic_field_iter(
         &self,
         parent: ObjectID,
+        filter: Option<&DynamicFieldFilter>,
         cursor: Option<DynamicFieldKey>,
     ) -> Result<Box<dyn Iterator<Item = Result<DynamicFieldKey, TypedStoreError>> + '_>> {
-        self.reader.dynamic_field_iter(parent, cursor)
+        self.reader.dynamic_field_iter(parent, filter, cursor)
     }
 
     fn get_coin_info(&self, coin_type: &StructTag) -> Result<Option<CoinInfo>> {
