@@ -7,7 +7,7 @@ use prost::Message as _;
 use sui_inverted_index::ScanDirection;
 use sui_rpc::proto::sui::rpc::v2::LedgerPosition;
 
-mod proto;
+pub(crate) mod proto;
 
 use proto::sui::rpc::cursor::v1 as grpc;
 
@@ -290,6 +290,9 @@ impl TryFrom<grpc::CursorToken> for CursorToken {
                 event_index: position.event_index.context("cursor missing event_index")?,
                 public_position: public_position()?,
             },
+            grpc::cursor_token::Position::State(_) => {
+                anyhow::bail!("state cursor is not valid for ledger history");
+            }
         };
         Ok(Self { kind, position })
     }
