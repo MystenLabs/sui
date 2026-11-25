@@ -9,7 +9,8 @@
 /// - spend - spend the token in the shop
 module examples::loyalty;
 
-use sui::coin::{Self, TreasuryCap};
+use sui::coin::TreasuryCap;
+use sui::coin_registry;
 use sui::token::{Self, ActionRequest, Token};
 
 /// Token amount does not match the `GIFT_PRICE`.
@@ -33,15 +34,14 @@ public struct Gift has key, store {
 
 // Create a new LOYALTY currency, create a `TokenPolicy` for it and allow
 // everyone to spend `Token`s if they were `reward`ed.
-#[allow(deprecated_usage)]
 fun init(otw: LOYALTY, ctx: &mut TxContext) {
-    let (treasury_cap, coin_metadata) = coin::create_currency(
+    let (builder, treasury_cap) = coin_registry::new_currency_with_otw(
         otw,
         0, // no decimals
-        b"LOY", // symbol
-        b"Loyalty Token", // name
-        b"Token for Loyalty", // description
-        option::none(), // url
+        b"LOY".to_string(), // symbol
+        b"Loyalty Token".to_string(), // name
+        b"Token for Loyalty".to_string(), // description
+        b"".to_string(), // no url
         ctx,
     );
 
@@ -57,9 +57,10 @@ fun init(otw: LOYALTY, ctx: &mut TxContext) {
 
     token::share_policy(policy);
 
-    transfer::public_freeze_object(coin_metadata);
-    transfer::public_transfer(policy_cap, tx_context::sender(ctx));
-    transfer::public_transfer(treasury_cap, tx_context::sender(ctx));
+    let metadata_cap = builder.finalize(ctx);
+    transfer::public_transfer(metadata_cap, ctx.sender());
+    transfer::public_transfer(policy_cap, ctx.sender());
+    transfer::public_transfer(treasury_cap, ctx.sender());
 }
 
 /// Handy function to reward users. Can be called by the application admin
