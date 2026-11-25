@@ -1038,8 +1038,11 @@ Whether <code>addr</code> is permanently frozen for <code>T</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_is_permanently_frozen">is_permanently_frozen</a>&lt;T&gt;(list: &<a href="../sui/coin_regulation.md#sui_coin_regulation_FreezeList">FreezeList</a>, addr: <b>address</b>): bool {
-    df::get_fold!(&list.id, <a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressKey">FrozenAddressKey</a>&lt;T&gt;(addr), <b>false</b>, |state: &<a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressState">FrozenAddressState</a>|
-        state.unfreeze_lock == UnfreezeLock::Permanent
+    df::get_fold!(
+        &list.id,
+        <a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressKey">FrozenAddressKey</a>&lt;T&gt;(addr),
+        <b>false</b>,
+        |state: &<a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressState">FrozenAddressState</a>| state.unfreeze_lock == UnfreezeLock::Permanent,
     )
 }
 </code></pre>
@@ -1090,8 +1093,11 @@ The IDs of the outstanding <code><a href="../sui/coin_regulation.md#sui_coin_reg
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_seize_auths">seize_auths</a>&lt;T&gt;(list: &<a href="../sui/coin_regulation.md#sui_coin_regulation_FreezeList">FreezeList</a>, addr: <b>address</b>): vector&lt;ID&gt; {
-    df::get_fold!(&list.id, <a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressKey">FrozenAddressKey</a>&lt;T&gt;(addr), vector[], |state: &<a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressState">FrozenAddressState</a>|
-        *state.<a href="../sui/coin_regulation.md#sui_coin_regulation_seize_auths">seize_auths</a>.keys()
+    df::get_fold!(
+        &list.id,
+        <a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressKey">FrozenAddressKey</a>&lt;T&gt;(addr),
+        vector[],
+        |state: &<a href="../sui/coin_regulation.md#sui_coin_regulation_FrozenAddressState">FrozenAddressState</a>| *state.<a href="../sui/coin_regulation.md#sui_coin_regulation_seize_auths">seize_auths</a>.keys(),
     )
 }
 </code></pre>
@@ -1336,8 +1342,8 @@ Count a newly frozen address against this transaction's limit.
 
 
 <pre><code><b>fun</b> <a href="../sui/coin_regulation.md#sui_coin_regulation_count_freeze">count_freeze</a>(ctx: &<b>mut</b> TxContext) {
-    <b>let</b> count =
-        ctx.scratch_internal_remove_opt!&lt;<a href="../sui/coin_regulation.md#sui_coin_regulation_FreezeCountKey">FreezeCountKey</a>, u64&gt;(<a href="../sui/coin_regulation.md#sui_coin_regulation_FreezeCountKey">FreezeCountKey</a>())
+    <b>let</b> count = ctx
+        .scratch_internal_remove_opt!&lt;<a href="../sui/coin_regulation.md#sui_coin_regulation_FreezeCountKey">FreezeCountKey</a>, u64&gt;(<a href="../sui/coin_regulation.md#sui_coin_regulation_FreezeCountKey">FreezeCountKey</a>())
         .destroy_with_default(0);
     <b>assert</b>!(count &lt; <a href="../sui/coin_regulation.md#sui_coin_regulation_MAX_FREEZES_PER_TRANSACTION">MAX_FREEZES_PER_TRANSACTION</a>, <a href="../sui/coin_regulation.md#sui_coin_regulation_ETooManyFreezes">ETooManyFreezes</a>);
     ctx.scratch_internal_add!(<a href="../sui/coin_regulation.md#sui_coin_regulation_FreezeCountKey">FreezeCountKey</a>(), count + 1);

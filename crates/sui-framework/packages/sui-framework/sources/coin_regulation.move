@@ -276,8 +276,11 @@ public fun is_frozen<T>(list: &FreezeList, addr: address): bool {
 
 /// Whether `addr` is permanently frozen for `T`.
 public fun is_permanently_frozen<T>(list: &FreezeList, addr: address): bool {
-    df::get_fold!(&list.id, FrozenAddressKey<T>(addr), false, |state: &FrozenAddressState|
-        state.unfreeze_lock == UnfreezeLock::Permanent
+    df::get_fold!(
+        &list.id,
+        FrozenAddressKey<T>(addr),
+        false,
+        |state: &FrozenAddressState| state.unfreeze_lock == UnfreezeLock::Permanent,
     )
 }
 
@@ -288,8 +291,11 @@ public fun is_global_pause_enabled<T>(list: &FreezeList): bool {
 
 /// The IDs of the outstanding `SeizeAuth`s for `addr`, empty if `addr` is not frozen.
 public fun seize_auths<T>(list: &FreezeList, addr: address): vector<ID> {
-    df::get_fold!(&list.id, FrozenAddressKey<T>(addr), vector[], |state: &FrozenAddressState|
-        *state.seize_auths.keys()
+    df::get_fold!(
+        &list.id,
+        FrozenAddressKey<T>(addr),
+        vector[],
+        |state: &FrozenAddressState| *state.seize_auths.keys(),
     )
 }
 
@@ -380,8 +386,8 @@ fun add_frozen_address<T>(
 
 /// Count a newly frozen address against this transaction's limit.
 fun count_freeze(ctx: &mut TxContext) {
-    let count =
-        ctx.scratch_internal_remove_opt!<FreezeCountKey, u64>(FreezeCountKey())
+    let count = ctx
+        .scratch_internal_remove_opt!<FreezeCountKey, u64>(FreezeCountKey())
         .destroy_with_default(0);
     assert!(count < MAX_FREEZES_PER_TRANSACTION, ETooManyFreezes);
     ctx.scratch_internal_add!(FreezeCountKey(), count + 1);

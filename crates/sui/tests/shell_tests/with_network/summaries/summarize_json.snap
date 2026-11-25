@@ -553,6 +553,21 @@ vector.json
         "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
       },
       {
+        "module_name": "scratch",
+        "datatype_name": "Permit",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "scratch",
+        "datatype_name": "BorrowMarker",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "scratch",
+        "datatype_name": "BorrowMarkerKey",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
         "module_name": "coin_regulation",
         "datatype_name": "FreezeList",
         "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
@@ -585,6 +600,11 @@ vector.json
       {
         "module_name": "coin_regulation",
         "datatype_name": "FrozenAddressState",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_regulation",
+        "datatype_name": "FreezeCountKey",
         "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
       },
       {
@@ -625,6 +645,11 @@ vector.json
       {
         "module_name": "coin_regulation",
         "datatype_name": "DenyCapMigrated",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_regulation",
+        "datatype_name": "UnfreezeLock",
         "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
       },
       {
@@ -935,21 +960,6 @@ vector.json
       {
         "module_name": "ristretto255",
         "datatype_name": "G",
-        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
-      },
-      {
-        "module_name": "scratch",
-        "datatype_name": "Permit",
-        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
-      },
-      {
-        "module_name": "scratch",
-        "datatype_name": "BorrowMarker",
-        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
-      },
-      {
-        "module_name": "scratch",
-        "datatype_name": "BorrowMarkerKey",
         "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
       },
       {
