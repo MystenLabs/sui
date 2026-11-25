@@ -224,6 +224,85 @@ impl WriteStallConfig {
     }
 }
 
+/// Sliding-window deletion-compaction trigger for a column family.
+///
+/// Wraps RocksDB's `CompactOnDeletionCollectorFactory`: while writing
+/// an SST, RocksDB marks the file for compaction whenever any
+/// `window_size` consecutive entries contain at least
+/// `deletion_trigger` deletes, or when the whole file's deletion ratio
+/// reaches `deletion_ratio`. Setting `window_size = 0` disables the
+/// sliding window and `deletion_ratio = 0.0` disables the ratio check.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case", default, deny_unknown_fields)]
+pub struct CompactOnDeletionConfig {
+    /// Sliding window size, in entries. `0` disables the sliding window.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub window_size: Option<usize>,
+
+    /// Deletion count within `window_size` entries that marks the SST
+    /// for compaction.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deletion_trigger: Option<usize>,
+
+    /// Whole-SST deletion fraction in `(0.0, 1.0]` that marks the SST for
+    /// compaction. `0.0` disables the whole-file ratio check.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deletion_ratio: Option<f64>,
+}
+
+impl CompactOnDeletionConfig {
+    fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// Field-wise overlay: every field set on `self` wins; otherwise
+    /// fall back to `base`.
+    pub fn merge_over(&self, base: &Self) -> Self {
+        Self {
+            window_size: self.window_size.or(base.window_size),
+            deletion_trigger: self.deletion_trigger.or(base.deletion_trigger),
+            deletion_ratio: self.deletion_ratio.or(base.deletion_ratio),
+        }
+    }
+
+    fn validate(&self, cf: &str) -> Result<(), OpenError> {
+        if let Some(ratio) = self.deletion_ratio
+            && (!ratio.is_finite() || !(0.0..=1.0).contains(&ratio))
+        {
+            return Err(OpenError::msg(format!(
+                "rocksdb config for column family `{cf}`: compact-on-deletion deletion-ratio \
+                 must be in 0.0..=1.0, got {ratio}"
+            )));
+        }
+
+        let window = self.window_size.unwrap_or(0);
+        let trigger = self.deletion_trigger.unwrap_or(0);
+        if window > 0 && (trigger == 0 || trigger > window) {
+            return Err(OpenError::msg(format!(
+                "rocksdb config for column family `{cf}`: compact-on-deletion deletion-trigger \
+                 ({trigger}) must be in 1..=window-size ({window})"
+            )));
+        }
+        if window == 0 && trigger > 0 {
+            return Err(OpenError::msg(format!(
+                "rocksdb config for column family `{cf}`: compact-on-deletion deletion-trigger \
+                 ({trigger}) requires a non-zero window-size"
+            )));
+        }
+
+        Ok(())
+    }
+
+    fn apply(&self, opts: &mut rocksdb::Options) {
+        let window = self.window_size.unwrap_or(0);
+        let trigger = self.deletion_trigger.unwrap_or(0);
+        let ratio = self.deletion_ratio.unwrap_or(0.0);
+        if window > 0 || ratio > 0.0 {
+            opts.add_compact_on_deletion_collector_factory(window, trigger, ratio);
+        }
+    }
+}
+
 /// Per-column-family performance tuning.
 ///
 /// Correctness-bearing settings (merge operators, compaction filters)
@@ -273,6 +352,10 @@ pub struct CfTuning {
     /// Write-stall thresholds.
     #[serde(default, skip_serializing_if = "WriteStallConfig::is_empty")]
     pub write_stall: WriteStallConfig,
+
+    /// Deletion-triggered compaction collector.
+    #[serde(default, skip_serializing_if = "CompactOnDeletionConfig::is_empty")]
+    pub compact_on_deletion: CompactOnDeletionConfig,
 }
 
 impl CfTuning {
@@ -297,7 +380,16 @@ impl CfTuning {
                 .periodic_compaction_seconds
                 .or(base.periodic_compaction_seconds),
             write_stall: self.write_stall.merge_over(&base.write_stall),
+            compact_on_deletion: self
+                .compact_on_deletion
+                .merge_over(&base.compact_on_deletion),
         }
+    }
+
+    fn validate(&self, cf: &str) -> Result<(), OpenError> {
+        self.write_stall.validate(cf)?;
+        self.compact_on_deletion.validate(cf)?;
+        Ok(())
     }
 
     /// Build a fresh [`rocksdb::Options`] with the set fields applied.
@@ -348,6 +440,7 @@ impl CfTuning {
         }
 
         self.write_stall.apply(&mut opts);
+        self.compact_on_deletion.apply(&mut opts);
 
         opts
     }
@@ -459,9 +552,9 @@ impl RocksDbConfig {
     /// default profile and for every per-CF override (resolved
     /// against the default profile). Returns the first violation.
     pub fn validate(&self) -> Result<(), OpenError> {
-        self.default_cf.write_stall.validate("default-cf")?;
+        self.default_cf.validate("default-cf")?;
         for (name, cf) in &self.column_family {
-            cf.merge_over(&self.default_cf).write_stall.validate(name)?;
+            cf.merge_over(&self.default_cf).validate(name)?;
         }
         Ok(())
     }
@@ -801,5 +894,49 @@ mod tests {
         );
         // Unset fields stay None so they fall back at resolve time.
         assert_eq!(cfg.default_cf.write_buffer_size_mb, None);
+    }
+
+    #[test]
+    fn compact_on_deletion_validation_and_merge() {
+        let base = CfTuning {
+            compact_on_deletion: CompactOnDeletionConfig {
+                window_size: Some(10_000),
+                deletion_trigger: Some(8_000),
+                deletion_ratio: Some(0.0),
+            },
+            ..Default::default()
+        };
+        let disabled = CfTuning {
+            compact_on_deletion: CompactOnDeletionConfig {
+                window_size: Some(0),
+                deletion_trigger: Some(0),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let merged = disabled.merge_over(&base);
+        assert_eq!(merged.compact_on_deletion.window_size, Some(0));
+        assert_eq!(merged.compact_on_deletion.deletion_trigger, Some(0));
+        assert_eq!(merged.compact_on_deletion.deletion_ratio, Some(0.0));
+        assert!(merged.validate("object_by_owner").is_ok());
+
+        let bad_trigger = CfTuning {
+            compact_on_deletion: CompactOnDeletionConfig {
+                window_size: Some(1_000),
+                deletion_trigger: Some(1_001),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(bad_trigger.validate("object_by_owner").is_err());
+
+        let bad_ratio = CfTuning {
+            compact_on_deletion: CompactOnDeletionConfig {
+                deletion_ratio: Some(1.5),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(bad_ratio.validate("object_by_owner").is_err());
     }
 }
