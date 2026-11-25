@@ -26,7 +26,7 @@ use mysten_metrics::{
 use parking_lot::RwLockWriteGuard;
 use serde::{Deserialize, Serialize};
 use sui_config::node::CongestionLogConfig;
-use sui_macros::{fail_point, fail_point_arg, fail_point_if};
+use sui_macros::{fail_point, fail_point_arg, fail_point_async, fail_point_if};
 use sui_protocol_config::{
     Chain, PerObjectCongestionControlMode, ProtocolConfig, assert_reachable_gated,
 };
@@ -1111,6 +1111,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         consensus_commit: impl ConsensusCommitAPI,
         transactions: ParsedConsensusTransactions,
     ) -> Result<(), RuntimeShutdown> {
+        fail_point_async!("before-handle-consensus-commit");
+
         // This may block until one of two conditions happens:
         // - Number of uncommitted transactions in the writeback cache goes below the
         //   backpressure threshold.

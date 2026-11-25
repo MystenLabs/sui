@@ -5,6 +5,9 @@ use std::sync::Arc;
 
 use mysten_common::debug_fatal;
 use mysten_metrics::monitored_scope;
+use parking_lot::Mutex;
+use prometheus::{IntGauge, Registry, register_int_gauge_with_registry};
+use sui_macros::fail_point;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tokio::sync::watch;
 use tracing::{debug, info};
@@ -37,6 +40,30 @@ impl Watermarks {
     }
 }
 
+struct BackpressureMetrics {
+    effective: IntGauge,
+    checkpoint_rebuild_pending: IntGauge,
+}
+
+impl BackpressureMetrics {
+    fn new(registry: &Registry) -> Self {
+        Self {
+            effective: register_int_gauge_with_registry!(
+                "backpressure_effective",
+                "1 if backpressure is on and not suppressed, so that the consensus handler pauses before its next commit, 0 otherwise",
+                registry,
+            )
+            .unwrap(),
+            checkpoint_rebuild_pending: register_int_gauge_with_registry!(
+                "backpressure_checkpoint_rebuild_pending",
+                "1 if backpressure is suppressed until the checkpoints built before a restart are rebuilt, 0 otherwise",
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+}
+
 pub struct BackpressureManager {
     // Holds the executed, certified and verified checkpoint watermarks.
     // The executed watermark is always less than or equal to the certified watermark. The
@@ -49,6 +76,10 @@ pub struct BackpressureManager {
 
     // used by the WritebackCache to notify us when it has too many pending transactions in memory.
     backpressure_sender: watch::Sender<bool>,
+
+    // The lock is held while both channels are read and the gauges are set, so that the last
+    // update to either channel determines the final gauge values.
+    metrics: Mutex<BackpressureMetrics>,
 }
 
 pub struct BackpressureSubscriber {
@@ -57,19 +88,20 @@ pub struct BackpressureSubscriber {
 
 impl BackpressureManager {
     pub fn new_for_tests() -> Arc<Self> {
-        Self::new_from_watermarks(Default::default())
+        Self::new_from_watermarks(Default::default(), &Registry::new())
     }
 
-    fn new_from_watermarks(watermarks: Watermarks) -> Arc<Self> {
+    fn new_from_watermarks(watermarks: Watermarks, registry: &Registry) -> Arc<Self> {
         let (watermarks_sender, _) = watch::channel(watermarks);
         let (backpressure_sender, _) = watch::channel(false);
         Arc::new(Self {
             watermarks_sender,
             backpressure_sender,
+            metrics: Mutex::new(BackpressureMetrics::new(registry)),
         })
     }
 
-    pub fn new_from_checkpoint_store(store: &CheckpointStore) -> Arc<Self> {
+    pub fn new_from_checkpoint_store(store: &CheckpointStore, registry: &Registry) -> Arc<Self> {
         let executed = store
             .get_highest_executed_checkpoint_seq_number()
             .expect("read cannot fail")
@@ -86,12 +118,15 @@ impl BackpressureManager {
             ?verified,
             "initializing backpressure manager from checkpoint store"
         );
-        let manager = Self::new_from_watermarks(Watermarks {
-            executed,
-            certified,
-            verified,
-            checkpoint_rebuild_pending: false,
-        });
+        let manager = Self::new_from_watermarks(
+            Watermarks {
+                executed,
+                certified,
+                verified,
+                checkpoint_rebuild_pending: false,
+            },
+            registry,
+        );
         match tokio::runtime::Handle::try_current() {
             Ok(handle) => {
                 let weak = Arc::downgrade(&manager);
@@ -114,8 +149,26 @@ impl BackpressureManager {
         manager
     }
 
+    fn modify_watermarks(&self, modify: impl FnOnce(&mut Watermarks) -> bool) {
+        if self.watermarks_sender.send_if_modified(modify) {
+            self.update_metrics();
+        }
+    }
+
+    fn update_metrics(&self) {
+        let metrics = self.metrics.lock();
+        let watermarks = *self.watermarks_sender.borrow();
+        let backpressure = *self.backpressure_sender.borrow();
+        metrics
+            .effective
+            .set((backpressure && !watermarks.should_suppress_backpressure()) as i64);
+        metrics
+            .checkpoint_rebuild_pending
+            .set(watermarks.checkpoint_rebuild_pending as i64);
+    }
+
     pub fn update_highest_certified_checkpoint(&self, seq: CheckpointSequenceNumber) {
-        self.watermarks_sender.send_if_modified(|watermarks| {
+        self.modify_watermarks(|watermarks| {
             if seq > watermarks.certified {
                 watermarks.certified = seq;
                 debug!(?watermarks, "updating highest certified checkpoint");
@@ -127,7 +180,7 @@ impl BackpressureManager {
     }
 
     pub fn update_highest_verified_checkpoint(&self, seq: CheckpointSequenceNumber) {
-        self.watermarks_sender.send_if_modified(|watermarks| {
+        self.modify_watermarks(|watermarks| {
             if seq > watermarks.verified {
                 watermarks.verified = seq;
                 debug!(?watermarks, "updating highest verified checkpoint");
@@ -139,7 +192,7 @@ impl BackpressureManager {
     }
 
     pub fn set_checkpoint_rebuild_pending(&self, pending: bool) {
-        self.watermarks_sender.send_if_modified(|watermarks| {
+        self.modify_watermarks(|watermarks| {
             if watermarks.checkpoint_rebuild_pending != pending {
                 watermarks.checkpoint_rebuild_pending = pending;
                 info!(?watermarks, "setting checkpoint rebuild pending");
@@ -151,7 +204,7 @@ impl BackpressureManager {
     }
 
     pub fn update_highest_executed_checkpoint(&self, seq: CheckpointSequenceNumber) {
-        self.watermarks_sender.send_if_modified(|watermarks| {
+        self.modify_watermarks(|watermarks| {
             if seq > watermarks.executed {
                 debug_assert_eq!(seq, watermarks.executed + 1);
                 watermarks.executed = seq;
@@ -165,7 +218,7 @@ impl BackpressureManager {
 
     // Returns true if the backpressure state was changed.
     pub fn set_backpressure(&self, backpressure: bool) -> bool {
-        self.backpressure_sender.send_if_modified(|bp| {
+        let changed = self.backpressure_sender.send_if_modified(|bp| {
             if *bp != backpressure {
                 debug!(?backpressure, "setting backpressure");
                 *bp = backpressure;
@@ -173,7 +226,11 @@ impl BackpressureManager {
             } else {
                 false
             }
-        })
+        });
+        if changed {
+            self.update_metrics();
+        }
+        changed
     }
 
     pub fn subscribe(self: &Arc<Self>) -> BackpressureSubscriber {
@@ -190,10 +247,16 @@ impl BackpressureSubscriber {
     /// Otherwise, wait until backpressure is lifted or suppressed.
     pub async fn await_no_backpressure(&self) {
         let mut watermarks_rx = self.mgr.watermarks_sender.subscribe();
-        if watermarks_rx
-            .borrow_and_update()
-            .should_suppress_backpressure()
-        {
+        let watermarks = *watermarks_rx.borrow_and_update();
+        if watermarks.should_suppress_backpressure() {
+            let pauses_without_rebuild = !Watermarks {
+                checkpoint_rebuild_pending: false,
+                ..watermarks
+            }
+            .should_suppress_backpressure();
+            if pauses_without_rebuild && self.is_backpressure_active() {
+                fail_point!("backpressure-suppressed-by-rebuild");
+            }
             return;
         }
 
@@ -231,7 +294,6 @@ impl BackpressureSubscriber {
 mod tests {
     use super::*;
     use futures::FutureExt;
-    use parking_lot::Mutex;
     use std::sync::Arc;
     use std::time::Duration;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
@@ -281,7 +343,7 @@ mod tests {
     #[tokio::test]
     async fn test_verified_checkpoint_forwarded_from_store() {
         let store = CheckpointStore::new_for_tests();
-        let manager = BackpressureManager::new_from_checkpoint_store(&store);
+        let manager = BackpressureManager::new_from_checkpoint_store(&store, &Registry::new());
         manager.set_backpressure(true);
 
         let subscriber = manager.subscribe();
@@ -329,6 +391,40 @@ mod tests {
 
         manager.set_checkpoint_rebuild_pending(true);
         await_with_timeout(waiter).await;
+    }
+
+    #[tokio::test]
+    async fn test_backpressure_metrics() {
+        let manager = BackpressureManager::new_for_tests();
+        let gauges = || {
+            let metrics = manager.metrics.lock();
+            (
+                metrics.effective.get(),
+                metrics.checkpoint_rebuild_pending.get(),
+            )
+        };
+        assert_eq!(gauges(), (0, 0));
+
+        manager.set_backpressure(true);
+        assert_eq!(gauges(), (0, 0));
+
+        manager.update_highest_verified_checkpoint(1);
+        assert_eq!(gauges(), (1, 0));
+
+        manager.set_checkpoint_rebuild_pending(true);
+        assert_eq!(gauges(), (0, 1));
+
+        manager.set_checkpoint_rebuild_pending(false);
+        assert_eq!(gauges(), (1, 0));
+
+        manager.update_highest_executed_checkpoint(1);
+        assert_eq!(gauges(), (0, 0));
+
+        manager.update_highest_certified_checkpoint(2);
+        assert_eq!(gauges(), (1, 0));
+
+        manager.set_backpressure(false);
+        assert_eq!(gauges(), (0, 0));
     }
 
     async fn await_with_timeout<R>(f: impl std::future::Future<Output = R>) {

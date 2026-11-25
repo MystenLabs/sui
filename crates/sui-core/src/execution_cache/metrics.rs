@@ -81,7 +81,7 @@ impl ExecutionCacheMetrics {
             .unwrap(),
             backpressure_status: register_int_gauge_with_registry!(
                 "execution_cache_backpressure_status",
-                "Backpressure status (1 = on, 0 = off)",
+                "Backpressure status (1 = on, 0 = off), whether or not backpressure is suppressed",
                 registry,
             )
             .unwrap(),

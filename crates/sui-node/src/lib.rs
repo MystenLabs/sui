@@ -606,7 +606,7 @@ impl SuiNode {
             .expect("Database read should not fail at init.");
 
         let backpressure_manager =
-            BackpressureManager::new_from_checkpoint_store(&checkpoint_store);
+            BackpressureManager::new_from_checkpoint_store(&checkpoint_store, &prometheus_registry);
 
         let store =
             AuthorityStore::open(perpetual_tables, &genesis, &config, &prometheus_registry).await?;
