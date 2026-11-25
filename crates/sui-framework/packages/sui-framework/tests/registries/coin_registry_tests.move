@@ -8,8 +8,16 @@ use std::string::String;
 use std::unit_test::{assert_eq, destroy};
 use sui::coin::{Self, DenyCapV2, TreasuryCap, CoinMetadata};
 use sui::coin_registry::{Self, Currency, CurrencyInitializer, CoinRegistry};
-use sui::test_scenario;
+use sui::coin_regulation::{ComplianceCap, DenyCapMigrated, FreezeList};
+use sui::deny_list::DenyList;
+use sui::event;
+use sui::test_scenario::{Self, Scenario};
 use sui::url;
+
+const ISSUER: address = @0x11;
+const ALICE: address = @0xA;
+const BOB: address = @0xB;
+const CAROL: address = @0xC0;
 
 /// OTW-like.
 public struct COIN_REGISTRY_TESTS has drop {}
@@ -48,7 +56,7 @@ fun default_scenario() {
 
 // === Regulated Currency ===
 
-#[test]
+#[test, allow(deprecated_usage)]
 fun regulated_default() {
     let ctx = &mut tx_context::dummy();
     let (mut builder, t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
@@ -64,7 +72,15 @@ fun regulated_default() {
     destroy(t_cap);
 }
 
-#[test, expected_failure(abort_code = coin_registry::EDenyCapAlreadyCreated)]
+#[
+    test,
+    expected_failure(
+        abort_code = coin_registry::EDenyCapAlreadyCreated,
+    ),
+    allow(
+        deprecated_usage,
+    ),
+]
 fun regulated_twice_fail() {
     let ctx = &mut tx_context::dummy();
     let (mut builder, _t_cap) = new_builder().build_otw(COIN_REGISTRY_TESTS {}, ctx);
@@ -535,6 +551,260 @@ fun new_currency_is_shared_and_metadata_cap_is_deleted() {
     destroy(t_cap);
 
     test.end();
+}
+
+// === Compliance ===
+
+fun new_compliance_regulated(
+    allow_global_pause: bool,
+    ctx: &mut TxContext,
+): (Currency<COIN_REGISTRY_TESTS>, ComplianceCap<COIN_REGISTRY_TESTS>) {
+    let (mut init, t_cap) = coin_registry::new_currency_with_otw(
+        COIN_REGISTRY_TESTS {},
+        6,
+        b"TEST".to_string(),
+        b"Test".to_string(),
+        b"Test".to_string(),
+        b"".to_string(),
+        ctx,
+    );
+    let cap = init.make_compliance_regulated(allow_global_pause, ctx);
+    let (currency, metadata_cap) = init.finalize_unwrap_for_testing(ctx);
+    destroy(metadata_cap);
+    destroy(t_cap);
+    (currency, cap)
+}
+
+#[allow(deprecated_usage)]
+fun new_legacy_regulated(
+    ctx: &mut TxContext,
+): (
+    TreasuryCap<COIN_REGISTRY_TESTS>,
+    DenyCapV2<COIN_REGISTRY_TESTS>,
+    CoinMetadata<COIN_REGISTRY_TESTS>,
+) {
+    coin::create_regulated_currency_v2(
+        COIN_REGISTRY_TESTS {},
+        6,
+        b"TEST",
+        b"Test",
+        b"Test",
+        option::none(),
+        true,
+        ctx,
+    )
+}
+
+/// Create the legacy-migrated `Currency`, in the `Unknown` regulated state, for a legacy regulated
+/// coin.
+fun new_unknown_currency(
+    scenario: &mut Scenario,
+): (Currency<COIN_REGISTRY_TESTS>, DenyCapV2<COIN_REGISTRY_TESTS>) {
+    let (t_cap, deny_cap, metadata) = new_legacy_regulated(scenario.ctx());
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(
+        &mut tx_context::dummy(),
+    );
+    let currency = coin_registry::migrate_legacy_metadata_for_testing(
+        &mut registry,
+        &metadata,
+        scenario.ctx(),
+    );
+    destroy(registry);
+    destroy(metadata);
+    destroy(t_cap);
+    (currency, deny_cap)
+}
+
+fun migrate_currency(
+    scenario: &mut Scenario,
+    currency: &mut Currency<COIN_REGISTRY_TESTS>,
+    cap: DenyCapV2<COIN_REGISTRY_TESTS>,
+    frozen_addresses: vector<address>,
+): ComplianceCap<COIN_REGISTRY_TESTS> {
+    let mut list = scenario.take_shared<FreezeList>();
+    let mut deny_list = scenario.take_shared<DenyList>();
+    let cap = currency.migrate_to_compliance_cap(
+        &mut list,
+        &mut deny_list,
+        cap,
+        frozen_addresses,
+        scenario.ctx(),
+    );
+    test_scenario::return_shared(list);
+    test_scenario::return_shared(deny_list);
+    cap
+}
+
+#[test]
+fun make_compliance_regulated_records_cap() {
+    let mut scenario = test_scenario::begin(@0x0);
+    let (currency, cap) = new_compliance_regulated(true, scenario.ctx());
+    assert!(currency.is_regulated());
+    assert_eq!(currency.deny_cap_id(), option::some(object::id(&cap)));
+    assert!(cap.allow_global_pause());
+    let (cap_id, allow_global_pause, variant) = currency.regulated_state_for_testing();
+    assert_eq!(cap_id, object::id(&cap));
+    assert_eq!(allow_global_pause, option::some(true));
+    assert_eq!(variant, 0);
+    destroy(currency);
+    destroy(cap);
+    scenario.end();
+}
+
+#[test]
+fun make_compliance_regulated_freeze_pause_and_seize() {
+    let mut scenario = test_scenario::begin(ISSUER);
+    scenario.create_system_objects();
+    let (currency, mut cap) = new_compliance_regulated(true, scenario.ctx());
+    scenario.next_tx(ISSUER);
+
+    let mut list = scenario.take_shared<FreezeList>();
+    assert!(!list.has_coin_type_state<COIN_REGISTRY_TESTS>());
+    list.freeze_address(&mut cap, ALICE, scenario.ctx());
+    assert!(list.is_frozen<COIN_REGISTRY_TESTS>(ALICE));
+    list.enable_global_pause(&mut cap, scenario.ctx());
+    assert!(list.is_global_pause_enabled<COIN_REGISTRY_TESTS>());
+    let auth = list.issue_seize_auth(&mut cap, ALICE, scenario.ctx());
+    assert_eq!(auth.frozen_address(), ALICE);
+    list.destroy_seize_auth(auth, scenario.ctx());
+
+    test_scenario::return_shared(list);
+    destroy(currency);
+    destroy(cap);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = coin_registry::EDenyCapAlreadyCreated)]
+fun make_compliance_regulated_twice_aborts() {
+    let ctx = &mut tx_context::dummy();
+    let (mut init, _t_cap) = coin_registry::new_currency_with_otw(
+        COIN_REGISTRY_TESTS {},
+        6,
+        b"TEST".to_string(),
+        b"Test".to_string(),
+        b"Test".to_string(),
+        b"".to_string(),
+        ctx,
+    );
+    let _cap = init.make_compliance_regulated(true, ctx);
+    let _cap2 = init.make_compliance_regulated(true, ctx);
+    abort
+}
+
+#[test]
+fun migrate_to_compliance_cap_from_unknown() {
+    let mut scenario = test_scenario::begin(ISSUER);
+    scenario.create_system_objects();
+    let (mut currency, deny_cap) = new_unknown_currency(&mut scenario);
+    let cap_id = object::id(&deny_cap);
+    assert!(!currency.is_regulated());
+    scenario.next_tx(ISSUER);
+
+    let cap = migrate_currency(&mut scenario, &mut currency, deny_cap, vector[]);
+    assert_eq!(object::id(&cap), cap_id);
+    assert!(currency.is_regulated());
+    assert_eq!(currency.deny_cap_id(), option::some(cap_id));
+    assert_eq!(event::events_by_type<DenyCapMigrated<COIN_REGISTRY_TESTS>>().length(), 1);
+    let (_, allow_global_pause, variant) = currency.regulated_state_for_testing();
+    assert_eq!(allow_global_pause, option::some(true));
+    assert_eq!(variant, 0);
+
+    destroy(currency);
+    destroy(cap);
+    scenario.end();
+}
+
+#[test]
+fun migrate_to_compliance_cap_from_regulated() {
+    let mut scenario = test_scenario::begin(ISSUER);
+    scenario.create_system_objects();
+    let (mut currency, deny_cap) = new_unknown_currency(&mut scenario);
+    let cap_id = object::id(&deny_cap);
+    currency.migrate_regulated_state_by_cap(&deny_cap);
+    scenario.next_tx(ISSUER);
+
+    let mut cap = migrate_currency(&mut scenario, &mut currency, deny_cap, vector[]);
+    assert_eq!(object::id(&cap), cap_id);
+    assert_eq!(currency.deny_cap_id(), option::some(cap_id));
+
+    scenario.next_tx(ISSUER);
+    let mut list = scenario.take_shared<FreezeList>();
+    list.freeze_address(&mut cap, ALICE, scenario.ctx());
+    assert!(list.is_frozen<COIN_REGISTRY_TESTS>(ALICE));
+    test_scenario::return_shared(list);
+
+    destroy(currency);
+    destroy(cap);
+    scenario.end();
+}
+
+#[test]
+fun migrate_to_compliance_cap_replaces_recorded_cap() {
+    let mut scenario = test_scenario::begin(ISSUER);
+    scenario.create_system_objects();
+    let (mut currency, deny_cap) = new_unknown_currency(&mut scenario);
+    let cap_id = object::id(&deny_cap);
+    let other_cap = coin::new_deny_cap_v2<COIN_REGISTRY_TESTS>(true, scenario.ctx());
+    currency.migrate_regulated_state_by_cap(&other_cap);
+    assert_eq!(currency.deny_cap_id(), option::some(object::id(&other_cap)));
+    scenario.next_tx(ISSUER);
+
+    let cap = migrate_currency(&mut scenario, &mut currency, deny_cap, vector[]);
+    assert_eq!(object::id(&cap), cap_id);
+    assert_eq!(currency.deny_cap_id(), option::some(cap_id));
+
+    destroy(currency);
+    destroy(cap);
+    destroy(other_cap);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = coin_registry::EUnregulatedCurrency)]
+fun migrate_to_compliance_cap_unregulated_aborts() {
+    let mut scenario = test_scenario::begin(ISSUER);
+    scenario.create_system_objects();
+    let (init, _t_cap) = coin_registry::new_currency_with_otw(
+        COIN_REGISTRY_TESTS {},
+        6,
+        b"TEST".to_string(),
+        b"Test".to_string(),
+        b"Test".to_string(),
+        b"".to_string(),
+        scenario.ctx(),
+    );
+    let (mut currency, _metadata_cap) = init.finalize_unwrap_for_testing(scenario.ctx());
+    let deny_cap = coin::new_deny_cap_v2<COIN_REGISTRY_TESTS>(true, scenario.ctx());
+    scenario.next_tx(ISSUER);
+
+    let _cap = migrate_currency(&mut scenario, &mut currency, deny_cap, vector[]);
+    abort
+}
+
+#[test]
+fun migrate_to_compliance_cap_freezes_listed_denied_addresses() {
+    let mut scenario = test_scenario::begin(ISSUER);
+    scenario.create_system_objects();
+    let (mut currency, mut deny_cap) = new_unknown_currency(&mut scenario);
+    scenario.next_tx(ISSUER);
+    let mut deny_list = scenario.take_shared<DenyList>();
+    coin::deny_list_v2_add(&mut deny_list, &mut deny_cap, ALICE, scenario.ctx());
+    coin::deny_list_v2_add(&mut deny_list, &mut deny_cap, BOB, scenario.ctx());
+    test_scenario::return_shared(deny_list);
+    scenario.next_tx(ISSUER);
+
+    // ALICE is listed twice, CAROL is not denied, and BOB is denied but not listed.
+    let cap = migrate_currency(&mut scenario, &mut currency, deny_cap, vector[ALICE, CAROL, ALICE]);
+    scenario.next_tx(ISSUER);
+    let list = scenario.take_shared<FreezeList>();
+    assert!(list.is_frozen<COIN_REGISTRY_TESTS>(ALICE));
+    assert!(!list.is_frozen<COIN_REGISTRY_TESTS>(CAROL));
+    assert!(!list.is_frozen<COIN_REGISTRY_TESTS>(BOB));
+    assert_eq!(list.num_frozen_addresses<COIN_REGISTRY_TESTS>(), 1);
+    test_scenario::return_shared(list);
+
+    destroy(currency);
+    destroy(cap);
+    scenario.end();
 }
 
 // === Metadata Builder ===
