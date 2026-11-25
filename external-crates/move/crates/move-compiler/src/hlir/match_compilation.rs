@@ -363,8 +363,11 @@ fn compile_match_struct(
         return MatchTree::Failure;
     };
     let struct_ctors = matrix.first_struct_ctors(context);
-    let (subject_binders, unpack) = if let Some((ploc, arg_types)) = struct_ctors {
-        let fringe_binders = context.make_imm_ref_match_binders(decl_fields, ploc, arg_types);
+    let (subject_binders, unpack) = if let Some((_ploc, arg_types)) = struct_ctors {
+        // Shared by every arm this constructor matches, so no one arm's pattern owns them.
+        let subject_loc = subject.var.loc;
+        let fringe_binders =
+            context.make_imm_ref_match_binders(decl_fields, subject_loc, arg_types);
         let fringe_exps = make_fringe_entries(&fringe_binders);
         let inner_fringe = fringe_exps.into_iter().chain(fringe.clone()).collect();
 
@@ -421,13 +424,16 @@ fn compile_enum_switch(
     );
     let mut arms = BTreeMap::new();
 
-    for (ctor, (ploc, arg_types)) in ctors {
+    for (ctor, (_ploc, arg_types)) in ctors {
         unmatched_variants.remove(&ctor);
         let decl_fields = context
             .info
             .enum_variant_fields(&mident, &datatype_name, &ctor)
             .unwrap();
-        let fringe_binders = context.make_imm_ref_match_binders(decl_fields, ploc, arg_types);
+        // Shared by every arm this constructor matches, so no one arm's pattern owns them.
+        let subject_loc = subject.var.loc;
+        let fringe_binders =
+            context.make_imm_ref_match_binders(decl_fields, subject_loc, arg_types);
         let fringe_exps = make_fringe_entries(&fringe_binders);
         let inner_fringe = fringe_exps.into_iter().chain(fringe.clone()).collect();
 
@@ -618,7 +624,13 @@ fn match_switch_to_exp(
             let true_arm = match_tree_to_exp(context, init_subject, *true_arm);
             let false_arm = match_tree_to_exp(context, init_subject, *false_arm);
 
-            make_if_else_arm(context, lit_subject, true_arm, false_arm)
+            make_if_else_arm(
+                context,
+                context.arms_loc(),
+                lit_subject,
+                true_arm,
+                false_arm,
+            )
         }
         MatchSwitch::Literal { arms: map, default } => {
             let lit_subject = make_match_lit(subject.clone());
@@ -632,7 +644,8 @@ fn match_switch_to_exp(
             for (key, next_tree) in entries.into_iter().rev() {
                 let match_arm = match_tree_to_exp(context, init_subject, *next_tree);
                 let test_exp = make_lit_test(lit_subject.clone(), key);
-                out_exp = make_if_else_arm(context, test_exp, match_arm, out_exp);
+                out_exp =
+                    make_if_else_arm(context, context.arms_loc(), test_exp, match_arm, out_exp);
             }
             out_exp
         }
@@ -718,7 +731,9 @@ fn make_guard_exp(
         .map(|(x, (_mut, entry))| (x, (Mutability::Imm, entry)))
         .collect();
     let guard_arm = make_arm(context, subject.clone(), arm);
-    let body = make_if_else_arm(context, *guard.unwrap(), guard_arm, cur_exp);
+    let guard = *guard.unwrap();
+    let guard_loc = guard.exp.loc;
+    let body = make_if_else_arm(context, guard_loc, guard, guard_arm, cur_exp);
     make_copy_bindings(context, bindings, body)
 }
 
@@ -1108,7 +1123,9 @@ fn make_match_variant_unpack(
     let eloc = next.exp.loc;
     seq.push_back(sp(eloc, T::SequenceItem_::Seq(Box::new(next))));
 
-    let exp_value = sp(eloc, T::UnannotatedExp_::Block((UseFuns::new(0), seq)));
+    // The block exists to unpack the subject, so it is spanned like the unpack and not
+    // like the continuation it happens to end with.
+    let exp_value = sp(rhs_loc, T::UnannotatedExp_::Block((UseFuns::new(0), seq)));
     T::exp(context.output_type(), exp_value)
 }
 
@@ -1150,7 +1167,9 @@ fn make_match_struct_unpack(
     let eloc = next.exp.loc;
     seq.push_back(sp(eloc, T::SequenceItem_::Seq(Box::new(next))));
 
-    let exp_value = sp(eloc, T::UnannotatedExp_::Block((UseFuns::new(0), seq)));
+    // The block exists to unpack the subject, so it is spanned like the unpack and not
+    // like the continuation it happens to end with.
+    let exp_value = sp(rhs_loc, T::UnannotatedExp_::Block((UseFuns::new(0), seq)));
     T::exp(context.output_type(), exp_value)
 }
 
@@ -1319,12 +1338,11 @@ fn make_lit_test(lit_exp: T::Exp, value: Value) -> T::Exp {
 
 fn make_if_else_arm(
     context: &ResolutionContext,
+    loc: Loc,
     test: T::Exp,
     conseq: T::Exp,
     alt: T::Exp,
 ) -> T::Exp {
-    // FIXME: this span is woefully wrong
-    let loc = test.exp.loc;
     T::exp(
         context.output_type(),
         sp(

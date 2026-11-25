@@ -1,0 +1,37 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+module 0x42::m
+  fun nested
+5:16-17         Assign                     x
+5:16-17           Copy                     x
+5:19-11:10      Assign                     { 1 => match (y) { 10 => 100, _ => 200, }, _ => …
+5:19-11:10        BorrowLocal              { 1 => match (y) { 10 => 100, _ => 200, }, _ => …
+5:19-11:10      IfElse                     { 1 => match (y) { 10 => 100, _ => 200, }, _ => …
+6:13-14           BinopExp                 1
+5:19-11:10          Dereference            { 1 => match (y) { 10 => 100, _ => 200, }, _ => …
+5:19-11:10            Copy                 { 1 => match (y) { 10 => 100, _ => 200, }, _ => …
+6:13-14             Value                  1
+6:25-26           Assign                   y
+6:25-26             Copy                   y
+6:28-9:14         Assign                   { 10 => 100, _ => 200, }
+6:28-9:14           BorrowLocal            { 10 => 100, _ => 200, }
+6:28-9:14         IfElse                   { 10 => 100, _ => 200, }
+7:17-19             BinopExp               10
+6:28-9:14             Dereference          { 10 => 100, _ => 200, }
+6:28-9:14               Copy               { 10 => 100, _ => 200, }
+7:17-19               Value                10
+7:23-26             Assign                 100
+7:23-26               Value                100
+8:22-25             Assign                 200
+8:22-25               Value                200
+6:28-9:14         Assign                   { 10 => 100, _ => 200, }
+6:28-9:14           Move                   { 10 => 100, _ => 200, }
+10:18-21          Assign                   300
+10:18-21            Value                  300
+5:19-11:10      Return                     { 1 => match (y) { 10 => 100, _ => 200, }, _ => …
+5:19-11:10        Move                     { 1 => match (y) { 10 => 100, _ => 200, }, _ => …
