@@ -193,6 +193,13 @@ impl IngestionService {
         &self.config
     }
 
+    /// Register the sending half of an already-created checkpoint channel as a subscriber.
+    /// Used to attach a pipeline whose channel (and tasks) were set up before this service
+    /// existed.
+    pub(crate) fn subscribe(&mut self, tx: mpsc::Sender<Arc<CheckpointEnvelope>>) {
+        self.subscribers.push(tx);
+    }
+
     /// Add a new subscription backed by a bounded `mpsc` channel of the given capacity. The
     /// channel itself is the backpressure signal: when this consumer falls behind, the channel
     /// fills and the adaptive ingestion controller cuts fetch concurrency. Send blocks when the
@@ -201,7 +208,7 @@ impl IngestionService {
     /// Callers typically pass `pipeline::IngestionConfig::subscriber_channel_size()`.
     pub fn subscribe_bounded(&mut self, size: usize) -> mpsc::Receiver<Arc<CheckpointEnvelope>> {
         let (tx, rx) = mpsc::channel(size);
-        self.subscribers.push(tx);
+        self.subscribe(tx);
         rx
     }
 
