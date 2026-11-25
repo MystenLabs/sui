@@ -7,23 +7,19 @@
 //! field ID is a pure function of the coin type, or of the coin type and address. Execution reads
 //! them bounded by the FreezeList version assigned to the transaction; signing reads the latest.
 
-use crate::base_types::{EpochId, ObjectID, SequenceNumber, SuiAddress};
+use crate::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use crate::collection_types::VecSet;
 use crate::dynamic_field::DynamicFieldKey;
 use crate::error::SuiResult;
-use crate::id::UID;
-use crate::object::Object;
 use crate::storage::{ObjectStore, RuntimeObjectResolver};
 use crate::{MoveTypeTagTrait, SUI_FRAMEWORK_ADDRESS, SUI_FREEZE_LIST_OBJECT_ID};
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::{StructTag, TypeTag};
-use mysten_common::debug_fatal;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 pub const COIN_REGULATION_MODULE_NAME: &IdentStr = ident_str!("coin_regulation");
-pub const SEIZE_AUTH_STRUCT_NAME: &IdentStr = ident_str!("SeizeAuth");
 const COIN_TYPE_KEY_STRUCT_NAME: &IdentStr = ident_str!("CoinTypeKey");
 const FROZEN_ADDRESS_KEY_STRUCT_NAME: &IdentStr = ident_str!("FrozenAddressKey");
 
@@ -63,14 +59,6 @@ pub enum UnfreezeLock {
     Permanent,
 }
 
-/// Mirror of the Move struct `sui::coin_regulation::SeizeAuth<T>`.
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct SeizeAuth {
-    pub id: UID,
-    pub frozen_address: SuiAddress,
-    pub frozen_epoch: u64,
-}
-
 fn coin_regulation_struct(name: &IdentStr, type_params: Vec<TypeTag>) -> StructTag {
     StructTag {
         address: SUI_FRAMEWORK_ADDRESS,
@@ -95,19 +83,6 @@ impl MoveTypeTagTrait for FrozenAddressState {
             ident_str!("FrozenAddressState"),
             vec![],
         )))
-    }
-}
-
-impl SeizeAuth {
-    pub fn type_(coin_type: TypeTag) -> StructTag {
-        coin_regulation_struct(SEIZE_AUTH_STRUCT_NAME, vec![coin_type])
-    }
-
-    pub fn is_seize_auth(s: &StructTag) -> bool {
-        s.address == SUI_FRAMEWORK_ADDRESS
-            && s.module.as_ident_str() == COIN_REGULATION_MODULE_NAME
-            && s.name.as_ident_str() == SEIZE_AUTH_STRUCT_NAME
-            && s.type_params.len() == 1
     }
 }
 
@@ -170,18 +145,6 @@ where
         .transpose()
 }
 
-fn load_latest<K, V>(store: &dyn ObjectStore, field: FreezeListField<K>) -> SuiResult<Option<V>>
-where
-    K: Serialize + DeserializeOwned + std::fmt::Debug,
-    V: Serialize + DeserializeOwned,
-{
-    field
-        .into_unbounded_id()?
-        .load_object(store)
-        .map(|field| field.load_value::<V>())
-        .transpose()
-}
-
 /// `None` means `coin_type` is not regulated by the FreezeList.
 pub fn get_coin_type_state(
     resolver: &dyn RuntimeObjectResolver,
@@ -191,65 +154,37 @@ pub fn get_coin_type_state(
     load_bounded(resolver, freeze_list_version, CoinTypeKey::field(coin_type))
 }
 
-/// `None` means `addr` is not frozen for `coin_type`.
-pub fn get_frozen_address_state(
-    resolver: &dyn RuntimeObjectResolver,
-    freeze_list_version: SequenceNumber,
-    coin_type: &TypeTag,
-    addr: SuiAddress,
-) -> SuiResult<Option<FrozenAddressState>> {
-    load_bounded(
-        resolver,
-        freeze_list_version,
-        FrozenAddressKey::field(coin_type, addr),
-    )
-}
-
-pub fn get_latest_coin_type_state(
-    store: &dyn ObjectStore,
-    coin_type: &TypeTag,
-) -> SuiResult<Option<CoinTypeState>> {
-    load_latest(store, CoinTypeKey::field(coin_type))
-}
-
-pub fn get_latest_frozen_address_state(
-    store: &dyn ObjectStore,
-    coin_type: &TypeTag,
-    addr: SuiAddress,
-) -> SuiResult<Option<FrozenAddressState>> {
-    load_latest(store, FrozenAddressKey::field(coin_type, addr))
-}
-
 /// Whether `coin_type` has a `CoinTypeKey` as of FreezeList version `freeze_list_version`.
+///
+/// A coin type gets one when it migrates from its `DenyCapV2` or its `ComplianceCap` first freezes
+/// or pauses it. From then on the FreezeList alone regulates it, and its legacy deny list is ignored.
 pub fn has_coin_type_state(
     resolver: &dyn RuntimeObjectResolver,
     freeze_list_version: SequenceNumber,
     coin_type: &TypeTag,
 ) -> SuiResult<bool> {
-    get_coin_type_state(resolver, freeze_list_version, coin_type).map(|s| s.is_some())
+    CoinTypeKey::field(coin_type)
+        .into_id_with_bound(freeze_list_version)?
+        .exists(resolver)
+}
+
+/// Whether `addr` is frozen for `coin_type` as of FreezeList version `freeze_list_version`.
+pub fn is_address_frozen(
+    resolver: &dyn RuntimeObjectResolver,
+    freeze_list_version: SequenceNumber,
+    coin_type: &TypeTag,
+    addr: SuiAddress,
+) -> SuiResult<bool> {
+    FrozenAddressKey::field(coin_type, addr)
+        .into_id_with_bound(freeze_list_version)?
+        .exists(resolver)
 }
 
 pub fn has_latest_coin_type_state(store: &dyn ObjectStore, coin_type: &TypeTag) -> SuiResult<bool> {
-    get_latest_coin_type_state(store, coin_type).map(|s| s.is_some())
-}
-
-/// Returns the `T`, frozen address, and `frozen_epoch` of a `SeizeAuth<T>` object, or `None` for any
-/// other object. Does not check the object's owner.
-pub fn parse_seize_auth(object: &Object) -> Option<(TypeTag, SuiAddress, EpochId)> {
-    let move_obj = object.data.try_as_move()?;
-    let tag = move_obj.type_().other()?;
-    if !SeizeAuth::is_seize_auth(tag) {
-        return None;
-    }
-    let coin_type = tag.type_params[0].clone();
-    let Ok(auth) = bcs::from_bytes::<SeizeAuth>(move_obj.contents()) else {
-        debug_fatal!(
-            "seize auth {} did not match the `SeizeAuth` rust type",
-            object.id()
-        );
-        return None;
-    };
-    Some((coin_type, auth.frozen_address, auth.frozen_epoch))
+    Ok(CoinTypeKey::field(coin_type)
+        .into_unbounded_id()?
+        .load_object(store)
+        .is_some())
 }
 
 #[cfg(test)]

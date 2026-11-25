@@ -1228,7 +1228,9 @@ impl AuthorityState {
         if epoch_store.protocol_config().enable_coin_deny_list_v2() {
             let object_store = self.get_object_store();
             let check_migrated = epoch_store.protocol_config().enable_coin_regulation();
-            // The deny list names coin types, and the FreezeList keys them by type tag.
+            // Coin types migrated to `sui::coin_regulation` are regulated by the FreezeList instead
+            // of the deny list. The deny list names coin types, and the FreezeList keys them by type
+            // tag.
             let coin_types: BTreeMap<String, TypeTag> = checked_input_objects
                 .inner()
                 .iter_objects()

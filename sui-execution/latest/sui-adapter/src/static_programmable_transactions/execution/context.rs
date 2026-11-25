@@ -730,14 +730,12 @@ where
         };
         let balance_tracking = balance_tracking::finish(before, balances_after, objects)?;
         if env.protocol_config.enable_coin_regulation() {
-            coin_regulation::check(env.state_view, &balance_tracking, |reads| {
-                coin_regulation::check_address_reads(
-                    env.protocol_config,
-                    &metrics.limits_metrics,
-                    reads,
-                )
-                .map_err(|e| env.convert_vm_error(e.finish(Location::Undefined)))
-            })?;
+            coin_regulation::check(
+                env.state_view,
+                &balance_tracking,
+                env.protocol_config,
+                &metrics.limits_metrics,
+            )?;
         }
         Ok(results)
     }
@@ -2463,19 +2461,21 @@ pub(crate) fn finish(
         result,
         num_non_gas_coin_owners,
     } = if protocol_config.enable_coin_regulation() {
-        // Gas is charged for the owners of migrated types too, as before migration.
+        // A coin type migrated to `sui::coin_regulation` is regulated by the FreezeList instead of
+        // the deny list, so the deny list skips it. Its owners are still charged for, so migrating
+        // does not change gas.
         let num_non_gas_coin_owners = receiving_funds_type_and_owners
             .iter()
             .filter(|(coin_type, _)| !sui_types::gas_coin::GAS::is_gas_type(coin_type))
             .map(|(_, owners)| owners.len() as u64)
             .sum();
-        coin_regulation::remove_migrated_coin_types(
+        let unmigrated = coin_regulation::remove_migrated_coin_types(
             state_view,
-            &mut receiving_funds_type_and_owners,
+            receiving_funds_type_and_owners,
         )?;
         DenyListResult {
             num_non_gas_coin_owners,
-            ..state_view.check_coin_deny_list(receiving_funds_type_and_owners)
+            ..state_view.check_coin_deny_list(unmigrated)
         }
     } else {
         state_view.check_coin_deny_list(receiving_funds_type_and_owners)

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::coin_regulation::{check_address_reads, check_touched_types, touched_coin_types};
-use move_binary_format::errors::Location;
+use move_binary_format::errors::VMError;
 use move_core_types::vm_status::StatusCode;
 use serde::{Serialize, de::DeserializeOwned};
 use std::{
@@ -73,18 +73,45 @@ fn regulate(objects: &mut Vec<Object>, coin_type: &TypeTag, paused: bool, frozen
     }
 }
 
-fn check(
+fn check_with_limit(
     store: &InMemoryStorage,
     touched: &[&TypeTag],
     addresses: &[SuiAddress],
+    max_reads: u64,
 ) -> Result<(), ExecutionError> {
+    let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+    config.set_max_freeze_list_address_reads_for_testing(max_reads);
+    let metrics = ExecutionMetrics::new(&prometheus::Registry::new());
     check_touched_types(
         store,
         VERSION,
         &touched.iter().copied().collect(),
         &addresses.iter().copied().collect(),
-        |_| Ok::<_, ExecutionError>(()),
+        &config,
+        &metrics.limits_metrics,
     )
+}
+
+fn check(
+    store: &InMemoryStorage,
+    touched: &[&TypeTag],
+    addresses: &[SuiAddress],
+) -> Result<(), ExecutionError> {
+    check_with_limit(store, touched, addresses, u64::MAX)
+}
+
+fn assert_read_limit(result: Result<(), ExecutionError>) {
+    let err = result.unwrap_err();
+    let vm_error = err
+        .source()
+        .as_ref()
+        .and_then(|source| source.downcast_ref::<VMError>())
+        .unwrap();
+    assert_eq!(vm_error.major_status(), StatusCode::MEMORY_LIMIT_EXCEEDED);
+    assert_eq!(
+        vm_error.sub_status(),
+        Some(VMMemoryLimitExceededSubStatusCode::FREEZE_LIST_ADDRESS_READ_LIMIT_EXCEEDED as u64)
+    );
 }
 
 fn assert_paused(result: Result<(), ExecutionError>, coin_type: &TypeTag) {
@@ -209,23 +236,11 @@ fn address_reads_are_counted_before_any_is_made() {
     regulate(&mut objects, &b, false, &[y]);
     regulate(&mut objects, &c, false, &[]);
     let store = InMemoryStorage::new(objects);
-    let mut requested = None;
-    let result = check_touched_types(
-        &store,
-        VERSION,
-        &[&a, &b, &c].into_iter().collect(),
-        &[x, y, z].into_iter().collect(),
-        |reads| {
-            requested = Some(reads);
-            Err(ExecutionError::invariant_violation("over the limit"))
-        },
-    );
-    // Only the two types with frozen addresses are read, for each of the three addresses.
-    assert_eq!(requested, Some(6));
-    assert_eq!(
-        result.unwrap_err().kind(),
-        &ExecutionErrorKind::InvariantViolation
-    );
+    // Only the two types with frozen addresses are read, for each of the three addresses, and
+    // the limit fails before the frozen `x` is found.
+    let touched = [&a, &b, &c];
+    assert_read_limit(check_with_limit(&store, &touched, &[x, y, z], 6));
+    assert_denied(check_with_limit(&store, &touched, &[x, y, z], 7), x, &a);
 }
 
 #[test]
@@ -234,12 +249,5 @@ fn address_reads_fail_at_the_limit() {
     config.set_max_freeze_list_address_reads_for_testing(6);
     let metrics = ExecutionMetrics::new(&prometheus::Registry::new());
     check_address_reads(&config, &metrics.limits_metrics, 5).unwrap();
-    let err = check_address_reads(&config, &metrics.limits_metrics, 6)
-        .unwrap_err()
-        .finish(Location::Undefined);
-    assert_eq!(err.major_status(), StatusCode::MEMORY_LIMIT_EXCEEDED);
-    assert_eq!(
-        err.sub_status(),
-        Some(VMMemoryLimitExceededSubStatusCode::FREEZE_LIST_ADDRESS_READ_LIMIT_EXCEEDED as u64)
-    );
+    assert_read_limit(check_address_reads(&config, &metrics.limits_metrics, 6));
 }

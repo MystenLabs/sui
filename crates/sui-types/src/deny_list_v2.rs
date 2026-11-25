@@ -115,6 +115,10 @@ impl MoveTypeTagTrait for GlobalPauseKey {
 }
 
 /// Skips the coin types for which `is_migrated` holds, without reading their deny lists.
+///
+/// A coin type migrated to `sui::coin_regulation` is regulated by the FreezeList instead of the
+/// deny list, so its deny list entries no longer apply. `is_migrated` takes the coin type's
+/// `type_name` string.
 pub fn check_coin_deny_list_v2_during_signing(
     sender: SuiAddress,
     input_objects: &CheckedInputObjects,

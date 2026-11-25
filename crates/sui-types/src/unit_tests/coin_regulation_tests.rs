@@ -3,11 +3,11 @@
 
 use super::*;
 use crate::balance::Balance;
-use crate::base_types::MoveObjectType;
+use crate::base_types::EpochId;
 use crate::digests::TransactionDigest;
 use crate::gas_coin::GAS;
 use crate::in_memory_storage::InMemoryStorage;
-use crate::object::{MoveObject, Owner};
+use crate::object::{Object, Owner};
 use crate::storage::{BackingPackageStore, PackageObject};
 use std::collections::BTreeMap;
 
@@ -36,24 +36,6 @@ where
     Object::new_move(
         field,
         Owner::ObjectOwner(SUI_FREEZE_LIST_OBJECT_ID.into()),
-        TransactionDigest::genesis_marker(),
-    )
-}
-
-fn move_object(type_: StructTag, contents: Vec<u8>) -> Object {
-    let object = unsafe {
-        MoveObject::new_from_execution_with_limit(
-            MoveObjectType::from(type_),
-            false,
-            SequenceNumber::from_u64(1),
-            contents,
-            256,
-        )
-    }
-    .unwrap();
-    Object::new_move(
-        object,
-        Owner::AddressOwner(alice()),
         TransactionDigest::genesis_marker(),
     )
 }
@@ -100,7 +82,7 @@ fn coin_type_name_uses_full_addresses_without_prefix() {
 }
 
 #[test]
-fn bounded_and_latest_reads() {
+fn bounded_reads() {
     let version = SequenceNumber::from_u64(5);
     let regulated = GAS::type_tag();
     let unregulated = balance_of_sui();
@@ -120,48 +102,22 @@ fn bounded_and_latest_reads() {
         field_object(CoinTypeKey::field(&regulated), state.clone(), version),
         field_object(
             FrozenAddressKey::field(&regulated, alice()),
-            frozen.clone(),
+            frozen,
             version,
         ),
     ]);
 
     assert_eq!(
         get_coin_type_state(&store, version, &regulated).unwrap(),
-        Some(state.clone())
+        Some(state)
     );
     assert_eq!(
         get_coin_type_state(&store, version, &unregulated).unwrap(),
         None
     );
-    assert_eq!(
-        get_frozen_address_state(&store, version, &regulated, alice()).unwrap(),
-        Some(frozen.clone())
-    );
-    assert_eq!(
-        get_frozen_address_state(&store, version, &regulated, bob).unwrap(),
-        None
-    );
-    assert_eq!(
-        get_frozen_address_state(&store, version, &unregulated, alice()).unwrap(),
-        None
-    );
-
-    assert_eq!(
-        get_latest_coin_type_state(&store, &regulated).unwrap(),
-        Some(state)
-    );
-    assert_eq!(
-        get_latest_coin_type_state(&store, &unregulated).unwrap(),
-        None
-    );
-    assert_eq!(
-        get_latest_frozen_address_state(&store, &regulated, alice()).unwrap(),
-        Some(frozen)
-    );
-    assert_eq!(
-        get_latest_frozen_address_state(&store, &regulated, bob).unwrap(),
-        None
-    );
+    assert!(is_address_frozen(&store, version, &regulated, alice()).unwrap());
+    assert!(!is_address_frozen(&store, version, &regulated, bob).unwrap());
+    assert!(!is_address_frozen(&store, version, &unregulated, alice()).unwrap());
 }
 
 /// Keeps every version of each child.
@@ -242,13 +198,12 @@ fn bounded_reads_ignore_later_versions() {
     ));
 
     let read_state = |version| get_coin_type_state(&store, version, &coin_type).unwrap();
-    let read_frozen =
-        |version| get_frozen_address_state(&store, version, &coin_type, alice()).unwrap();
+    let read_frozen = |version| is_address_frozen(&store, version, &coin_type, alice()).unwrap();
     assert_eq!(read_state(SequenceNumber::from_u64(2)), None);
     assert_eq!(read_state(v5), Some(state(false)));
     assert_eq!(read_state(v7), Some(state(true)));
-    assert_eq!(read_frozen(v5), None);
-    assert_eq!(read_frozen(v7), Some(frozen(7)));
+    assert!(!read_frozen(v5));
+    assert!(read_frozen(v7));
 }
 
 #[test]
@@ -270,34 +225,4 @@ fn has_coin_type_state_reads() {
     assert!(!has_coin_type_state(&store, version, &without_state).unwrap());
     assert!(has_latest_coin_type_state(&store, &with_state).unwrap());
     assert!(!has_latest_coin_type_state(&store, &without_state).unwrap());
-}
-
-#[test]
-fn parse_seize_auth_objects() {
-    let auth = SeizeAuth {
-        id: UID::new(id("0x5e12e")),
-        frozen_address: alice(),
-        frozen_epoch: 3,
-    };
-    let contents = bcs::to_bytes(&auth).unwrap();
-
-    let object = move_object(SeizeAuth::type_(balance_of_sui()), contents.clone());
-    assert_eq!(
-        parse_seize_auth(&object),
-        Some((balance_of_sui(), alice(), 3))
-    );
-
-    let cap = coin_regulation_struct(ident_str!("ComplianceCap"), vec![GAS::type_tag()]);
-    assert_eq!(parse_seize_auth(&move_object(cap, contents.clone())), None);
-
-    let mut elsewhere = SeizeAuth::type_(GAS::type_tag());
-    elsewhere.address = id("0x123").into();
-    assert_eq!(parse_seize_auth(&move_object(elsewhere, contents)), None);
-
-    let coin = Object::new_move(
-        MoveObject::new_coin(GAS::type_tag(), SequenceNumber::from_u64(1), id("0xc0"), 10),
-        Owner::AddressOwner(alice()),
-        TransactionDigest::genesis_marker(),
-    );
-    assert_eq!(parse_seize_auth(&coin), None);
 }
