@@ -4568,7 +4568,7 @@ fn find_faucet_url(rpc: &str) -> anyhow::Result<String> {
         return Ok("https://faucet.testnet.sui.io".to_string());
     }
 
-    if host == localhost || host == localhost_0 {
+    if host == localhost || host == localhost_0 || host == "localhost" {
         Ok("http://127.0.0.1:9123/v2/gas".to_string())
     } else {
         bail!("Cannot recognize the active network. Please provide the gas faucet full URL.")
@@ -4693,5 +4693,17 @@ mod tests {
 
         let table = gas_result(0, 42).to_string();
         assert!(table.contains("address balance"), "{table}");
+    }
+
+    /// `http://localhost:9000` is the same localnet as `127.0.0.1:9000`.
+    #[test]
+    fn find_faucet_url_accepts_localhost_hostname() {
+        let url = find_faucet_url("http://localhost:9000")
+            .expect("localhost RPC should map to the local faucet");
+        assert_eq!(url, "http://127.0.0.1:9123/v2/gas");
+        assert_eq!(
+            find_faucet_url("http://127.0.0.1:9000").unwrap(),
+            "http://127.0.0.1:9123/v2/gas"
+        );
     }
 }
