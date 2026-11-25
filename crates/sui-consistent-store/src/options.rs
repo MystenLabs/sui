@@ -256,11 +256,19 @@ impl CompactOnDeletionConfig {
     }
 
     /// Field-wise overlay: every field set on `self` wins; otherwise
-    /// fall back to `base`.
+    /// fall back to `base`. Setting `window_size` to `Some(0)` without
+    /// an explicit `deletion_trigger` also clears an inherited trigger
+    /// to `Some(0)` so disabling the sliding window only requires
+    /// zeroing `window_size`.
     pub fn merge_over(&self, base: &Self) -> Self {
+        let window_size = self.window_size.or(base.window_size);
+        let deletion_trigger = match (self.window_size, self.deletion_trigger) {
+            (Some(0), None) => Some(0),
+            (_, trigger) => trigger.or(base.deletion_trigger),
+        };
         Self {
-            window_size: self.window_size.or(base.window_size),
-            deletion_trigger: self.deletion_trigger.or(base.deletion_trigger),
+            window_size,
+            deletion_trigger,
             deletion_ratio: self.deletion_ratio.or(base.deletion_ratio),
         }
     }
@@ -906,10 +914,10 @@ mod tests {
             },
             ..Default::default()
         };
+        // Zeroing window_size alone clears the inherited deletion_trigger.
         let disabled = CfTuning {
             compact_on_deletion: CompactOnDeletionConfig {
                 window_size: Some(0),
-                deletion_trigger: Some(0),
                 ..Default::default()
             },
             ..Default::default()
@@ -919,6 +927,20 @@ mod tests {
         assert_eq!(merged.compact_on_deletion.deletion_trigger, Some(0));
         assert_eq!(merged.compact_on_deletion.deletion_ratio, Some(0.0));
         assert!(merged.validate("object_by_owner").is_ok());
+
+        let zero_window_with_trigger = CfTuning {
+            compact_on_deletion: CompactOnDeletionConfig {
+                window_size: Some(0),
+                deletion_trigger: Some(500),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(
+            zero_window_with_trigger
+                .validate("object_by_owner")
+                .is_err()
+        );
 
         let bad_trigger = CfTuning {
             compact_on_deletion: CompactOnDeletionConfig {
