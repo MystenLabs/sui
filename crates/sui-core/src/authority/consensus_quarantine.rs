@@ -82,9 +82,6 @@ pub(crate) struct ConsensusCommitOutput {
     dkg_own_confirmation: Option<VersionedDkgConfirmation>,
     dkg_output: Option<Option<dkg_v1::Output<PkG, EncG>>>,
 
-    // encrypted transaction state
-    pending_encrypted_transactions: Option<Vec<VerifiedExecutableTransactionWithAliases>>,
-
     // jwk state
     pending_jwks: BTreeSet<(AuthorityName, JwkId, JWK)>,
     active_jwks: BTreeSet<(u64, (JwkId, JWK))>,
@@ -249,13 +246,6 @@ impl ConsensusCommitOutput {
         self.dkg_own_confirmation = Some(conf);
     }
 
-    pub fn set_pending_encrypted_transactions(
-        &mut self,
-        transactions: Vec<VerifiedExecutableTransactionWithAliases>,
-    ) {
-        self.pending_encrypted_transactions = Some(transactions);
-    }
-
     pub fn set_dkg_output(&mut self, output: Option<dkg_v1::Output<PkG, EncG>>) {
         self.dkg_output = Some(output);
     }
@@ -383,17 +373,6 @@ impl ConsensusCommitOutput {
                 .into_iter()
                 .map(|conf| (SINGLETON_KEY, conf)),
         )?;
-        if let Some(transactions) = self.pending_encrypted_transactions {
-            let transactions: Vec<_> = transactions
-                .into_iter()
-                .map(|tx| tx.serializable())
-                .collect();
-            batch.insert_batch(
-                &tables.pending_encrypted_transactions,
-                [(SINGLETON_KEY, transactions)],
-            )?;
-        }
-
         if let Some(output) = self.dkg_output {
             batch.insert_batch(&tables.dkg_output_v2, [(SINGLETON_KEY, output)])?;
         }

@@ -560,25 +560,32 @@ async fn test_encrypted_transaction_key_derivation() {
 
     // Only one node requests the key. Its shares alone are below the threshold, and the other
     // nodes do not release theirs, so no key is derived.
-    handles[0]
+    let mut first = handles[0]
         .1
-        .request_encrypted_transaction_key(0, id_message.clone());
-    let waiter = handles[0]
-        .1
-        .wait_encrypted_transaction_key(0, id_message.clone());
+        .derive_encrypted_transaction_key(0, id_message.clone());
     tokio::time::sleep(Duration::from_secs(2)).await;
-    let mut waiter = waiter;
-    assert!(waiter.try_recv().is_err());
+    assert!(first.try_recv().is_err());
 
-    // Once every node processed the commit, all nodes derive the same verified key.
-    for (_, handle) in handles.iter().skip(1) {
-        handle.request_encrypted_transaction_key(0, id_message.clone());
+    // Once every other node but the last processed the commit, all of them derive the same
+    // verified key.
+    let last = handles.len() - 1;
+    let mut receivers = vec![first];
+    for (_, handle) in &handles[1..last] {
+        receivers.push(handle.derive_encrypted_transaction_key(0, id_message.clone()));
     }
-    let mut keys = vec![waiter.await.unwrap()];
-    for (_, handle) in handles.iter().skip(1) {
+    let mut keys = vec![];
+    for receiver in receivers {
+        keys.push(receiver.await.unwrap());
+    }
+
+    // A node that requests the key after the others finished derives it from the shares that
+    // they sent. Another call joins the same derivation.
+    tokio::time::sleep(Duration::from_secs(20)).await;
+    for _ in 0..2 {
         keys.push(
-            handle
-                .wait_encrypted_transaction_key(0, id_message.clone())
+            handles[last]
+                .1
+                .derive_encrypted_transaction_key(0, id_message.clone())
                 .await
                 .unwrap(),
         );
@@ -591,11 +598,11 @@ async fn test_encrypted_transaction_key_derivation() {
     // A malformed identity is refused, so the beacon's round messages cannot be signed.
     let round_message = RandomnessRound(5).signature_message();
     for (_, handle) in handles.iter() {
-        handle.request_encrypted_transaction_key(0, round_message.clone());
+        assert!(
+            handle
+                .derive_encrypted_transaction_key(0, round_message.clone())
+                .await
+                .is_err()
+        );
     }
-    let mut waiter = handles[0]
-        .1
-        .wait_encrypted_transaction_key(0, round_message);
-    tokio::time::sleep(Duration::from_secs(2)).await;
-    assert!(waiter.try_recv().is_err());
 }

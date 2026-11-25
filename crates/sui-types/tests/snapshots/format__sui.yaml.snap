@@ -437,9 +437,11 @@ ConsensusDeterminedVersionAssignments:
                             - TYPENAME: ObjectID
                             - TYPENAME: SequenceNumber
                         - TYPENAME: SequenceNumber
-          - encrypted_transactions:
+          - encrypted_transaction_keys:
               SEQ:
-                TYPENAME: EncryptedTransactionResolution
+                TUPLE:
+                  - TYPENAME: TransactionDigest
+                  - SEQ: U8
 Data:
   ENUM:
     0:
@@ -484,19 +486,10 @@ EmptySignInfo:
 EncryptedTransaction:
   STRUCT:
     - epoch: U64
-    - salt:
-        SEQ: U8
     - nonce:
         SEQ: U8
     - ciphertext:
         SEQ: U8
-EncryptedTransactionResolution:
-  STRUCT:
-    - transaction_digest:
-        TYPENAME: TransactionDigest
-    - key:
-        SEQ: U8
-    - executes: BOOL
 EndOfEpochData:
   STRUCT:
     - nextEpochCommittee:

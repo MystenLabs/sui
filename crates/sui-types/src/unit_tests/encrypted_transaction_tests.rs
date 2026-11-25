@@ -2,15 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::base_types::{ObjectID, random_object_ref};
+use crate::accumulator_root::AccumulatorValue;
+use crate::balance::Balance;
+use crate::base_types::{ObjectID, SequenceNumber, random_object_ref};
+use crate::coin_reservation::ParsedObjectRefWithdrawal;
 use crate::crypto::RandomnessRound;
+use crate::gas_coin::GAS;
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::transaction::{
     TransactionData, TransactionDataAPI, TransactionKind, TxValidityCheckContext,
 };
 use fastcrypto::groups::bls12381::Scalar;
 use fastcrypto_threshold::polynomial::{Eval, Poly};
-use fastcrypto_threshold::types::ShareIndex;
+use fastcrypto_threshold::tbls::ThresholdBls;
+use fastcrypto_threshold::types::{ShareIndex, ThresholdBls12381MinSig};
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 use sui_protocol_config::ProtocolConfig;
@@ -59,9 +64,6 @@ fn seal_and_open() {
     encrypted.check_format().unwrap();
 
     let key = beacon.derive_key(&encrypted.id_message(&sender));
-    encrypted
-        .verify_key(&beacon.public_key, &sender, &key)
-        .unwrap();
     assert_eq!(encrypted.open(&sender, &key).unwrap(), transaction);
 
     let decoded: EncryptedTransaction =
@@ -84,10 +86,6 @@ fn key_of_another_sender_does_not_open() {
     // An attacker that puts the ciphertext into its own transaction gets the key of its own
     // identity, which does not decrypt the ciphertext.
     let attacker_key = beacon.derive_key(&encrypted.id_message(&attacker));
-    assert_eq!(
-        encrypted.verify_key(&beacon.public_key, &sender, &attacker_key),
-        Err(EncryptedTransactionError::InvalidKey)
-    );
     assert_eq!(
         encrypted.open(&attacker, &attacker_key),
         Err(EncryptedTransactionError::DecryptionFailed)
@@ -138,18 +136,11 @@ fn malformed_fields_are_rejected() {
         Err(EncryptedTransactionError::Malformed("nonce"))
     );
 
-    let mut zero_nonce = encrypted.clone();
+    let mut zero_nonce = encrypted;
     zero_nonce.nonce = G2Element::zero().to_byte_array().to_vec();
     assert_eq!(
         zero_nonce.check_format(),
         Err(EncryptedTransactionError::Malformed("nonce"))
-    );
-
-    let mut short_salt = encrypted;
-    short_salt.salt.pop();
-    assert_eq!(
-        short_salt.check_format(),
-        Err(EncryptedTransactionError::Malformed("salt"))
     );
 }
 
@@ -215,7 +206,7 @@ fn vote_checks() {
         EncryptedTransaction::seal(&mut rng, &beacon.public_key, 0, sender, &programmable());
 
     let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
-    config.set_encrypted_transaction_fee_for_testing(1_000_000);
+    config.set_encrypted_transaction_min_gas_price_for_testing(1_000);
     let data = |price| {
         TransactionData::new_with_gas_coins(
             TransactionKind::EncryptedTransaction(encrypted.clone()),
@@ -233,8 +224,24 @@ fn vote_checks() {
     config.set_encrypted_transactions_for_testing(true);
     let context = TxValidityCheckContext::from_cfg_for_testing(&config);
     data(1_000).validity_check(&context).unwrap();
-    // A gas price of 999 charges less than the fee for 1,000 computation units.
     assert!(data(999).validity_check(&context).is_err());
+
+    // Gas is paid with coins of the sender.
+    let mut no_payment = data(1_000);
+    no_payment.gas_data_mut().payment.clear();
+    assert!(no_payment.validity_check(&context).is_err());
+
+    let mut coin_reservation = data(1_000);
+    let account = AccumulatorValue::get_field_id(sender, &Balance::type_tag(GAS::type_tag()));
+    coin_reservation.gas_data_mut().payment = vec![
+        ParsedObjectRefWithdrawal::new(*account.unwrap().inner(), 0, 100_000_000)
+            .encode(SequenceNumber::new(), context.chain_identifier),
+    ];
+    assert!(coin_reservation.validity_check(&context).is_err());
+
+    let mut sponsored = data(1_000);
+    sponsored.gas_data_mut().owner = SuiAddress::random_for_testing_only();
+    assert!(sponsored.validity_check(&context).is_err());
 
     let mut other_epoch = context;
     other_epoch.epoch = 1;

@@ -14,15 +14,20 @@
 //! signature on the identity message (`ThresholdBls12381MinSig`), so the beacon's key shares
 //! produce it.
 //!
-//! The identity contains the sender address. Validators release key shares only for a
-//! committed transaction whose sender equals the identity's sender, and only the sender can
-//! sign such a transaction. A party that copies the ciphertext into its own transaction gets
-//! the key of a different identity, which does not decrypt the ciphertext.
+//! The identity contains the sender address and the KEM encapsulation. Validators release key
+//! shares only for a committed transaction whose sender equals the identity's sender, and only
+//! the sender can sign such a transaction. A party that copies the ciphertext into its own
+//! transaction gets the key of a different identity, which does not decrypt the ciphertext.
+//!
+//! The encapsulation is uniformly random for each transaction, so each transaction has its own
+//! identity. The encapsulation does not depend on the identity, so the identity can contain it.
+//! The security argument of Boneh-Franklin still applies: a reduction knows the challenge
+//! encapsulation in advance, and can program the identity hash of every other identity.
 
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
-use crate::base_types::{SuiAddress, TransactionDigest};
+use crate::base_types::SuiAddress;
 use crate::committee::EpochId;
 use crate::crypto::RandomnessSignature;
 use crate::transaction::ProgrammableTransaction;
@@ -32,9 +37,6 @@ use fastcrypto::groups::{GroupElement, HashToGroupElement, Pairing, Scalar as _}
 use fastcrypto::hash::{HashFunction, Sha3_256};
 use fastcrypto::serde_helpers::ToFromByteArray;
 use fastcrypto::traits::{AllowedRng, ToFromBytes};
-use fastcrypto_threshold::tbls::ThresholdBls;
-use fastcrypto_threshold::types::ThresholdBls12381MinSig;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Prefix of every identity message. It must not share a prefix with
@@ -46,13 +48,6 @@ const KDF_TAG: &[u8] = b"sui encrypted transaction kdf v1";
 /// AES-256-GCM-SIV takes a 96-bit nonce. Each key encrypts one message, so the nonce is fixed.
 const DEM_NONCE: [u8; 12] = [0; 12];
 
-pub const SALT_LENGTH: usize = 32;
-
-/// The smallest computation charge in gas units (the first computation bucket). Every executed
-/// transaction pays at least this many units times its gas price, so a gas price of
-/// `fee / MIN_COMPUTATION_UNITS` pays the inclusion fee even if the transaction runs no command.
-pub const MIN_COMPUTATION_UNITS: u64 = 1_000;
-
 /// The random beacon's threshold public key for one epoch (`dkg_output.vss_pk.c0()`).
 pub type BeaconPublicKey = G2Element;
 /// The IBE user secret key for an identity. It is a threshold BLS signature on the identity
@@ -63,8 +58,6 @@ pub type EncryptedTransactionKey = RandomnessSignature;
 pub enum EncryptedTransactionError {
     #[error("malformed encrypted transaction field: {0}")]
     Malformed(&'static str),
-    #[error("key does not verify against the beacon public key")]
-    InvalidKey,
     #[error("ciphertext does not decrypt")]
     DecryptionFailed,
     #[error("plaintext does not deserialize")]
@@ -77,9 +70,8 @@ pub struct EncryptedTransaction {
     /// The epoch whose beacon key encrypts the transaction. The transaction is valid only in
     /// this epoch.
     pub epoch: EpochId,
-    /// Chosen by the sender so that each transaction has its own identity (32 bytes).
-    pub salt: Vec<u8>,
-    /// IBE encapsulation `r * g2` (96 bytes, compressed G2).
+    /// IBE encapsulation `r * g2` (96 bytes, compressed G2). It is part of the identity, so it
+    /// must be fresh for each transaction.
     pub nonce: Vec<u8>,
     /// AES-256-GCM-SIV encryption of `bcs(ProgrammableTransaction)` with the identity message
     /// as associated data.
@@ -92,10 +84,11 @@ pub struct EncryptedTransaction {
     decrypted: Option<Arc<ProgrammableTransaction>>,
 }
 
+// The plaintext is not part of the transaction, so it does not affect equality. Caches compare
+// copies of a transaction of which only one is decrypted.
 impl PartialEq for EncryptedTransaction {
     fn eq(&self, other: &Self) -> bool {
         self.epoch == other.epoch
-            && self.salt == other.salt
             && self.nonce == other.nonce
             && self.ciphertext == other.ciphertext
     }
@@ -105,23 +98,8 @@ impl Eq for EncryptedTransaction {}
 
 impl Hash for EncryptedTransaction {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.epoch.hash(state);
-        self.salt.hash(state);
-        self.nonce.hash(state);
-        self.ciphertext.hash(state);
+        (self.epoch, &self.nonce, &self.ciphertext).hash(state);
     }
-}
-
-/// The key of an encrypted transaction that a commit schedules, recorded in the commit prologue
-/// so that nodes that replay checkpoints can decrypt the transaction.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct EncryptedTransactionResolution {
-    pub transaction_digest: TransactionDigest,
-    /// Compressed G1 key (48 bytes).
-    pub key: Vec<u8>,
-    /// False when the ciphertext does not decrypt or the decrypted transaction fails
-    /// validation. The transaction then runs no command and only pays gas.
-    pub executes: bool,
 }
 
 impl EncryptedTransaction {
@@ -133,12 +111,9 @@ impl EncryptedTransaction {
         sender: SuiAddress,
         transaction: &ProgrammableTransaction,
     ) -> Self {
-        let mut salt = vec![0; SALT_LENGTH];
-        rng.fill_bytes(&mut salt);
-        let id_message = id_message(epoch, &sender, &salt);
-
         let r = fastcrypto::groups::bls12381::Scalar::rand(rng);
         let nonce = G2Element::generator() * r;
+        let id_message = id_message(epoch, &sender, &nonce.to_byte_array());
         let shared = (hash_id(&id_message) * r).pairing(beacon_pk);
         let dem_key = kdf(&shared.to_byte_array(), &nonce, &id_message);
 
@@ -147,7 +122,6 @@ impl EncryptedTransaction {
 
         Self {
             epoch,
-            salt,
             nonce: nonce.to_byte_array().to_vec(),
             ciphertext,
             decrypted: None,
@@ -156,27 +130,12 @@ impl EncryptedTransaction {
 
     /// The message whose threshold signature is the key of this transaction.
     pub fn id_message(&self, sender: &SuiAddress) -> Vec<u8> {
-        id_message(self.epoch, sender, &self.salt)
+        id_message(self.epoch, sender, &self.nonce)
     }
 
-    /// Checks field lengths. Validators run this when they vote on the transaction.
+    /// Checks the field format. Validators run this when they vote on the transaction.
     pub fn check_format(&self) -> Result<(), EncryptedTransactionError> {
-        if self.salt.len() != SALT_LENGTH {
-            return Err(EncryptedTransactionError::Malformed("salt"));
-        }
-        self.parse_nonce()?;
-        Ok(())
-    }
-
-    /// Checks that `key` is the IBE user secret key of this transaction under `beacon_pk`.
-    pub fn verify_key(
-        &self,
-        beacon_pk: &BeaconPublicKey,
-        sender: &SuiAddress,
-        key: &EncryptedTransactionKey,
-    ) -> Result<(), EncryptedTransactionError> {
-        ThresholdBls12381MinSig::verify(beacon_pk, &self.id_message(sender), key)
-            .map_err(|_| EncryptedTransactionError::InvalidKey)
+        self.parse_nonce().map(|_| ())
     }
 
     /// Decrypts the transaction with its key.
@@ -224,12 +183,7 @@ impl EncryptedTransaction {
     }
 }
 
-/// The smallest gas price that pays the inclusion fee.
-pub fn min_gas_price_for_fee(fee: u64) -> u64 {
-    fee.div_ceil(MIN_COMPUTATION_UNITS)
-}
-
-/// Parses a compressed key from an `EncryptedTransactionResolution`.
+/// Parses a compressed key from a commit prologue.
 pub fn key_from_bytes(bytes: &[u8]) -> Result<EncryptedTransactionKey, EncryptedTransactionError> {
     let bytes: [u8; 48] = bytes
         .try_into()
@@ -249,21 +203,9 @@ pub struct BeaconKeyInfo {
     pub beacon_public_key: Vec<u8>,
 }
 
-impl BeaconKeyInfo {
-    pub fn public_key(&self) -> Result<BeaconPublicKey, EncryptedTransactionError> {
-        let bytes: [u8; 96] = self
-            .beacon_public_key
-            .as_slice()
-            .try_into()
-            .map_err(|_| EncryptedTransactionError::Malformed("beacon public key"))?;
-        G2Element::from_byte_array(&bytes)
-            .map_err(|_| EncryptedTransactionError::Malformed("beacon public key"))
-    }
-}
-
-fn id_message(epoch: EpochId, sender: &SuiAddress, salt: &[u8]) -> Vec<u8> {
+fn id_message(epoch: EpochId, sender: &SuiAddress, nonce: &[u8]) -> Vec<u8> {
     let mut message = ID_TAG.to_vec();
-    message.extend(bcs::to_bytes(&(epoch, sender, salt)).expect("serialization should not fail"));
+    message.extend(bcs::to_bytes(&(epoch, sender, nonce)).expect("serialization should not fail"));
     message
 }
 

@@ -1710,7 +1710,7 @@ impl ProgrammableTransaction {
             .collect()
     }
 
-    pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
+    fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         let ProgrammableTransaction { inputs, commands } = self;
         fp_ensure!(
             commands.len() < config.max_programmable_tx_commands() as usize,
@@ -2496,7 +2496,7 @@ pub fn is_gas_paid_from_address_balance(
     gas_data.payment.is_empty()
         && matches!(
             transaction_kind,
-            TransactionKind::ProgrammableTransaction(_) | TransactionKind::EncryptedTransaction(_)
+            TransactionKind::ProgrammableTransaction(_)
         )
 }
 
@@ -3867,7 +3867,7 @@ impl TransactionDataAPI for TransactionDataV1 {
             && self.is_gas_paid_from_address_balance()
         {
             if config.address_balance_gas_reject_gas_coin_arg()
-                && let Some(pt) = self.kind.user_programmable_transaction()
+                && let TransactionKind::ProgrammableTransaction(pt) = &self.kind
             {
                 fp_ensure!(
                     !pt.commands.iter().any(|cmd| cmd.is_gas_coin_used()),
@@ -4026,15 +4026,26 @@ impl TransactionDataAPI for TransactionDataV1 {
                 ))
                 .into()
             );
-            let min_price = crate::encrypted_transaction::min_gas_price_for_fee(
-                config.encrypted_transaction_fee(),
-            );
+            let min_price = config.encrypted_transaction_min_gas_price();
             fp_ensure!(
                 self.gas_data.price >= min_price,
                 UserInputError::GasPriceUnderRGP {
                     gas_price: self.gas_data.price,
                     reference_gas_price: min_price,
                 }
+                .into()
+            );
+            // Several transactions can reserve gas from one address balance, and those that it
+            // does not cover pay nothing. Their keys would be derived for free.
+            fp_ensure!(
+                !self
+                    .gas_data
+                    .payment
+                    .iter()
+                    .any(|(_, _, digest)| ParsedDigest::is_coin_reservation_digest(digest)),
+                UserInputError::Unsupported(
+                    "encrypted transactions must pay gas with coins".to_string()
+                )
                 .into()
             );
         }
@@ -4076,10 +4087,8 @@ impl TransactionDataAPI for TransactionDataV1 {
         if self.gas_owner() == self.sender() {
             return Ok(());
         }
-        if matches!(
-            &self.kind,
-            TransactionKind::ProgrammableTransaction(_) | TransactionKind::EncryptedTransaction(_)
-        ) {
+        // The sponsor of an encrypted transaction could not see a use of its gas coin.
+        if matches!(&self.kind, TransactionKind::ProgrammableTransaction(_)) {
             return Ok(());
         }
         Err(UserInputError::UnsupportedSponsoredTransactionKind)

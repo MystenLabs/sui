@@ -24,6 +24,7 @@ use sui_types::{
     executable_transaction::VerifiedExecutableTransaction,
     transaction::{TransactionDataAPI, TransactionKey, VerifiedTransaction},
 };
+use tokio::sync::watch;
 use tracing::{debug, error};
 
 #[derive(Clone)]
@@ -62,6 +63,8 @@ pub(crate) struct SettlementScheduler {
     execution_scheduler: ExecutionScheduler,
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
     settlement_queue_sender: Arc<Mutex<Option<SettlementQueueSender>>>,
+    /// The height of the last batch that executed and settled.
+    settled_height: Arc<watch::Sender<u64>>,
     metrics: Arc<AuthorityMetrics>,
 }
 
@@ -75,8 +78,16 @@ impl SettlementScheduler {
             execution_scheduler,
             transaction_cache_read,
             settlement_queue_sender: Arc::new(Mutex::new(None)),
+            settled_height: Arc::new(watch::Sender::new(0)),
             metrics,
         }
+    }
+
+    /// Watches the height of the last batch that executed and settled. `initial` is the height
+    /// up to which every batch settled before this scheduler started.
+    pub(crate) fn watch_settled_height(&self, initial: u64) -> watch::Receiver<u64> {
+        self.settled_height.send_replace(initial);
+        self.settled_height.subscribe()
     }
 
     pub(crate) fn enqueue(
@@ -153,6 +164,7 @@ impl SettlementScheduler {
 
             let tx_index_offset = running_tx_offset;
             let batch_tx_count = item.batch_info.tx_keys.len() as u64;
+            let height = item.batch_info.checkpoint_height;
 
             let result = epoch_store
                 .within_alive_epoch(scheduler.construct_and_execute_settlement(
@@ -170,6 +182,7 @@ impl SettlementScheduler {
                 }
                 Ok(settlement_tx_count) => {
                     running_tx_offset += batch_tx_count + settlement_tx_count as u64;
+                    scheduler.settled_height.send_replace(height);
                 }
             }
         }

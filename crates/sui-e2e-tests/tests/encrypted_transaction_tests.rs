@@ -13,7 +13,7 @@ use move_core_types::language_storage::TypeTag;
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
 use sui_types::base_types::ObjectID;
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{SequenceNumber, SuiAddress};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::encrypted_transaction::{BeaconPublicKey, EncryptedTransaction};
 use sui_types::gas_coin::GAS;
@@ -27,7 +27,7 @@ use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID, SUI_FRAMEWORK_PACK
 use test_cluster::addr_balance_test_env::{TestEnv, TestEnvBuilder};
 
 const TIMEOUT: Duration = Duration::from_secs(120);
-const FEE: u64 = 1_000;
+const MIN_GAS_PRICE: u64 = 1_000;
 
 async fn build_env() -> TestEnv {
     TestEnvBuilder::new()
@@ -35,7 +35,7 @@ async fn build_env() -> TestEnv {
         .with_proto_override_cb(Box::new(|_, mut config| {
             config.set_encrypted_transactions_for_testing(true);
             config.set_encrypted_transaction_max_per_commit_for_testing(4);
-            config.set_encrypted_transaction_fee_for_testing(FEE);
+            config.set_encrypted_transaction_min_gas_price_for_testing(MIN_GAS_PRICE);
             config
         }))
         .build()
@@ -48,11 +48,7 @@ async fn beacon_key(validator: &SuiNodeHandle) -> (u64, BeaconPublicKey) {
         loop {
             let key = validator.with(|node| {
                 let epoch_store = node.state().load_epoch_store_one_call_per_task();
-                let keys = epoch_store.encrypted_transaction_keys()?;
-                Some((
-                    epoch_store.epoch(),
-                    keys.beacon_public_key(epoch_store.epoch())?,
-                ))
+                Some((epoch_store.epoch(), node.beacon_public_key()?))
             });
             if let Some(key) = key {
                 return key;
@@ -145,8 +141,7 @@ fn envelope(env: &TestEnv, sender: SuiAddress, encrypted: EncryptedTransaction) 
         sender,
         gas,
         100_000_000,
-        env.rgp
-            .max(FEE / sui_types::encrypted_transaction::MIN_COMPUTATION_UNITS),
+        env.rgp.max(MIN_GAS_PRICE),
     )
 }
 
@@ -351,4 +346,135 @@ async fn test_encrypted_withdrawal_respects_the_deny_list() {
     assert!(effects.status().is_ok(), "{:?}", effects.status());
     assert!(effects.gas_cost_summary().computation_cost > 0);
     assert_eq!(env.get_balance_ab(recipient, coin_type), 1);
+}
+
+#[sim_test]
+async fn test_hidden_inputs_that_the_vote_would_reject() {
+    telemetry_subscribers::init_for_testing();
+    let mut env = build_env().await;
+    let sender = env.get_sender(0);
+    let owned = env.get_gas_for_sender(env.get_sender(1))[0];
+
+    let use_shared = |id, version, mutability| {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .obj(ObjectArg::SharedObject {
+                id,
+                initial_shared_version: version,
+                mutability,
+            })
+            .unwrap();
+        builder.transfer_sui(SuiAddress::ZERO, Some(1));
+        builder.finish()
+    };
+    let call_object = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.programmable_move_call(
+            SUI_CLOCK_OBJECT_ID,
+            "clock".parse().unwrap(),
+            "timestamp_ms".parse().unwrap(),
+            vec![],
+            vec![],
+        );
+        builder.finish()
+    };
+    let invalid = [
+        use_shared(
+            SUI_CLOCK_OBJECT_ID,
+            SequenceNumber::from_u64(1),
+            SharedObjectMutability::Mutable,
+        ),
+        use_shared(
+            SUI_CLOCK_OBJECT_ID,
+            SequenceNumber::from_u64(7),
+            SharedObjectMutability::Immutable,
+        ),
+        use_shared(owned.0, owned.1, SharedObjectMutability::Immutable),
+        call_object,
+    ];
+    for transaction in &invalid {
+        let effects = execute_encrypted(&mut env, sender, transaction).await;
+        assert!(effects.status().is_ok(), "{:?}", effects.status());
+        assert!(effects.created().is_empty());
+        assert!(effects.gas_cost_summary().computation_cost > 0);
+    }
+
+    // The network still executes encrypted transactions.
+    let effects = execute_encrypted(&mut env, sender, &read_clock()).await;
+    assert!(reads_clock(&effects));
+    env.trigger_reconfiguration().await;
+}
+
+/// Executes an encrypted transaction that reads the clock. The transaction driver retries when it
+/// picks a validator that is stopped or behind.
+async fn execute_through_driver(
+    env: &mut TestEnv,
+    epoch: u64,
+    beacon_pk: &BeaconPublicKey,
+    sender: SuiAddress,
+) {
+    let encrypted = EncryptedTransaction::seal(
+        &mut rand::thread_rng(),
+        beacon_pk,
+        epoch,
+        sender,
+        &read_clock(),
+    );
+    let transaction = env
+        .cluster
+        .sign_transaction(&envelope(env, sender, encrypted))
+        .await;
+    let (effects, _) = env
+        .cluster
+        .execute_transaction_return_raw_effects(transaction)
+        .await
+        .expect("encrypted transaction should execute");
+    assert!(reads_clock(&effects));
+    env.update_all_gas().await;
+}
+
+#[sim_test]
+async fn test_restarted_validators_resolve_encrypted_transactions() {
+    telemetry_subscribers::init_for_testing();
+    let mut env = build_env().await;
+    let sender = env.get_sender(0);
+    execute_encrypted(&mut env, sender, &read_clock()).await;
+
+    // One validator misses encrypted transactions. Then all validators restart, so the others
+    // lose the keys that they derived.
+    let (epoch, beacon_pk) = beacon_key(&env.cluster.all_validator_handles()[0]).await;
+    let lagging = env.cluster.get_validator_pubkeys()[3];
+    env.cluster.stop_node(&lagging);
+    for _ in 0..3 {
+        execute_through_driver(&mut env, epoch, &beacon_pk, sender).await;
+    }
+    tokio::time::sleep(Duration::from_secs(10)).await;
+    env.cluster.stop_all_validators().await;
+    env.cluster.start_all_validators().await;
+    execute_through_driver(&mut env, epoch, &beacon_pk, sender).await;
+
+    // Every consensus handler catches up and builds new checkpoints.
+    let target = env.cluster.fullnode_handle.sui_node.with(|node| {
+        node.state()
+            .get_checkpoint_store()
+            .get_highest_executed_checkpoint_seq_number()
+            .unwrap()
+            .unwrap()
+    });
+    tokio::time::timeout(TIMEOUT, async {
+        for validator in env.cluster.all_validator_handles() {
+            while validator.with(|node| {
+                node.state()
+                    .get_checkpoint_store()
+                    .get_latest_locally_computed_checkpoint()
+                    .unwrap()
+                    .is_none_or(|checkpoint| checkpoint.sequence_number < target)
+            }) {
+                tokio::time::sleep(Duration::from_millis(200)).await;
+            }
+        }
+    })
+    .await
+    .expect("every validator should build checkpoints");
+    env.trigger_reconfiguration().await;
 }

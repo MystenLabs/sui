@@ -565,11 +565,6 @@ pub struct AuthorityEpochTables {
     /// Records the final output of DKG after completion, including the public VSS key and
     /// any local private shares. `None` indicates DKG completed as a failure.
     pub(crate) dkg_output_v2: DBMap<u64, Option<dkg_v1::Output<PkG, EncG>>>,
-
-    /// Encrypted transactions accepted in the last processed commit that are not scheduled
-    /// yet.
-    pub(crate) pending_encrypted_transactions:
-        DBMap<u64, Vec<TrustedExecutableTransactionWithAliases>>,
 }
 
 #[cfg(not(tidehunter))]
@@ -783,10 +778,6 @@ impl AuthorityEpochTables {
             ),
             (
                 "dkg_output_v2".to_string(),
-                ThConfig::new(8, 1, KeyType::uniform(1)),
-            ),
-            (
-                "pending_encrypted_transactions".to_string(),
                 ThConfig::new(8, 1, KeyType::uniform(1)),
             ),
         ];
@@ -1148,20 +1139,6 @@ impl AuthorityPerEpochStore {
 
     pub fn encrypted_transaction_keys(&self) -> Option<Arc<dyn EncryptedTransactionKeys>> {
         self.encrypted_transaction_keys.get().cloned()
-    }
-
-    /// Reads the pending encrypted transactions at startup, when the quarantine is empty.
-    pub(crate) fn get_pending_encrypted_transactions(
-        &self,
-    ) -> SuiResult<Vec<VerifiedExecutableTransactionWithAliases>> {
-        Ok(self
-            .tables()
-            .pending_encrypted_transactions
-            .get(&SINGLETON_KEY)?
-            .unwrap_or_default()
-            .into_iter()
-            .map(Into::into)
-            .collect())
     }
 
     pub fn randomness_reporter(&self) -> Option<RandomnessReporter> {

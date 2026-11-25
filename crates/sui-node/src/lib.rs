@@ -39,7 +39,6 @@ use sui_core::authority::execution_time_estimator::ExecutionTimeObserver;
 use sui_core::consensus_adapter::ConsensusClient;
 use sui_core::consensus_manager::UpdatableConsensusClient;
 use sui_core::consensus_transaction_pool::TransactionPoolContext;
-use sui_core::encrypted_transactions::NetworkEncryptedTransactionKeys;
 use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::build_execution_cache;
 use sui_core::randomness_round_receiver::{RandomnessRoundReceiver, RandomnessRoundReceiverHandle};
@@ -59,6 +58,7 @@ use sui_types::crypto::RandomnessRound;
 use sui_types::digests::{
     ChainIdentifier, CheckpointDigest, TransactionDigest, TransactionEffectsDigest,
 };
+use sui_types::encrypted_transaction::BeaconPublicKey;
 use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
@@ -1633,12 +1633,7 @@ impl SuiNode {
                     .await?;
             }
             if epoch_store.protocol_config().encrypted_transactions() {
-                epoch_store.set_encrypted_transaction_keys(Arc::new(
-                    NetworkEncryptedTransactionKeys::new(
-                        randomness_handle,
-                        randomness_receiver_handle.clone(),
-                    ),
-                ));
+                epoch_store.set_encrypted_transaction_keys(Arc::new(randomness_handle));
             }
         }
 
@@ -1860,6 +1855,11 @@ impl SuiNode {
             server.into_handle()
         });
         Ok((server, admission_queue))
+    }
+
+    /// The random beacon public key of the current epoch, if DKG completed.
+    pub fn beacon_public_key(&self) -> Option<BeaconPublicKey> {
+        self.randomness_receiver_handle.public_key()
     }
 
     pub fn state(&self) -> Arc<AuthorityState> {

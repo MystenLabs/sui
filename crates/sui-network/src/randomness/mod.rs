@@ -158,26 +158,18 @@ impl Handle {
             .expect("RandomnessEventLoop mailbox should not overflow or be closed")
     }
 
-    /// Starts deriving the key of an encrypted transaction. The caller must call this only
-    /// after the commit that holds the transaction is processed, because it releases this
-    /// node's shares.
-    pub fn request_encrypted_transaction_key(&self, epoch: EpochId, id_message: Vec<u8>) {
-        self.sender
-            .try_send(RandomnessMessage::RequestEncryptedTransactionKey(
-                epoch, id_message,
-            ))
-            .expect("RandomnessEventLoop mailbox should not overflow or be closed")
-    }
-
-    /// Returns a receiver that yields the verified key of an encrypted transaction.
-    pub fn wait_encrypted_transaction_key(
+    /// Derives the key of an encrypted transaction. The receiver yields the verified key. The
+    /// caller must call this only after the commit that holds the transaction is processed,
+    /// because it releases this node's shares. The derivation continues if the receiver is
+    /// dropped, and another call for the same identity joins it.
+    pub fn derive_encrypted_transaction_key(
         &self,
         epoch: EpochId,
         id_message: Vec<u8>,
     ) -> oneshot::Receiver<RandomnessSignature> {
         let (sender, receiver) = oneshot::channel();
         self.sender
-            .try_send(RandomnessMessage::WaitEncryptedTransactionKey(
+            .try_send(RandomnessMessage::DeriveEncryptedTransactionKey(
                 epoch, id_message, sender,
             ))
             .expect("RandomnessEventLoop mailbox should not overflow or be closed");
@@ -234,8 +226,7 @@ enum RandomnessMessage {
         RandomnessSignature,
         oneshot::Sender<Result<()>>,
     ),
-    RequestEncryptedTransactionKey(EpochId, Vec<u8>),
-    WaitEncryptedTransactionKey(EpochId, Vec<u8>, oneshot::Sender<RandomnessSignature>),
+    DeriveEncryptedTransactionKey(EpochId, Vec<u8>, oneshot::Sender<RandomnessSignature>),
     ReceiveEncryptedTransactionKeyShares(PeerId, SendEncryptedTransactionKeySharesRequest),
 }
 
@@ -344,11 +335,8 @@ impl RandomnessEventLoop {
             RandomnessMessage::AdminInjectFullSignature(round, sig, result_channel) => {
                 let _ = result_channel.send(self.admin_inject_full_signature(round, sig));
             }
-            RandomnessMessage::RequestEncryptedTransactionKey(epoch, id_message) => {
-                self.request_encrypted_transaction_key(epoch, id_message)
-            }
-            RandomnessMessage::WaitEncryptedTransactionKey(epoch, id_message, sender) => {
-                self.wait_encrypted_transaction_key(epoch, id_message, sender)
+            RandomnessMessage::DeriveEncryptedTransactionKey(epoch, id_message, sender) => {
+                self.derive_encrypted_transaction_key(epoch, id_message, sender)
             }
             RandomnessMessage::ReceiveEncryptedTransactionKeyShares(peer_id, request) => {
                 self.receive_encrypted_transaction_key_shares(peer_id, request)
@@ -429,9 +417,6 @@ impl RandomnessEventLoop {
         }
 
         self.encrypted_transaction_keys.update_epoch(new_epoch);
-        for (epoch, id_message) in self.encrypted_transaction_keys.take_deferred_requests() {
-            self.request_encrypted_transaction_key(epoch, id_message);
-        }
 
         Ok(())
     }

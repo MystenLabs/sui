@@ -2346,6 +2346,12 @@ impl AuthorityState {
             }
             .into());
         }
+        if matches!(transaction.kind(), TransactionKind::EncryptedTransaction(_)) {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
+                error: "simulate does not support encrypted transactions".to_string(),
+            }
+            .into());
+        }
 
         let epoch_store = self.load_epoch_store_one_call_per_task();
         if !self.is_fullnode(&epoch_store) {

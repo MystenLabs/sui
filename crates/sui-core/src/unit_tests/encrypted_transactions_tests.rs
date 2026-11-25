@@ -7,20 +7,21 @@ use fastcrypto::groups::bls12381::{G1Element, G2Element, Scalar};
 use fastcrypto::groups::{GroupElement, HashToGroupElement, Scalar as _};
 use move_core_types::ident_str;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::base_types::{ObjectID, ObjectRef};
-use sui_types::crypto::{AccountKeyPair, deterministic_random_account_key, get_key_pair};
+use sui_types::crypto::{AccountKeyPair, deterministic_random_account_key};
 use sui_types::digests::TransactionDigest;
+use sui_types::encrypted_transaction::BeaconPublicKey;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::gas_coin::GAS;
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::object::Object;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
-    ObjectArg, ProgrammableTransaction, SharedObjectMutability, Transaction, TransactionData,
+    ProgrammableTransaction, SharedObjectMutability, Transaction, VerifiedTransaction,
 };
 use sui_types::utils::to_sender_signed_transaction;
+use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 
 use super::*;
 use crate::authority::AuthorityState;
@@ -31,7 +32,7 @@ use crate::consensus_test_utils::{
     CapturedTransactions, TestConsensusCommit, setup_consensus_handler_for_testing,
 };
 
-const FEE: u64 = 1_000_000;
+const GAS_PRICE: u64 = 1_000;
 
 /// Derives keys directly from a master key instead of from beacon key shares.
 struct TestKeys {
@@ -52,18 +53,16 @@ impl TestKeys {
     }
 }
 
-#[async_trait]
 impl EncryptedTransactionKeys for TestKeys {
-    fn request(&self, _epoch: EpochId, id_message: Vec<u8>) {
+    fn derive(
+        &self,
+        _epoch: EpochId,
+        id_message: Vec<u8>,
+    ) -> oneshot::Receiver<EncryptedTransactionKey> {
+        let (sender, receiver) = oneshot::channel();
+        let _ = sender.send(G1Element::hash_to_group_element(&id_message) * self.master);
         self.requested.lock().push(id_message);
-    }
-
-    async fn wait(&self, _epoch: EpochId, id_message: Vec<u8>) -> EncryptedTransactionKey {
-        G1Element::hash_to_group_element(&id_message) * self.master
-    }
-
-    fn beacon_public_key(&self, _epoch: EpochId) -> Option<BeaconPublicKey> {
-        Some(self.public_key())
+        receiver
     }
 }
 
@@ -74,7 +73,7 @@ fn enable_encrypted_transactions(max_per_commit: u64) -> sui_protocol_config::Ov
         config.set_random_beacon_for_testing(false);
         config.set_encrypted_transactions_for_testing(true);
         config.set_encrypted_transaction_max_per_commit_for_testing(max_per_commit);
-        config.set_encrypted_transaction_fee_for_testing(FEE);
+        config.set_encrypted_transaction_min_gas_price_for_testing(GAS_PRICE);
         config
     })
 }
@@ -91,7 +90,7 @@ struct Fixture {
 async fn fixture() -> Fixture {
     telemetry_subscribers::init_for_testing();
     let (sender, keypair) = deterministic_random_account_key();
-    let gas_objects: Vec<_> = (0..6)
+    let gas_objects: Vec<_> = (0..20)
         .map(|_| Object::with_id_owner_for_testing(ObjectID::random(), sender))
         .collect();
     let shared_object = Object::shared_for_testing();
@@ -118,14 +117,16 @@ async fn fixture() -> Fixture {
 impl Fixture {
     /// A programmable transaction that reads the shared coin object.
     fn read_shared_object(&self) -> ProgrammableTransaction {
+        self.read_coin(ObjectArg::SharedObject {
+            id: self.shared_object.id(),
+            initial_shared_version: self.shared_object.version(),
+            mutability: SharedObjectMutability::Immutable,
+        })
+    }
+
+    fn read_coin(&self, coin: ObjectArg) -> ProgrammableTransaction {
         let mut builder = ProgrammableTransactionBuilder::new();
-        let coin = builder
-            .obj(ObjectArg::SharedObject {
-                id: self.shared_object.id(),
-                initial_shared_version: self.shared_object.version(),
-                mutability: SharedObjectMutability::Immutable,
-            })
-            .unwrap();
+        let coin = builder.obj(coin).unwrap();
         builder.programmable_move_call(
             SUI_FRAMEWORK_PACKAGE_ID,
             ident_str!("coin").to_owned(),
@@ -172,7 +173,7 @@ impl Fixture {
             sender,
             vec![gas],
             100_000_000,
-            FEE / sui_types::encrypted_transaction::MIN_COMPUTATION_UNITS,
+            GAS_PRICE,
         );
         to_sender_signed_transaction(data, keypair)
     }
@@ -222,6 +223,29 @@ impl Fixture {
             .unwrap();
         ConsensusTransaction::new_user_transaction_v2_message(&self.state.name, verified.into())
     }
+}
+
+/// Handles one commit per item of `commits`, and returns the user transactions that the handler
+/// sent to execution, per commit.
+async fn run_commits(
+    fixture: &Fixture,
+    commits: Vec<Vec<ConsensusTransaction>>,
+) -> Vec<Vec<VerifiedExecutableTransaction>> {
+    let mut setup = setup_consensus_handler_for_testing(&fixture.state).await;
+    let count = commits.len();
+    for (index, transactions) in commits.into_iter().enumerate() {
+        let index = index as u64 + 1;
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(TestConsensusCommit::new(
+                transactions,
+                index + 9,
+                index * 1_000,
+                index,
+            ))
+            .await;
+    }
+    scheduled(&setup.captured_transactions, count).await
 }
 
 fn user_digest(message: &ConsensusTransaction) -> TransactionDigest {
@@ -297,7 +321,13 @@ async fn encrypted_transaction_is_scheduled_before_the_next_commit() {
         vec![id_message],
         "the key is requested once the transaction's commit is processed"
     );
-    assert!(setup.consensus_handler.encrypted_transactions.has_pending());
+    assert!(
+        !fixture
+            .state
+            .epoch_store_for_testing()
+            .deferred_transactions_empty(),
+        "the epoch does not close before the transaction executes"
+    );
 
     setup
         .consensus_handler
@@ -329,7 +359,7 @@ async fn encrypted_transaction_is_scheduled_before_the_next_commit() {
 
 #[tokio::test]
 async fn invalid_decrypted_transaction_runs_no_command() {
-    let _guard = enable_encrypted_transactions(5);
+    let _guard = enable_encrypted_transactions(20);
     let fixture = fixture().await;
 
     let sender_withdrawal =
@@ -340,8 +370,93 @@ async fn invalid_decrypted_transaction_runs_no_command() {
         fixture.sender,
         ObjectID::random(),
     );
+    let shared = |id, version: SequenceNumber, mutability| {
+        fixture.read_coin(ObjectArg::SharedObject {
+            id,
+            initial_shared_version: version,
+            mutability,
+        })
+    };
+    let object = |index: usize| {
+        let (id, version, _) = fixture.gas(index);
+        (id, version)
+    };
+    let (shared_id, shared_version) = (fixture.shared_object.id(), fixture.shared_object.version());
+    let party_object = {
+        let mut object = fixture.gas_objects[19].clone();
+        object.owner = Owner::ConsensusAddressOwner {
+            start_version: object.version(),
+            owner: fixture.sender,
+        };
+        let mut inner = object.into_inner();
+        inner
+            .data
+            .try_as_move_mut()
+            .unwrap()
+            .increment_version_to(SequenceNumber::from_u64(10));
+        Object::from(inner)
+    };
+    fixture
+        .state
+        .insert_objects_unsafe_for_testing_only(std::slice::from_ref(&party_object))
+        .await
+        .unwrap();
+    let call = |package| {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.programmable_move_call(
+            package,
+            ident_str!("coin").to_owned(),
+            ident_str!("value").to_owned(),
+            vec![],
+            vec![],
+        );
+        builder.finish()
+    };
+    let publish = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.publish_immutable(vec![vec![0]], vec![]);
+        builder.finish()
+    };
     let invalid = [
-        fixture.use_owned_object(&fixture.gas_objects[5]),
+        shared(
+            SUI_CLOCK_OBJECT_ID,
+            SequenceNumber::from_u64(1),
+            SharedObjectMutability::Mutable,
+        ),
+        shared(
+            shared_id,
+            shared_version.next(),
+            SharedObjectMutability::Immutable,
+        ),
+        shared(
+            shared_id,
+            SequenceNumber::from_u64(0),
+            SharedObjectMutability::Immutable,
+        ),
+        shared(
+            object(18).0,
+            object(18).1,
+            SharedObjectMutability::Immutable,
+        ),
+        shared(
+            party_object.id(),
+            party_object.owner.start_version().unwrap(),
+            SharedObjectMutability::Immutable,
+        ),
+        shared(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            SequenceNumber::from_u64(1),
+            SharedObjectMutability::Immutable,
+        ),
+        shared(
+            ObjectID::random(),
+            SequenceNumber::from_u64(1),
+            SharedObjectMutability::Immutable,
+        ),
+        call(SUI_CLOCK_OBJECT_ID),
+        call(ObjectID::random()),
+        publish,
+        fixture.use_owned_object(&fixture.gas_objects[18]),
         fixture.withdraw(vec![allowance_withdrawal]),
         fixture.withdraw(vec![sender_withdrawal(0)]),
         // The sender's address balance is empty.
@@ -362,65 +477,13 @@ async fn invalid_decrypted_transaction_runs_no_command() {
         .map(|envelope| fixture.message(envelope.clone()))
         .collect();
 
-    let mut setup = setup_consensus_handler_for_testing(&fixture.state).await;
-    for (round, transactions) in [(10, messages), (11, vec![])] {
-        setup
-            .consensus_handler
-            .handle_consensus_commit_for_test(TestConsensusCommit::new(
-                transactions,
-                round,
-                round * 100,
-                round - 9,
-            ))
-            .await;
-    }
-
-    let commits = scheduled(&setup.captured_transactions, 2).await;
+    let commits = run_commits(&fixture, vec![messages, vec![]]).await;
     assert!(commits[0].is_empty());
     assert_eq!(commits[1].len(), envelopes.len());
     for transaction in &commits[1] {
         assert!(decrypted(transaction).commands.is_empty());
         assert!(!transaction.transaction_data().has_funds_withdrawals());
     }
-}
-
-#[tokio::test]
-async fn copied_ciphertext_does_not_decrypt() {
-    let _guard = enable_encrypted_transactions(2);
-    let fixture = fixture().await;
-
-    // An attacker copies the sender's ciphertext into its own transaction. The released key
-    // belongs to the attacker's identity, so the ciphertext does not decrypt.
-    let (attacker, attacker_keypair): (_, AccountKeyPair) = get_key_pair();
-    let attacker_gas = Object::with_id_owner_for_testing(ObjectID::random(), attacker);
-    fixture
-        .state
-        .insert_objects_unsafe_for_testing_only(std::slice::from_ref(&attacker_gas))
-        .await
-        .unwrap();
-    let copied = fixture.envelope(
-        fixture.encrypt(&fixture.read_shared_object()),
-        attacker,
-        &attacker_keypair,
-        attacker_gas.compute_object_reference(),
-    );
-
-    let mut setup = setup_consensus_handler_for_testing(&fixture.state).await;
-    for (round, transactions) in [(10, vec![fixture.message(copied.clone())]), (11, vec![])] {
-        setup
-            .consensus_handler
-            .handle_consensus_commit_for_test(TestConsensusCommit::new(
-                transactions,
-                round,
-                round * 100,
-                round - 9,
-            ))
-            .await;
-    }
-
-    let commits = scheduled(&setup.captured_transactions, 2).await;
-    assert_eq!(digests(&commits[1]), vec![*copied.digest()]);
-    assert!(decrypted(&commits[1][0]).commands.is_empty());
 }
 
 #[tokio::test]
@@ -432,27 +495,11 @@ async fn transactions_over_the_commit_limit_run_no_command() {
     let first = fixture.encrypted_transaction(&inner, 0);
     let second = fixture.encrypted_transaction(&inner, 1);
 
-    let mut setup = setup_consensus_handler_for_testing(&fixture.state).await;
-    for (round, transactions) in [
-        (
-            10,
-            vec![
-                fixture.message(first.clone()),
-                fixture.message(second.clone()),
-            ],
-        ),
-        (11, vec![]),
-    ] {
-        setup
-            .consensus_handler
-            .handle_consensus_commit_for_test(TestConsensusCommit::new(
-                transactions,
-                round,
-                round * 100,
-                round - 9,
-            ))
-            .await;
-    }
+    let messages = vec![
+        fixture.message(first.clone()),
+        fixture.message(second.clone()),
+    ];
+    let commits = run_commits(&fixture, vec![messages, vec![]]).await;
     // The resolve step requests the key again, which has no effect.
     let requested: std::collections::HashSet<_> =
         fixture.keys.requested.lock().iter().cloned().collect();
@@ -462,7 +509,6 @@ async fn transactions_over_the_commit_limit_run_no_command() {
         "no key is released for the transaction over the limit"
     );
 
-    let commits = scheduled(&setup.captured_transactions, 2).await;
     // The transaction over the limit runs no command in its own commit.
     assert_eq!(digests(&commits[0]), vec![*second.digest()]);
     assert!(decrypted(&commits[0][0]).commands.is_empty());
@@ -479,65 +525,41 @@ async fn checkpoint_transactions_are_decrypted_from_prologue_keys() {
     let TransactionKind::EncryptedTransaction(et) = encrypted.transaction_data().kind() else {
         unreachable!()
     };
-    let key = fixture.keys.wait(0, et.id_message(&fixture.sender)).await;
+    let key = fixture
+        .keys
+        .derive(0, et.id_message(&fixture.sender))
+        .await
+        .unwrap();
 
     let executable = |tx: Transaction| {
         VerifiedExecutableTransaction::new_from_checkpoint(
-            sui_types::transaction::VerifiedTransaction::new_unchecked(tx),
+            VerifiedTransaction::new_unchecked(tx),
             0,
             1,
         )
     };
-    let prologue = |round, encrypted_transactions| {
-        Arc::new(
-            sui_types::transaction::VerifiedTransaction::new_consensus_commit_prologue_v4(
-                0,
-                round,
-                0,
-                Default::default(),
-                sui_types::messages_consensus::ConsensusDeterminedVersionAssignments::CancelledAndEncryptedTransactions {
-                    cancelled_transactions: vec![],
-                    encrypted_transactions,
-                },
-                sui_types::digests::AdditionalConsensusStateDigest::ZERO,
-            ),
-        )
-    };
-    let with_key = prologue(
-        1,
-        vec![EncryptedTransactionResolution {
-            transaction_digest: *encrypted.digest(),
-            key: key_to_bytes(&key),
-            executes: true,
-        }],
+    let prologue = VerifiedExecutableTransaction::new_system(
+        VerifiedTransaction::new_consensus_commit_prologue_v4(
+            0,
+            1,
+            0,
+            Default::default(),
+            ConsensusDeterminedVersionAssignments::CancelledAndEncryptedTransactions {
+                cancelled_transactions: vec![],
+                encrypted_transaction_keys: vec![(*encrypted.digest(), key_to_bytes(&key))],
+            },
+            sui_types::digests::AdditionalConsensusStateDigest::ZERO,
+        ),
+        0,
     );
-    let as_executable = |tx: &Arc<sui_types::transaction::VerifiedTransaction>| {
-        VerifiedExecutableTransaction::new_system((**tx).clone(), 0)
-    };
-
-    // The prologue is in the same checkpoint. Earlier checkpoints are not read.
-    let transactions = decrypt_checkpoint_transactions(
-        vec![as_executable(&with_key), executable(encrypted.clone())],
-        std::iter::from_fn(|| -> Option<Vec<Arc<VerifiedTransaction>>> {
-            panic!("earlier checkpoints must not be read")
-        }),
-    );
+    let without_key = fixture.encrypted_transaction(&inner, 1);
+    let transactions = decrypt_checkpoint_transactions(vec![
+        prologue,
+        executable(encrypted),
+        executable(without_key),
+    ]);
     assert_eq!(decrypted(&transactions[1]), &inner);
-
-    // The commit spans two checkpoints, so the prologue is in the previous checkpoint.
-    let transactions = decrypt_checkpoint_transactions(
-        vec![executable(encrypted.clone())],
-        vec![vec![with_key.clone()]],
-    );
-    assert_eq!(decrypted(&transactions[0]), &inner);
-
-    // The search stops at the latest checkpoint with a prologue. A key recorded in an older
-    // prologue belongs to another commit and is not used.
-    let transactions = decrypt_checkpoint_transactions(
-        vec![executable(encrypted.clone())],
-        vec![vec![prologue(2, vec![])], vec![with_key]],
-    );
-    assert!(needs_key(&transactions[0]));
+    assert!(decrypted(&transactions[2]).commands.is_empty());
 }
 
 #[tokio::test]
@@ -574,20 +596,7 @@ async fn withdrawals_of_one_commit_share_the_balance() {
         .map(|envelope| fixture.message(envelope.clone()))
         .collect();
 
-    let mut setup = setup_consensus_handler_for_testing(&fixture.state).await;
-    for (round, transactions) in [(10, messages), (11, vec![])] {
-        setup
-            .consensus_handler
-            .handle_consensus_commit_for_test(TestConsensusCommit::new(
-                transactions,
-                round,
-                round * 100,
-                round - 9,
-            ))
-            .await;
-    }
-
-    let commits = scheduled(&setup.captured_transactions, 2).await;
+    let commits = run_commits(&fixture, vec![messages, vec![]]).await;
     assert_eq!(
         digests(&commits[1]),
         envelopes

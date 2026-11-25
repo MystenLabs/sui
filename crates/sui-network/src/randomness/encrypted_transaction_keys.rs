@@ -29,11 +29,9 @@ use super::{RandomnessClient, RandomnessEventLoop};
 
 /// Upper bound on the length of an identity message.
 pub(super) const MAX_ID_MESSAGE_LEN: usize = 256;
-/// Upper bound on the number of identities with buffered peer partial signatures that this
-/// node has not requested.
-const MAX_UNREQUESTED_IDS: usize = 1_000;
-/// Number of rounds a send task keeps sending the full key after the key is known.
-const SENDS_AFTER_KEY: usize = 2;
+/// Upper bound on the number of identities that this node has not requested and for which it
+/// buffers the partial signatures of one peer.
+const MAX_UNREQUESTED_IDS_PER_PEER: usize = 1_000;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SendEncryptedTransactionKeySharesRequest {
@@ -41,7 +39,7 @@ pub struct SendEncryptedTransactionKeySharesRequest {
     pub(super) id_message: Vec<u8>,
     // BCS-serialized `RandomnessPartialSignature` values, ordered by share index.
     pub(super) partial_sigs: Vec<Vec<u8>>,
-    // The full key, sent instead of partial signatures once the sender has it.
+    // The full key, sent instead of partial signatures in reply to a peer that does not have it.
     pub(super) key: Option<RandomnessSignature>,
 }
 
@@ -50,137 +48,93 @@ type KeyId = (EpochId, Vec<u8>);
 #[derive(Default)]
 pub(super) struct EncryptedTransactionKeyState {
     requested: HashMap<KeyId, RequestedKey>,
-    unrequested: HashMap<KeyId, HashMap<PeerId, Vec<RandomnessPartialSignature>>>,
-    /// Requests for an epoch whose DKG output the event loop does not have yet.
-    deferred_requests: Vec<KeyId>,
+    unrequested: HashMap<PeerId, HashMap<KeyId, Vec<RandomnessPartialSignature>>>,
 }
 
 struct RequestedKey {
     partials: HashMap<PeerId, Vec<RandomnessPartialSignature>>,
     key: Arc<OnceCell<RandomnessSignature>>,
     waiters: Vec<oneshot::Sender<RandomnessSignature>>,
-    send_task: Option<tokio::task::JoinHandle<()>>,
+    send_task: tokio::task::JoinHandle<()>,
 }
 
-impl RequestedKey {
-    fn new() -> Self {
-        Self {
-            partials: HashMap::new(),
-            key: Arc::new(OnceCell::new()),
-            waiters: vec![],
-            send_task: None,
-        }
+impl Drop for RequestedKey {
+    fn drop(&mut self) {
+        self.send_task.abort();
     }
 }
 
 impl EncryptedTransactionKeyState {
     /// Drops the state of earlier epochs.
     pub(super) fn update_epoch(&mut self, epoch: EpochId) {
-        self.requested.retain(|(e, _), state| {
-            if *e < epoch
-                && let Some(task) = state.send_task.take()
-            {
-                task.abort();
-            }
-            *e >= epoch
-        });
-        self.unrequested.retain(|(e, _), _| *e >= epoch);
-    }
-
-    pub(super) fn take_deferred_requests(&mut self) -> Vec<KeyId> {
-        std::mem::take(&mut self.deferred_requests)
+        self.requested.retain(|(e, _), _| *e >= epoch);
+        self.unrequested.clear();
     }
 }
 
 impl RandomnessEventLoop {
-    pub(super) fn request_encrypted_transaction_key(
+    pub(super) fn derive_encrypted_transaction_key(
         &mut self,
         epoch: EpochId,
         id_message: Vec<u8>,
+        waiter: oneshot::Sender<RandomnessSignature>,
     ) {
         if !id_message.starts_with(ID_TAG) || id_message.len() > MAX_ID_MESSAGE_LEN {
             warn!("BUG: refusing to derive an encrypted transaction key for a malformed identity");
             return;
         }
-        if epoch < self.epoch {
-            debug!("ignoring encrypted transaction key request for past epoch {epoch}");
-            return;
-        }
-        let Some(shares) = self
-            .dkg_output
-            .as_ref()
-            .filter(|_| epoch == self.epoch)
-            .and_then(|output| output.shares.clone())
-        else {
-            debug!(
-                "deferring encrypted transaction key request until DKG output for epoch {epoch} is available"
-            );
-            self.encrypted_transaction_keys
-                .deferred_requests
-                .push((epoch, id_message));
+        // The epoch's DKG output arrives before the first request, because the consensus handler
+        // accepts encrypted transactions only after DKG. Nodes that are not in the committee
+        // never get it, and read keys from checkpoints.
+        let Some(dkg_output) = self.dkg_output.as_ref().filter(|_| epoch == self.epoch) else {
+            debug!("not deriving an encrypted transaction key without the DKG output of {epoch}");
             return;
         };
 
-        let id = (epoch, id_message.clone());
-        if self
-            .encrypted_transaction_keys
-            .requested
-            .get(&id)
-            .is_some_and(|state| state.send_task.is_some())
-        {
+        let id = (epoch, id_message);
+        if let Some(state) = self.encrypted_transaction_keys.requested.get_mut(&id) {
+            match state.key.get() {
+                Some(key) => {
+                    let _ = waiter.send(*key);
+                }
+                None => state.waiters.push(waiter),
+            }
             return;
         }
-        let early_partials = self
+
+        // A validator without shares sends an empty list. It receives the partial signatures of
+        // its peers, or the key from a peer that has it.
+        let own_partials =
+            ThresholdBls12381MinSig::partial_sign_batch(dkg_output.shares.iter().flatten(), &id.1);
+        let mut partials: HashMap<_, _> = self
             .encrypted_transaction_keys
             .unrequested
-            .remove(&id)
-            .unwrap_or_default();
-        let own_partials = ThresholdBls12381MinSig::partial_sign_batch(shares.iter(), &id_message);
-        let own_peer_id = self.network.peer_id();
-        let name = self.name;
-        let network = self.network.clone();
-        let retry_interval = self.config.partial_signature_retry_interval();
-        let authority_info = self.authority_info.clone();
-
-        let state = self
-            .encrypted_transaction_keys
-            .requested
-            .entry(id.clone())
-            .or_insert_with(RequestedKey::new);
-        state.partials.extend(early_partials);
-        state.partials.insert(own_peer_id, own_partials.clone());
+            .iter_mut()
+            .filter_map(|(peer_id, ids)| Some((*peer_id, ids.remove(&id)?)))
+            .collect();
+        partials.insert(self.network.peer_id(), own_partials.clone());
+        let key = Arc::new(OnceCell::new());
         let task = send_encrypted_transaction_key_shares_task(
-            name,
-            network,
-            retry_interval,
-            authority_info,
-            epoch,
-            id_message,
+            self.name,
+            self.network.clone(),
+            self.config.partial_signature_retry_interval(),
+            self.authority_info.clone(),
+            id.clone(),
             own_partials,
-            state.key.clone(),
+            key.clone(),
         );
-        state.send_task = Some(spawn_monitored_task!(task));
+        let send_task = spawn_monitored_task!(task);
+        self.encrypted_transaction_keys.requested.insert(
+            id.clone(),
+            RequestedKey {
+                partials,
+                key,
+                waiters: vec![waiter],
+                send_task,
+            },
+        );
         debug!("sending encrypted transaction key shares");
         self.maybe_aggregate_encrypted_transaction_key(&id);
-    }
-
-    pub(super) fn wait_encrypted_transaction_key(
-        &mut self,
-        epoch: EpochId,
-        id_message: Vec<u8>,
-        sender: oneshot::Sender<RandomnessSignature>,
-    ) {
-        let state = self
-            .encrypted_transaction_keys
-            .requested
-            .entry((epoch, id_message))
-            .or_insert_with(RequestedKey::new);
-        match state.key.get() {
-            Some(key) => {
-                let _ = sender.send(*key);
-            }
-            None => state.waiters.push(sender),
-        }
     }
 
     pub(super) fn receive_encrypted_transaction_key_shares(
@@ -207,13 +161,26 @@ impl RandomnessEventLoop {
             return;
         };
         let id = (epoch, id_message);
+        let requested = self.encrypted_transaction_keys.requested.get(&id);
+        let known_key = requested.and_then(|state| state.key.get().copied());
 
         if let Some(key) = key {
+            // A peer sends the key only in reply to this node's request. Several peers reply, and
+            // keys after the first valid one are not verified.
+            if requested.is_none() || known_key.is_some() {
+                return;
+            }
             if ThresholdBls12381MinSig::verify(&vss_pk, &id.1, &key).is_err() {
                 warn!("received invalid encrypted transaction key from peer {peer_id}");
                 return;
             }
             self.complete_encrypted_transaction_key(&id, key);
+            return;
+        }
+
+        if let Some(key) = known_key {
+            // The peer may not have the key yet, for example after a restart.
+            send_encrypted_transaction_key_once(&self.network, peer_id, id, key);
             return;
         }
 
@@ -246,31 +213,20 @@ impl RandomnessEventLoop {
         }
 
         if let Some(state) = self.encrypted_transaction_keys.requested.get_mut(&id) {
-            if let Some(key) = state.key.get().copied() {
-                // The peer does not have the key yet, for example after a restart.
-                send_encrypted_transaction_key_once(&self.network, peer_id, id, key);
-                return;
-            }
             state.partials.insert(peer_id, partials);
             self.maybe_aggregate_encrypted_transaction_key(&id);
-        } else {
-            if !self
-                .encrypted_transaction_keys
-                .unrequested
-                .contains_key(&id)
-                && self.encrypted_transaction_keys.unrequested.len() >= MAX_UNREQUESTED_IDS
-            {
-                debug!(
-                    "dropping encrypted transaction key shares for an unrequested identity: buffer is full"
-                );
-                return;
-            }
-            self.encrypted_transaction_keys
-                .unrequested
-                .entry(id)
-                .or_default()
-                .insert(peer_id, partials);
+            return;
         }
+        let buffered = self
+            .encrypted_transaction_keys
+            .unrequested
+            .entry(peer_id)
+            .or_default();
+        if buffered.len() >= MAX_UNREQUESTED_IDS_PER_PEER && !buffered.contains_key(&id) {
+            debug!("dropping encrypted transaction key shares from peer {peer_id}: buffer is full");
+            return;
+        }
+        buffered.insert(id, partials);
     }
 
     fn maybe_aggregate_encrypted_transaction_key(&mut self, id: &KeyId) {
@@ -281,9 +237,7 @@ impl RandomnessEventLoop {
         let Some(state) = self.encrypted_transaction_keys.requested.get_mut(id) else {
             return;
         };
-        // Only a locally requested identity is aggregated. The request is the point at which
-        // the transaction is known to be committed.
-        if state.send_task.is_none() || state.key.initialized() {
+        if state.key.initialized() {
             return;
         }
         let aggregate = |partials: &HashMap<PeerId, Vec<RandomnessPartialSignature>>| {
@@ -319,11 +273,9 @@ impl RandomnessEventLoop {
     }
 
     fn complete_encrypted_transaction_key(&mut self, id: &KeyId, key: RandomnessSignature) {
-        let state = self
-            .encrypted_transaction_keys
-            .requested
-            .entry(id.clone())
-            .or_insert_with(RequestedKey::new);
+        let Some(state) = self.encrypted_transaction_keys.requested.get_mut(id) else {
+            return;
+        };
         if state.key.set(key).is_err() {
             return;
         }
@@ -337,44 +289,35 @@ impl RandomnessEventLoop {
 
 const SEND_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Sends this node's partial signatures to every peer until the key is known, then sends the
-/// key for a few more rounds so that peers that are behind can complete.
-#[allow(clippy::too_many_arguments)]
+/// Sends this node's partial signatures to every peer until the key is known. It sends them at
+/// least once, because other validators may need them.
 async fn send_encrypted_transaction_key_shares_task(
     name: AuthorityName,
     network: anemo::Network,
     retry_interval: Duration,
     authority_info: Arc<HashMap<AuthorityName, (PeerId, fastcrypto_threshold::nodes::PartyId)>>,
-    epoch: EpochId,
-    id_message: Vec<u8>,
+    (epoch, id_message): KeyId,
     partials: Vec<RandomnessPartialSignature>,
     key: Arc<OnceCell<RandomnessSignature>>,
 ) {
-    let partials: Vec<_> = partials
-        .iter()
-        .map(|partial| bcs::to_bytes(partial).expect("serialization should not fail"))
-        .collect();
+    let request = SendEncryptedTransactionKeySharesRequest {
+        epoch,
+        id_message,
+        partial_sigs: partials
+            .iter()
+            .map(|partial| bcs::to_bytes(partial).expect("serialization should not fail"))
+            .collect(),
+        key: None,
+    };
     let peers: Vec<_> = authority_info
         .iter()
         .filter(|(peer_name, _)| **peer_name != name)
         .map(|(_, (peer_id, _))| network.waiting_peer(*peer_id))
         .collect();
-    let mut sends_after_key = 0;
     loop {
-        let known_key = key.get().copied();
-        let requests = peers.iter().map(|peer| {
+        let sends = peers.iter().map(|peer| {
             let mut client = RandomnessClient::new(peer.clone());
-            let request = anemo::Request::new(SendEncryptedTransactionKeySharesRequest {
-                epoch,
-                id_message: id_message.clone(),
-                partial_sigs: if known_key.is_none() {
-                    partials.clone()
-                } else {
-                    vec![]
-                },
-                key: known_key,
-            })
-            .with_timeout(SEND_TIMEOUT);
+            let request = anemo::Request::new(request.clone()).with_timeout(SEND_TIMEOUT);
             async move {
                 if client
                     .send_encrypted_transaction_key_shares(request)
@@ -385,14 +328,11 @@ async fn send_encrypted_transaction_key_shares_task(
                 }
             }
         });
-        futures::future::join_all(requests).await;
-        if known_key.is_some() {
-            sends_after_key += 1;
-            if sends_after_key >= SENDS_AFTER_KEY {
-                return;
-            }
-        }
+        futures::future::join_all(sends).await;
         tokio::time::sleep(retry_interval).await;
+        if key.initialized() {
+            return;
+        }
     }
 }
 

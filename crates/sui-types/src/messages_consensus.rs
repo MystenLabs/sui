@@ -5,7 +5,6 @@ use crate::base_types::{AuthorityName, ConsensusObjectSequenceKey, ObjectRef, Tr
 use crate::base_types::{ConciseableName, ObjectID, SequenceNumber};
 use crate::committee::EpochId;
 use crate::digests::{AdditionalConsensusStateDigest, ConsensusCommitDigest};
-use crate::encrypted_transaction::EncryptedTransactionResolution;
 use crate::error::{SuiError, SuiErrorKind};
 use crate::execution::ExecutionTimeObservationKey;
 use crate::messages_checkpoint::{
@@ -139,14 +138,15 @@ pub enum ConsensusDeterminedVersionAssignments {
         )>,
     ),
     /// Cancelled transaction version assignments, plus the keys of the encrypted transactions
-    /// that the commit schedules. Nodes that replay checkpoints decrypt the transactions with
-    /// these keys.
+    /// that execute their commands in the commit. Nodes that replay checkpoints decrypt the
+    /// transactions with these keys. An encrypted transaction without a key runs no command.
     CancelledAndEncryptedTransactions {
         cancelled_transactions: Vec<(
             TransactionDigest,
             Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
         )>,
-        encrypted_transactions: Vec<EncryptedTransactionResolution>,
+        /// Transaction digests and compressed G1 keys (48 bytes).
+        encrypted_transaction_keys: Vec<(TransactionDigest, Vec<u8>)>,
     },
 }
 

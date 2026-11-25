@@ -86,11 +86,9 @@ impl VerifiedExecutableTransaction {
         self,
         transaction: Option<ProgrammableTransaction>,
     ) -> Self {
-        let mut inner = self.into_inner();
-        let is_encrypted = inner
-            .data_mut_for_testing()
-            .set_encrypted_transaction_plaintext(transaction);
+        let (mut data, proof) = self.into_inner().into_data_and_sig();
+        let is_encrypted = data.set_encrypted_transaction_plaintext(transaction);
         assert!(is_encrypted, "transaction is not an encrypted transaction");
-        Self::new_unchecked(inner)
+        Self::new_unchecked(Envelope::new_from_data_and_sig(data, proof))
     }
 }

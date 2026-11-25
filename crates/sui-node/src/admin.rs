@@ -693,13 +693,13 @@ async fn encrypted_transaction_beacon_key(
     State(state): State<Arc<AppState>>,
 ) -> (StatusCode, String) {
     let epoch_store = state.node.state().load_epoch_store_one_call_per_task();
-    let Some(keys) = epoch_store.encrypted_transaction_keys() else {
+    if !epoch_store.protocol_config().encrypted_transactions() {
         return (
             StatusCode::PRECONDITION_FAILED,
-            "encrypted transactions are not enabled on this node\n".to_string(),
+            "encrypted transactions are not enabled\n".to_string(),
         );
-    };
-    let Some(public_key) = keys.beacon_public_key(epoch_store.epoch()) else {
+    }
+    let Some(public_key) = state.node.beacon_public_key() else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             "the random beacon DKG has not completed in this epoch\n".to_string(),
