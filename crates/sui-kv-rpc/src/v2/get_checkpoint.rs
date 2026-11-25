@@ -228,13 +228,13 @@ mod tests {
         server.abort();
     }
 
-    /// Each read GetCheckpoint makes for its checkpoint goes through the request's limited
-    /// client under its own `checkpoints` permit, so a request with a single permit finishes: a
-    /// digest reads the `checkpoints_by_digest` index, then, if indexed, the `checkpoints` row.
-    /// A digest without an index row, or whose index row names a checkpoint without a row, is
-    /// `NotFound` by that digest.
+    /// GetCheckpoint reads its checkpoint through the request's limited client under one
+    /// `checkpoints` permit, so a request with a single permit finishes: a digest reads the
+    /// `checkpoints_by_digest` index, then, if indexed, the `checkpoints` row, both under the
+    /// same permit. A digest without an index row, or whose index row names a checkpoint without
+    /// a row, is `NotFound` by that digest.
     #[tokio::test]
-    async fn checkpoint_reads_each_take_a_request_limiter_permit() {
+    async fn checkpoint_reads_go_through_the_request_limiter() {
         let (mock, server, kv_client, digest_1) = two_checkpoint_replica().await;
         // Indexed at checkpoint 3, which is within the served height but has no row.
         let dangling_digest = CheckpointDigest::new([7; 32]);
@@ -247,11 +247,11 @@ mod tests {
         let unindexed_digest = CheckpointDigest::new([8; 32]);
         let stages = StagesConfig::default();
 
-        // Each request, the `checkpoints` reads it starts, and the sequence number it serves or
-        // the digest it is `NotFound` by.
+        // Each request, the gated `checkpoints` reads it starts, and the sequence number it
+        // serves or the digest it is `NotFound` by.
         for (checkpoint_id, expected_reads, expected) in [
             (CheckpointId::SequenceNumber(1), 1, Ok(1)),
-            (CheckpointId::Digest(digest_1.to_string()), 2, Ok(1)),
+            (CheckpointId::Digest(digest_1.to_string()), 1, Ok(1)),
             (
                 CheckpointId::Digest(unindexed_digest.to_string()),
                 1,
@@ -259,7 +259,7 @@ mod tests {
             ),
             (
                 CheckpointId::Digest(dangling_digest.to_string()),
-                2,
+                1,
                 Err(dangling_digest),
             ),
         ] {

@@ -63,7 +63,6 @@ use sui_kvstore::RowFilter;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxCheckpointPosition;
 use sui_kvstore::TxSeqDigestData;
-use sui_kvstore::tables::checkpoints_by_digest;
 use sui_kvstore::tables::objects::ObjectVersionRow;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::cursor::LedgerPoint;
@@ -344,6 +343,11 @@ impl BigTableClient {
     /// `rows_limit` rows, and its rows are drained by a spawned task (see
     /// [`drain_in_task`]), so the permit is released when the scan's response
     /// ends, however slowly the caller takes the rows.
+    ///
+    /// The underlying scan splits `range` into 1,000-transaction buckets and
+    /// reads each bucket while the one before it is consumed, so across a
+    /// bucket boundary the one permit covers up to two concurrent ReadRows
+    /// calls, and the limiter metrics count the whole scan as one read.
     pub(crate) async fn scan_tx_seq_digests_stream(
         &self,
         range: Range<u64>,
@@ -414,32 +418,18 @@ impl BigTableClient {
     /// The `checkpoints` row of the checkpoint with `digest`, reading only `columns` (every
     /// column if `None`), `None` when either the `checkpoints_by_digest` index or the
     /// `checkpoints` table has no row for it. Two serial point reads, the index then the
-    /// checkpoint, each under its own permit, so the second never waits on a permit the first
-    /// still holds.
+    /// checkpoint, under one `checkpoints` permit held through both.
     pub(crate) async fn get_checkpoint_by_digest_filtered(
         &self,
         digest: CheckpointDigest,
         columns: Option<&[&str]>,
     ) -> Result<Option<CheckpointData>, RpcError> {
         let mut inner = self.inner.clone();
-        let sequence_number = self
-            .call_gated(stage::CHECKPOINTS, async move {
-                let key = checkpoints_by_digest::encode_key(&digest);
-                inner
-                    .multi_get(checkpoints_by_digest::NAME, vec![key], None)
-                    .await?
-                    .pop()
-                    .map(|(_, row)| checkpoints_by_digest::decode(&row))
-                    .transpose()
-            })
-            .await?;
-        let Some(sequence_number) = sequence_number else {
-            return Ok(None);
-        };
-        Ok(self
-            .get_checkpoints_filtered(&[sequence_number], columns)
-            .await?
-            .pop())
+        self.call_gated(
+            stage::CHECKPOINTS,
+            inner.get_checkpoint_by_digest_filtered(digest, columns),
+        )
+        .await
     }
 
     /// Read the tx_sequence_number of each of `checkpoints`' first transaction in one call, and
