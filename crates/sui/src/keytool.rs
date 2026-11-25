@@ -1419,6 +1419,12 @@ impl Display for CommandOutput {
                     .with(tabled::settings::Style::rounded().horizontals([]))
                     .to_string();
 
+                let sui_signature = if uses_mldsa65(&data.sui_signature) {
+                    abbreviate(&data.sui_signature, "signature")
+                } else {
+                    data.sui_signature.clone()
+                };
+
                 let mut builder = Builder::default();
                 builder
                     .set_header([
@@ -1430,7 +1436,7 @@ impl Display for CommandOutput {
                         "suiAddress",
                     ])
                     .push_record([
-                        &data.sui_signature,
+                        &sui_signature,
                         &data.digest,
                         &data.raw_intent_msg,
                         &intent_table,
@@ -1445,7 +1451,7 @@ impl Display for CommandOutput {
             }
             _ => {
                 let mut json_obj = json![self];
-                abbreviate_mldsa65_keys(&mut json_obj);
+                abbreviate_mldsa65(&mut json_obj);
                 let mut table = json_to_table(&json_obj);
                 let style = tabled::settings::Style::rounded().horizontals([]);
                 table.with(style);
@@ -1456,34 +1462,61 @@ impl Display for CommandOutput {
     }
 }
 
-// A base64 ML-DSA-65 public key is 2,604 chars vs. 44 for Ed25519. In the table the
-// cell wraps into 17 lines and every other cell in the row is padded to match, so for that
-// scheme only the pretty view shows the ends of the key so we abbreviate mldsa key with a
-// left that --json flag can show the whole key if needed
-const ABBREVIATED_KEY_EDGE: usize = 16;
+// A base64 ML-DSA-65 public key is 2,604 chars vs. 44 for Ed25519, and a signature is 4,412
+// vs. 88. In the table the cell wraps into many lines and every other cell in the row is padded
+// to match, so for that scheme the pretty view shows only the ends. `--json` shows all of it.
+const ABBREVIATED_EDGE: usize = 16;
 
-fn abbreviate_mldsa65_keys(value: &mut serde_json::Value) {
+fn abbreviate(encoded: &str, what: &str) -> String {
+    format!(
+        "{}...{} ({} chars, add --json for the full {what})",
+        &encoded[..ABBREVIATED_EDGE],
+        &encoded[encoded.len() - ABBREVIATED_EDGE..],
+        encoded.len()
+    )
+}
+
+/// Whether a serialized signature is an ML-DSA-65 one, or a multisig with an ML-DSA-65 member.
+fn uses_mldsa65(serialized_sig: &str) -> bool {
+    match GenericSignature::decode_base64(serialized_sig) {
+        Ok(GenericSignature::MultiSig(multisig)) => multisig.uses_mldsa65(),
+        Ok(GenericSignature::MultiSigLegacy(multisig)) => multisig.uses_mldsa65(),
+        Ok(sig) => sig.is_mldsa65(),
+        Err(_) => false,
+    }
+}
+
+pub(crate) fn abbreviate_mldsa65(value: &mut serde_json::Value) {
     match value {
         serde_json::Value::Object(map) => {
-            let is_mldsa65 = map.get("keyScheme").and_then(|v| v.as_str()) == Some("mldsa65");
+            let mldsa65_key = map
+                .get("publicBase64Key")
+                .and_then(|pk| pk.as_str())
+                .is_some_and(|pk| {
+                    matches!(PublicKey::decode_base64(pk), Ok(PublicKey::MLDSA65(_)))
+                });
             for (key, inner) in map.iter_mut() {
-                if is_mldsa65 && key == "publicBase64Key" {
-                    if let serde_json::Value::String(encoded) = inner
-                        && encoded.len() > 2 * ABBREVIATED_KEY_EDGE
+                let serde_json::Value::String(encoded) = inner else {
+                    abbreviate_mldsa65(inner);
+                    continue;
+                };
+                match key.as_str() {
+                    "publicBase64Key" if mldsa65_key => *encoded = abbreviate(encoded, "key"),
+                    // The signature of a multisig member, next to the member's public key.
+                    "sigBase64" if mldsa65_key => *encoded = abbreviate(encoded, "signature"),
+                    "multisigParsed"
+                    | "multisigSerialized"
+                    | "multisigLegacyParsed"
+                    | "multisigLegacySerialized"
+                        if uses_mldsa65(encoded) =>
                     {
-                        *encoded = format!(
-                            "{}...{} ({} chars, add --json for the full key)",
-                            &encoded[..ABBREVIATED_KEY_EDGE],
-                            &encoded[encoded.len() - ABBREVIATED_KEY_EDGE..],
-                            encoded.len()
-                        );
+                        *encoded = abbreviate(encoded, "signature")
                     }
-                } else {
-                    abbreviate_mldsa65_keys(inner);
+                    _ => {}
                 }
             }
         }
-        serde_json::Value::Array(items) => items.iter_mut().for_each(abbreviate_mldsa65_keys),
+        serde_json::Value::Array(items) => items.iter_mut().for_each(abbreviate_mldsa65),
         _ => {}
     }
 }

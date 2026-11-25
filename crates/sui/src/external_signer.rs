@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::keytool::Key;
+use crate::keytool::{Key, abbreviate_mldsa65};
 use anyhow::anyhow;
 use clap::*;
 use json_to_table::{Orientation, json_to_table};
@@ -124,7 +124,8 @@ impl ExternalKeysCommand {
 
 impl Display for CommandOutput {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-        let json_obj = json![self];
+        let mut json_obj = json![self];
+        abbreviate_mldsa65(&mut json_obj);
         let mut table = json_to_table(&json_obj);
         let style = tabled::settings::Style::rounded().horizontals([]);
         table.with(style);

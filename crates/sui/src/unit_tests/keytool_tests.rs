@@ -39,6 +39,7 @@ use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::SuiSignatureInner;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::get_key_pair_from_rng;
+use sui_types::signature::GenericSignature;
 use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
 use sui_types::transaction::TransactionData;
 use tempfile::TempDir;
@@ -769,4 +770,103 @@ async fn keytool_list_abbreviates_mldsa65_keys_only() {
     let shown = format!("{}", CommandOutput::List(vec![Key::from(&ed25519_kp)]));
     assert!(shown.contains(&full_ed25519));
     assert!(!shown.contains("add --json for the full key"));
+}
+
+#[test]
+async fn keytool_abbreviates_mldsa65_signatures_and_multisig_keys() -> Result<(), anyhow::Error> {
+    let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(1));
+    let mldsa = SuiKeyPair::decode(MLDSA65_TEST_SUIPRIVKEY).unwrap();
+    let mldsa_pk = mldsa.public();
+    keystore.import(None, mldsa).await?;
+    let mut context = WalletContext::new_for_tests(keystore, None, None);
+    let ed25519 = *context.config.keystore.addresses().first().unwrap();
+    let ed25519_pk = context.config.keystore.export(&ed25519)?.public();
+    let hint = "add --json for the full signature";
+
+    let tx_data = TransactionData::new_pay_sui(
+        ed25519,
+        vec![],
+        vec![SuiAddress::ZERO],
+        vec![1],
+        (ObjectID::ZERO, SequenceNumber::new(), ObjectDigest::MIN),
+        TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        1,
+    )
+    .unwrap();
+    let mut sign = async |address: SuiAddress| {
+        let output = KeyToolCommand::Sign {
+            address: KeyIdentity::Address(address),
+            data: Base64::encode(bcs::to_bytes(&tx_data).unwrap()),
+            intent: None,
+        }
+        .execute(&mut context)
+        .await
+        .unwrap();
+        let CommandOutput::Sign(data) = &output else {
+            panic!("expected a signature");
+        };
+        (data.sui_signature.clone(), format!("{output}"))
+    };
+
+    let (ed25519_sig, shown) = sign(ed25519).await;
+    assert!(shown.contains(&ed25519_sig));
+    assert!(!shown.contains(hint));
+    let (mldsa_sig, shown) = sign(SuiAddress::from(&mldsa_pk)).await;
+    assert!(!shown.contains(&mldsa_sig[..64]));
+    assert!(shown.contains(hint));
+
+    // A multisig with an ML-DSA-65 member: the address, the combined signature and its parts.
+    let (pks, weights) = (vec![mldsa_pk.clone(), ed25519_pk.clone()], vec![1, 1]);
+    let shown = format!(
+        "{}",
+        KeyToolCommand::MultiSigAddress {
+            threshold: 2,
+            pks: pks.clone(),
+            weights: weights.clone(),
+        }
+        .execute(&mut context)
+        .await?
+    );
+    assert!(!shown.contains(&mldsa_pk.encode_base64()));
+    assert!(shown.contains("add --json for the full key"));
+    assert!(shown.contains(&ed25519_pk.encode_base64()));
+
+    let combined = KeyToolCommand::MultiSigCombinePartialSig {
+        sigs: vec![
+            GenericSignature::decode_base64(&mldsa_sig).unwrap(),
+            GenericSignature::decode_base64(&ed25519_sig).unwrap(),
+        ],
+        pks,
+        weights,
+        threshold: 2,
+    }
+    .execute(&mut context)
+    .await?;
+    let CommandOutput::MultiSigCombinePartialSig(data) = &combined else {
+        panic!("expected a multisig");
+    };
+    let GenericSignature::MultiSig(multisig) = data.multisig_parsed.clone() else {
+        panic!("expected a multisig");
+    };
+    let ed25519_part = Base64::encode(multisig.get_sigs()[1].as_ref());
+    let shown = format!("{combined}");
+    assert!(!shown.contains(&data.multisig_serialized));
+    assert!(shown.contains(hint));
+
+    let shown = format!(
+        "{}",
+        KeyToolCommand::DecodeMultiSig {
+            multisig,
+            tx_bytes: None,
+            cur_epoch: 0,
+        }
+        .execute(&mut context)
+        .await?
+    );
+    assert!(!shown.contains(&mldsa_pk.encode_base64()));
+    assert!(shown.contains(hint));
+    // The Ed25519 member keeps its full key and signature.
+    assert!(shown.contains(&ed25519_pk.encode_base64()));
+    assert!(shown.contains(&ed25519_part));
+    Ok(())
 }
