@@ -450,6 +450,8 @@ const MAINNET_USDB: &str =
 // Version 145: Reject secp256r1 public keys in the SEC1 compact encoding.
 //              Create the FreezeList system object.
 //              Enable coin regulation.
+//              Measure the staggered-submission signal's window and exit dwell in
+//              consensus commit time, and set its floors per second instead of per commit.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2391,6 +2393,31 @@ pub struct ProtocolConfig {
     /// below `staggered_submission_signal_min_consensus_user_transactions_per_commit` times
     /// `staggered_submission_signal_window_commits`. The two conditions can alternate.
     staggered_submission_signal_exit_dwell_commits: Option<u64>,
+    /// Duration of the staggered-submission signal's window, in milliseconds of consensus
+    /// commit time. A version that sets it measures the window and the exit dwell with
+    /// commit timestamps, and the commit-based window, dwell and floors above must be
+    /// unset.
+    staggered_submission_signal_window_ms: Option<u64>,
+    /// Excess copies per second of commit time that the signal requires before it turns
+    /// on. The signal compares the window's total with
+    /// `rate * staggered_submission_signal_window_ms / 1000`, rounded down.
+    staggered_submission_signal_min_excess_copies_per_second: Option<u64>,
+    /// User transactions per second of commit time, duplicates included, that the
+    /// signal requires. The signal compares the window's total with
+    /// `rate * staggered_submission_signal_window_ms / 1000`, rounded down. Below that
+    /// total the signal does not escalate, and a commit counts towards the exit dwell.
+    staggered_submission_signal_min_consensus_user_transactions_per_second: Option<u64>,
+    /// Milliseconds of commit time before the signal drops to a lower band. Every commit
+    /// in that time must have a ratio below the band's exit ratio or a window total
+    /// below the volume floor.
+    staggered_submission_signal_exit_dwell_ms: Option<u64>,
+    /// The most commit time, in milliseconds, that one commit adds to the signal's
+    /// clock, and so to its window and exit dwell. After a consensus stall the first
+    /// commit's timestamp jumps forward, and the cap limits how far that commit moves the
+    /// window and the dwell. A cap below the gap between commits slows the clock, so the
+    /// cap must exceed the gap at the slowest commit rate the signal must measure
+    /// correctly. The cap must also be below the window and the exit dwell.
+    staggered_submission_signal_max_commit_gap_ms: Option<u64>,
     /// Ratios to enter and exit each band, in basis points (bps) of the window's unique
     /// user transactions. Band 1 delays submissions up to 1.6s and band 2 up to 4.8s.
     staggered_submission_signal_band1_enter_ratio_bps: Option<u64>,
@@ -3325,6 +3352,11 @@ impl ProtocolConfig {
             staggered_submission_signal_min_excess_copies_per_commit: None,
             staggered_submission_signal_min_consensus_user_transactions_per_commit: None,
             staggered_submission_signal_exit_dwell_commits: None,
+            staggered_submission_signal_window_ms: None,
+            staggered_submission_signal_min_excess_copies_per_second: None,
+            staggered_submission_signal_min_consensus_user_transactions_per_second: None,
+            staggered_submission_signal_exit_dwell_ms: None,
+            staggered_submission_signal_max_commit_gap_ms: None,
             staggered_submission_signal_band1_enter_ratio_bps: None,
             staggered_submission_signal_band1_exit_ratio_bps: None,
             staggered_submission_signal_band2_enter_ratio_bps: None,
@@ -5147,6 +5179,38 @@ impl ProtocolConfig {
                     cfg.feature_flags.secp256r1_strict_public_keys = true;
                     cfg.feature_flags.create_freeze_list = true;
                     cfg.feature_flags.enable_coin_regulation = true;
+
+                    // The staggering signal measures its window and dwell in consensus
+                    // commit time instead of commits. Under load mainnet commits 10 to 13
+                    // times per second instead of about 15, and a per-commit floor then
+                    // admits a lower rate per second. These values keep v144's behaviour
+                    // at 15 commits per second: a 40 s window (600 commits), a dwell of
+                    // about 6.7 minutes (6000 commits), 2 excess copies per commit and
+                    // 1000 user transactions per commit, except that the volume floor
+                    // is 12,000 per second, the rate at which v144's floor turned on
+                    // under load in the 2026-11-04 to 2026-11-19 mainnet replay.
+                    cfg.staggered_submission_signal_window_commits = None;
+                    cfg.staggered_submission_signal_min_excess_copies_per_commit = None;
+                    cfg.staggered_submission_signal_min_consensus_user_transactions_per_commit =
+                        None;
+                    cfg.staggered_submission_signal_exit_dwell_commits = None;
+                    cfg.staggered_submission_signal_window_ms = Some(40_000);
+                    cfg.staggered_submission_signal_min_excess_copies_per_second = Some(30);
+                    cfg.staggered_submission_signal_min_consensus_user_transactions_per_second =
+                        Some(12_000);
+                    cfg.staggered_submission_signal_exit_dwell_ms = Some(400_000);
+                    // Mainnet commits are about 65 ms apart. In private-testnet runs with
+                    // validators down they were at most about 500 ms apart. Gaps below
+                    // the cap count in full, so a cap well above the gap at the slowest
+                    // commit rate keeps the clock at consensus time. A gap at the cap removes an
+                    // eighth of the window.
+                    cfg.staggered_submission_signal_max_commit_gap_ms = Some(5_000);
+                    if chain == Chain::Testnet {
+                        // This keeps v144's testnet floor of 5 user transactions per
+                        // commit at 15 commits per second.
+                        cfg.staggered_submission_signal_min_consensus_user_transactions_per_second =
+                            Some(75);
+                    }
                 }
                 // Use this template when making changes:
                 //

@@ -300,6 +300,7 @@ pub struct AuthorityMetrics {
     pub(crate) staggered_submission_signal_transitions: IntCounterVec,
     pub(crate) staggered_submission_commit_copies: IntCounterVec,
     pub(crate) staggered_submission_band_duration_commits: HistogramVec,
+    pub(crate) staggered_submission_band_duration_ms: HistogramVec,
     pub(crate) staggered_submission_duplication_ratio: Gauge,
     pub(crate) staggered_submission_window_consensus_user_transactions: IntGauge,
 
@@ -657,6 +658,15 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            staggered_submission_band_duration_ms: register_histogram_vec_with_registry!(
+                "staggered_submission_band_duration_ms",
+                "Milliseconds of consensus commit time the duplication signal spent in a band before leaving it, by band left",
+                &["band"],
+                // The largest bucket is 100 ms times 2^21, about 58 hours.
+                prometheus::exponential_buckets(100.0, 2.0, 22).unwrap(),
+                registry,
+            )
+            .unwrap(),
             staggered_submission_duplication_ratio: register_gauge_with_registry!(
                 "staggered_submission_duplication_ratio",
                 "Amplification measured by the duplication signal: excess duplicate copies as a fraction of unique user transactions over the signal window. The signal compares it against the band enter/exit ratios only when staggered_submission_window_consensus_user_transactions reaches the volume floor. Below the floor the signal treats the ratio as zero.",
@@ -665,7 +675,7 @@ impl AuthorityMetrics {
             .unwrap(),
             staggered_submission_window_consensus_user_transactions: register_int_gauge_with_registry!(
                 "staggered_submission_window_consensus_user_transactions",
-                "User transactions in the duplication signal's window, duplicates included. The signal does not escalate while this is below the volume floor, which is the protocol's min consensus user transactions per commit times the window commits.",
+                "User transactions in the duplication signal's window, duplicates included. The signal does not escalate while this is below the volume floor. From protocol version 145 the floor is the min consensus user transactions per second times the window in seconds. Before that it is the min per commit times the window commits.",
                 registry,
             )
             .unwrap(),
