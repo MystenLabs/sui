@@ -278,7 +278,7 @@ impl<'a> TestAuthorityBuilder<'a> {
         let checkpoint_store =
             CheckpointStore::new(&path.join("checkpoints"), pruner_watermarks.clone());
         let backpressure_manager =
-            BackpressureManager::new_from_checkpoint_store(&checkpoint_store);
+            BackpressureManager::new_from_checkpoint_store(&checkpoint_store, &registry);
 
         let cache_traits = build_execution_cache(
             &Default::default(),

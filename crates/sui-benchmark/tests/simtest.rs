@@ -1087,13 +1087,10 @@ mod test {
         test_simulated_load(test_cluster, 60).await
     }
 
-    #[sim_test(config = "test_config()")]
-    async fn test_backpressure() {
-        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-
+    async fn build_backpressure_test_cluster(epoch_duration_ms: u64) -> Arc<TestCluster> {
         let mut cache_config: ExecutionCacheConfig = Default::default();
         // make sure we don't halt even with absurdly low backpressure threshold
-        // To validate this, change backpressure::Watermarks::is_backpressure_suppressed() to
+        // To validate this, change backpressure::Watermarks::should_suppress_backpressure() to
         // always return false and verify the test fails.
         match &mut cache_config {
             ExecutionCacheConfig::WritebackCache {
@@ -1109,7 +1106,7 @@ mod test {
             _ => panic!(),
         }
 
-        let test_cluster = init_test_cluster_builder(4, 10000)
+        init_test_cluster_builder(4, epoch_duration_ms)
             .with_authority_overload_config(AuthorityOverloadConfig {
                 // Disable system overload checks for the test - during tests with crashes,
                 // it is possible for overload protection to trigger due to validators
@@ -1123,9 +1120,142 @@ mod test {
             .with_execution_cache_config(cache_config)
             .build()
             .await
-            .into();
+            .into()
+    }
 
+    #[sim_test(config = "test_config()")]
+    async fn test_backpressure() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        let test_cluster = build_backpressure_test_cluster(10000).await;
         test_simulated_load(test_cluster, 60).await;
+    }
+
+    /// Restarts validators while backpressure is on, and checks that they rebuild the checkpoints
+    /// they had built, and that backpressure engages again after the rebuild.
+    #[sim_test(config = "test_config()")]
+    async fn test_backpressure_restarts() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        let test_cluster = build_backpressure_test_cluster(330_000).await;
+
+        let suppressed_nodes: Arc<Mutex<HashSet<sui_simulator::task::NodeId>>> = Default::default();
+        let suppressed_nodes_clone = suppressed_nodes.clone();
+        register_fail_point("backpressure-suppressed-by-rebuild", move || {
+            suppressed_nodes_clone
+                .lock()
+                .unwrap()
+                .insert(sui_simulator::current_simnode_id());
+        });
+
+        let reengaged_nodes: Arc<Mutex<HashSet<sui_simulator::task::NodeId>>> = Default::default();
+        let reengaged_nodes_clone = reengaged_nodes.clone();
+        register_fail_point("backpressure-paused", move || {
+            let node_id = sui_simulator::current_simnode_id();
+            if suppressed_nodes.lock().unwrap().contains(&node_id) {
+                reengaged_nodes_clone.lock().unwrap().insert(node_id);
+            }
+        });
+
+        // Delay the replayed commits on restarted validators, so that state sync verifies newer
+        // checkpoints before the rebuild completes.
+        let original_nodes: HashSet<_> = test_cluster
+            .all_node_handles()
+            .iter()
+            .map(|handle| handle.with(|n| n.get_sim_node_id()))
+            .collect();
+        let delayed_commits: Arc<Mutex<BTreeMap<sui_simulator::task::NodeId, usize>>> =
+            Default::default();
+        register_fail_point_async("before-handle-consensus-commit", move || {
+            let node_id = sui_simulator::current_simnode_id();
+            let delay = !original_nodes.contains(&node_id) && {
+                let mut delayed_commits = delayed_commits.lock().unwrap();
+                let count = delayed_commits.entry(node_id).or_default();
+                *count += 1;
+                *count <= 20
+            };
+            async move {
+                if delay {
+                    tokio::time::sleep(Duration::from_millis(200)).await;
+                }
+            }
+        });
+
+        let validators = test_cluster.get_validator_pubkeys();
+        let cluster = test_cluster.clone();
+        let restarter = tokio::task::spawn(async move {
+            let checkpoint_store = |validator| {
+                cluster
+                    .swarm
+                    .node(validator)
+                    .unwrap()
+                    .get_node_handle()
+                    .unwrap()
+                    .with(|node| node.clone_checkpoint_store())
+            };
+            let highest_built = |validator| {
+                checkpoint_store(validator)
+                    .get_latest_locally_computed_checkpoint()
+                    .unwrap()
+                    .map_or(0, |checkpoint| checkpoint.sequence_number)
+            };
+            let highest_executed = |validator| {
+                checkpoint_store(validator)
+                    .get_highest_executed_checkpoint_seq_number()
+                    .unwrap()
+                    .unwrap_or(0)
+            };
+
+            // The restarts must end before the load does.
+            for validator in validators.iter().cycle().take(8) {
+                // Stop the validator once it holds checkpoints that it built but did not execute.
+                let has_unexecuted = tokio::time::timeout(Duration::from_secs(10), async {
+                    while highest_built(validator) < highest_executed(validator) + 3 {
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+                    }
+                })
+                .await;
+                if has_unexecuted.is_err() {
+                    continue;
+                }
+                let built_before_stop = highest_built(validator);
+                cluster.stop_node(validator);
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                cluster.start_node(validator).await;
+
+                tokio::time::timeout(Duration::from_secs(30), async {
+                    while highest_executed(validator) <= built_before_stop {
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+                    }
+                })
+                .await
+                .expect("restarted validator did not execute past its previously built checkpoint");
+
+                let node_id = cluster
+                    .swarm
+                    .node(validator)
+                    .unwrap()
+                    .get_node_handle()
+                    .unwrap()
+                    .with(|node| node.get_sim_node_id());
+                let reengaged = tokio::time::timeout(Duration::from_secs(10), async {
+                    while !reengaged_nodes.lock().unwrap().contains(&node_id) {
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+                    }
+                })
+                .await;
+                if reengaged.is_ok() {
+                    return true;
+                }
+            }
+            false
+        });
+
+        test_simulated_load(test_cluster, 300).await;
+        assert!(
+            restarter.await.unwrap(),
+            "no validator replayed commits past the backpressure threshold during a rebuild and then paused again"
+        );
     }
 
     fn handle_bool_failpoint(

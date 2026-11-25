@@ -614,7 +614,7 @@ impl SuiNode {
             .expect("Database read should not fail at init.");
 
         let backpressure_manager =
-            BackpressureManager::new_from_checkpoint_store(&checkpoint_store);
+            BackpressureManager::new_from_checkpoint_store(&checkpoint_store, &prometheus_registry);
 
         let store =
             AuthorityStore::open(perpetual_tables, &genesis, &config, &prometheus_registry).await?;
@@ -1608,6 +1608,25 @@ impl SuiNode {
             locally_built_checkpoint_publisher,
         );
 
+        // The checkpoint executor waits for checkpoints built before a restart to be rebuilt,
+        // and rebuilding them requires the consensus handler to reprocess commits. Backpressure
+        // is suppressed from the start of each epoch until the rebuild completes.
+        backpressure_manager.set_checkpoint_rebuild_pending(true);
+        {
+            let checkpoint_service = checkpoint_service.clone();
+            let backpressure_manager = backpressure_manager.clone();
+            let epoch_store = epoch_store.clone();
+            spawn_monitored_task!(async move {
+                epoch_store
+                    .within_alive_epoch(async move {
+                        checkpoint_service.wait_for_rebuilt_checkpoints().await;
+                        backpressure_manager.set_checkpoint_rebuild_pending(false);
+                    })
+                    .await
+                    .ok();
+            });
+        }
+
         // Clear the VSS public key from the previous epoch so any randomness round
         // signatures buffer in the channel until the new DKG completes.
         randomness_receiver_handle.clear_public_key();
@@ -2261,6 +2280,8 @@ impl SuiNode {
                     info!(
                         "This node has new role {new_role} and no longer runs consensus after reconfiguration"
                     );
+                    self.backpressure_manager
+                        .set_checkpoint_rebuild_pending(false);
                     None
                 }
             } else {

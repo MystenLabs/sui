@@ -1410,6 +1410,7 @@ impl WritebackCache {
         }
 
         self.dirty.clear();
+        self.set_backpressure(0);
 
         info!("clearing old transaction locks");
         self.object_locks.clear();

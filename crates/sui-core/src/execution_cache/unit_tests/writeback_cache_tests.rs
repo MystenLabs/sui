@@ -1379,3 +1379,33 @@ async fn test_get_consistent_latest_account_amount_race_with_pending_settlement(
     assert_eq!(version, v);
     assert_eq!(balance, expected_balance as u128);
 }
+
+#[tokio::test]
+async fn test_backpressure_cleared_at_end_of_epoch() {
+    telemetry_subscribers::init_for_testing();
+    let mut s = Scenario::new(None, Arc::new(AtomicU32::new(0))).await;
+    let mut config = ExecutionCacheConfig::default();
+    let ExecutionCacheConfig::WritebackCache {
+        backpressure_threshold,
+        ..
+    } = &mut config
+    else {
+        unreachable!("default config is a writeback cache");
+    };
+    *backpressure_threshold = Some(0);
+    let manager = BackpressureManager::new_for_tests();
+    s.cache = Arc::new(WritebackCache::new(
+        &config,
+        s.store.clone(),
+        s.cache.metrics.clone(),
+        manager.clone(),
+    ));
+    let subscriber = manager.subscribe();
+
+    s.with_created(&[1, 2]);
+    s.do_tx().await;
+    assert!(subscriber.is_backpressure_active());
+
+    s.clear_state_end_of_epoch();
+    assert!(!subscriber.is_backpressure_active());
+}
