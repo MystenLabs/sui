@@ -3,14 +3,15 @@
 
 use std::{collections::BTreeSet, sync::Arc};
 
-use consensus_config::{AuthorityIndex, DIGEST_LENGTH};
+use consensus_config::{AuthorityIndex, Committee, DIGEST_LENGTH};
 use consensus_types::block::Round;
 use parking_lot::RwLock;
+use rstest::rstest;
 
 use crate::{
     VerifiedBlock,
-    block::{BlockAPI, Slot, TestBlock},
-    commit::{CommitAPI, CommitIndex, Decision, LeaderStatus},
+    block::{BlockAPI, Slot, TestBlock, genesis_blocks},
+    commit::{CommitAPI, CommitIndex, Decision, LeaderStatus, TrustedCommit},
     context::Context,
     dag_state::DagState,
     flex_committer::{FlexCommitter, LeaderSlot, RoundState, sort_committed_blocks},
@@ -644,6 +645,75 @@ async fn try_commit_does_not_skip_undecided_prefix_round() {
         committer.try_commit(next).is_none(),
         "round 2 must not be committed while round 1 remains undecided",
     );
+}
+
+#[rstest]
+#[case(2, 3)]
+#[case(3, 101)]
+#[case(4, 102)]
+#[case(5, 102)]
+#[tokio::test]
+async fn try_commit_timestamp_uses_certification_threshold(
+    #[case] leader_count: u32,
+    #[case] median_timestamp: u64,
+    #[values(0, 1_000)] last_commit_timestamp: u64,
+) {
+    let (mut context, _) = Context::new_for_test(6);
+    context.protocol_config.set_enable_v3_for_testing(true);
+    context.committee = Committee::new_v3(
+        context.committee.epoch(),
+        context.committee.authorities_slice().to_vec(),
+        /* malicious_stake */ 1,
+        /* crash_stake */ 0,
+    );
+    assert_eq!(context.committee.certification_threshold(), 3);
+    assert_eq!(context.committee.quorum_threshold(), 5);
+    let context = Arc::new(context);
+    let dag_state = Arc::new(RwLock::new(DagState::new(
+        context.clone(),
+        Arc::new(MemStore::new()),
+    )));
+    let mut ancestors = genesis_blocks(&context)
+        .iter()
+        .map(|block| block.reference())
+        .collect::<Vec<_>>();
+    for round in 1..=3 {
+        let blocks = (0..6)
+            .map(|author| {
+                VerifiedBlock::new_for_test(
+                    TestBlock::new(round, author)
+                        .set_ancestors(ancestors.clone())
+                        .set_timestamp_ms(u64::from((round - 1) * 100 + author))
+                        .build_v3(0),
+                )
+            })
+            .collect::<Vec<_>>();
+        ancestors = blocks.iter().map(|block| block.reference()).collect();
+        let mut dag_state = dag_state.write();
+        dag_state.accept_blocks(blocks);
+        if round == 1 {
+            for block_ref in &ancestors {
+                dag_state.set_committed(block_ref);
+            }
+            let commit = TrustedCommit::new_for_test(
+                1,
+                dag_state.last_commit_digest(),
+                last_commit_timestamp,
+                ancestors[0],
+                ancestors.clone(),
+            );
+            dag_state.add_commit(commit);
+        }
+    }
+
+    // Parent timestamps have median 3; leaders at certification stake have median 101.
+    let mut committer = FlexCommitter::new(context, dag_state);
+    let allowed = (0..leader_count).collect::<Vec<_>>();
+    let (commit, subdag) = committer.try_commit(schedule(2, 2, &allowed)).unwrap();
+    assert_eq!(commit.leader().round, 2);
+    let expected_timestamp = median_timestamp.max(last_commit_timestamp);
+    assert_eq!(commit.timestamp_ms(), expected_timestamp);
+    assert_eq!(subdag.timestamp_ms, expected_timestamp);
 }
 
 /// All four authorities are leaders at round 1, fully connected DAG → one
