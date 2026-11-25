@@ -2,13 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { execSync } from 'child_process';
-import { readFileSync, writeFileSync } from 'fs';
-import { homedir } from 'os';
-import path from 'path';
+import { writeFileSync } from 'fs';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
-import { fromBase64 } from '@mysten/sui/utils';
 
 export type Network = 'mainnet' | 'testnet' | 'devnet' | 'localnet';
 
@@ -24,23 +22,20 @@ export const getActiveAddress = () => {
 export const getSigner = () => {
 	const sender = getActiveAddress();
 
-	const keystore = JSON.parse(
-		readFileSync(path.join(homedir(), '.sui', 'sui_config', 'sui.keystore'), 'utf8'),
+	// `sui keytool export` reads the keystore in either of its formats. For an encrypted keystore,
+	// it asks for the password in the terminal, or reads it from SUI_KEYSTORE_PASSWORD.
+	const exported = JSON.parse(
+		execSync(`${SUI_BIN} keytool --json export --key-identity ${sender}`, {
+			encoding: 'utf8',
+			stdio: ['inherit', 'pipe', 'inherit'],
+		}),
 	);
-
-	for (const priv of keystore) {
-		const raw = fromBase64(priv);
-		if (raw[0] !== 0) {
-			continue;
-		}
-
-		const pair = Ed25519Keypair.fromSecretKey(raw.slice(1));
-		if (pair.getPublicKey().toSuiAddress() === sender) {
-			return pair;
-		}
+	const { schema, secretKey } = decodeSuiPrivateKey(exported.exportedPrivateKey);
+	if (schema !== 'ED25519') {
+		throw new Error(`The key of ${sender} is not an Ed25519 key`);
 	}
 
-	throw new Error(`keypair not found for sender: ${sender}`);
+	return Ed25519Keypair.fromSecretKey(secretKey);
 };
 
 /** Get the client for the specified network. */

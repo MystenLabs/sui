@@ -420,7 +420,8 @@ impl WalletContext {
             .map_err(Into::into)
     }
 
-    /// Add an account
+    /// Add an account. Panics if the keystore cannot import it, for example because it is
+    /// encrypted and no password is available, or because another process changed its file.
     pub async fn add_account(&mut self, alias: Option<String>, keypair: SuiKeyPair) {
         self.config.keystore.import(alias, keypair).await.unwrap();
     }
@@ -482,20 +483,34 @@ impl WalletContext {
         let address = keystore.get_by_identity(key_identity).map_err(|_| {
             anyhow!("No address found for the provided key identity: {key_identity}")
         })?;
+        // Unlocking an encrypted keystore first reports a missing or incorrect password as an
+        // error of its own, instead of as the source of a signature error.
+        keystore.ensure_unlocked().await?;
         let sig = keystore.sign_secure(&address, data, intent).await?;
         Ok(sig)
     }
 
-    /// Sign a transaction with a key currently managed by the WalletContext
-    pub async fn sign_transaction(&self, data: &TransactionData) -> Transaction {
+    /// Signs a transaction with the key of its sender, from the keystore or the external keys.
+    pub async fn try_sign_transaction(
+        &self,
+        data: &TransactionData,
+    ) -> Result<Transaction, anyhow::Error> {
         let sig = self
-            .config
-            .keystore
-            .sign_secure(&data.sender(), data, Intent::sui_transaction())
-            .await
-            .unwrap();
+            .sign_secure(
+                &KeyIdentity::Address(data.sender()),
+                data,
+                Intent::sui_transaction(),
+            )
+            .await?;
         // TODO: To support sponsored transaction, we should also look at the gas owner.
-        Transaction::from_data(data.clone(), vec![sig])
+        Ok(Transaction::from_data(data.clone(), vec![sig]))
+    }
+
+    /// Sign a transaction with a key currently managed by the WalletContext. Panics if the keystore
+    /// cannot sign, for example because it is encrypted and no password is available.
+    /// [`Self::try_sign_transaction`] returns an error instead.
+    pub async fn sign_transaction(&self, data: &TransactionData) -> Transaction {
+        self.try_sign_transaction(data).await.unwrap()
     }
 
     /// Execute a transaction and wait for it to be locally executed on the fullnode.

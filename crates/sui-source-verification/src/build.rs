@@ -7,6 +7,7 @@ use std::process::Command;
 use fastcrypto::encoding::{Base64, Encoding};
 use move_binary_format::CompiledModule;
 use serde::Deserialize;
+use sui_keys::encryption::is_encrypted_file;
 use sui_types::base_types::ObjectID;
 
 use crate::error::Error;
@@ -82,7 +83,18 @@ pub fn dump(
     // Releases that cannot disable tree-shaking must reach the network during the dump, and they
     // locate the wallet through `SUI_CONFIG_DIR`. Without this the subprocess would consult the
     // user's default configuration rather than the network being verified against.
-    if let Some(dir) = client_config.and_then(|path| path.parent()) {
+    let wallet_copy = match client_config {
+        Some(path) => copy_wallet_without_keys(path).map_err(|e| Error::BuildSubprocess {
+            command: display_command(binary, &args),
+            stderr: format!("could not copy the client config {}: {e}", path.display()),
+        })?,
+        None => None,
+    };
+    let wallet_dir = match &wallet_copy {
+        Some(copy) => Some(copy.path()),
+        None => client_config.and_then(|path| path.parent()),
+    };
+    if let Some(dir) = wallet_dir {
         command.env("SUI_CONFIG_DIR", dir);
     }
 
@@ -103,6 +115,60 @@ pub fn dump(
     }
 
     parse_dump(&output.stdout)
+}
+
+/// Returns a directory with a copy of the client config at `path` whose keystore holds no keys, if
+/// the keystore of the client config is encrypted. Releases from before encrypted keystores cannot
+/// read one, and the build uses the networks of the client config but not its keys.
+fn copy_wallet_without_keys(path: &Path) -> anyhow::Result<Option<tempfile::TempDir>> {
+    // The build reports a client config that cannot be read, as it did before.
+    let Ok(contents) = std::fs::read_to_string(path) else {
+        return Ok(None);
+    };
+    let Ok(mut config) = serde_yaml::from_str::<serde_yaml::Value>(&contents) else {
+        return Ok(None);
+    };
+    let keystore_path = config
+        .get("keystore")
+        .and_then(|keystore| keystore.get("File"))
+        .and_then(|file| file.as_str());
+    let Some(keystore_path) = keystore_path else {
+        return Ok(None);
+    };
+    if !leading_bytes(Path::new(keystore_path)).is_ok_and(|bytes| is_encrypted_file(&bytes)) {
+        return Ok(None);
+    }
+
+    let dir = tempfile::tempdir()?;
+    let keystore = dir.path().join("sui.keystore");
+    std::fs::write(&keystore, "[]")?;
+    let keystore = keystore
+        .to_str()
+        .ok_or_else(|| anyhow::anyhow!("the temporary directory is not valid UTF-8"))?;
+    config["keystore"]["File"] = serde_yaml::Value::from(keystore);
+    std::fs::write(
+        dir.path().join("client.yaml"),
+        serde_yaml::to_string(&config)?,
+    )?;
+    Ok(Some(dir))
+}
+
+/// Returns the bytes of the file at `path` up to its first byte that is not whitespace, which tells
+/// the formats of a keystore apart. The file is read one byte at a time, so that no part of the
+/// private keys of a plaintext keystore is read.
+fn leading_bytes(path: &Path) -> std::io::Result<Vec<u8>> {
+    use std::io::Read;
+
+    let mut file = std::fs::File::open(path)?;
+    let mut bytes = Vec::new();
+    let mut byte = [0u8];
+    while file.read(&mut byte)? == 1 {
+        bytes.push(byte[0]);
+        if !byte[0].is_ascii_whitespace() {
+            break;
+        }
+    }
+    Ok(bytes)
 }
 
 /// Deserialize and decode the dump JSON into a [`GeneratedPackage`].
@@ -144,4 +210,52 @@ fn help_text(binary: &Path) -> String {
 
 fn display_command(binary: &Path, args: &[String]) -> String {
     format!("{} {}", binary.display(), args.join(" "))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn older_releases_read_a_copy_of_a_client_config_with_an_encrypted_keystore() {
+        let dir = tempfile::tempdir().unwrap();
+        let keystore = dir.path().join("sui.keystore");
+        let client_config = dir.path().join("client.yaml");
+        std::fs::write(
+            &client_config,
+            format!(
+                "---
+keystore:
+  File: {}
+envs:
+  - alias: testnet
+    rpc: \"https://fullnode.testnet.sui.io:443\"
+    ws: ~
+active_env: testnet
+active_address: ~
+",
+                keystore.display()
+            ),
+        )
+        .unwrap();
+
+        // A plaintext keystore is read as it is.
+        std::fs::write(&keystore, "[]").unwrap();
+        assert!(copy_wallet_without_keys(&client_config).unwrap().is_none());
+
+        std::fs::write(&keystore, r#"{"version": 1}"#).unwrap();
+        let copy = copy_wallet_without_keys(&client_config).unwrap().unwrap();
+        let config: serde_yaml::Value = serde_yaml::from_str(
+            &std::fs::read_to_string(copy.path().join("client.yaml")).unwrap(),
+        )
+        .unwrap();
+        let copied_keystore = Path::new(config["keystore"]["File"].as_str().unwrap());
+        assert!(copied_keystore.starts_with(copy.path()));
+        assert_eq!(std::fs::read_to_string(copied_keystore).unwrap(), "[]");
+        assert_eq!(config["active_env"].as_str(), Some("testnet"));
+        assert_eq!(
+            config["envs"][0]["rpc"].as_str(),
+            Some("https://fullnode.testnet.sui.io:443")
+        );
+    }
 }

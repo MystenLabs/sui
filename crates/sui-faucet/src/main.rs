@@ -8,6 +8,7 @@ use sui_config::sui_config_dir;
 use sui_faucet::{AppState, create_wallet_context, start_faucet};
 use sui_faucet::{FaucetConfig, LocalFaucet};
 use sui_futures::service::Error as ServiceError;
+use sui_keys::keystore::AccountKeystore;
 
 // Define the `GIT_REVISION` and `VERSION` consts
 bin_version::bin_version!();
@@ -21,6 +22,8 @@ async fn main() -> Result<(), anyhow::Error> {
     } = config;
 
     let context = create_wallet_context(wallet_client_timeout_secs, sui_config_dir()?)?;
+    // The faucet signs while it serves requests, so an encrypted keystore is unlocked now.
+    context.config.keystore.ensure_unlocked().await?;
 
     let app_state = Arc::new(AppState {
         faucet: LocalFaucet::new(context, config.clone()).await.unwrap(),

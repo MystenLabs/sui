@@ -6,6 +6,7 @@ use mysten_metrics::start_prometheus_server;
 use std::path::PathBuf;
 use std::time::Duration;
 use sui_config::Config;
+use sui_keys::keystore::AccountKeystore;
 use sui_oracle::{OracleNode, config::OracleNodeConfig};
 use sui_sdk::wallet_context::WalletContext;
 
@@ -27,6 +28,9 @@ async fn main() -> anyhow::Result<()> {
 
     let wallet_ctx =
         WalletContext::new(&args.client_config_path)?.with_request_timeout(Duration::from_secs(10)); // request times out after 10 secs
+    // The oracle signs in its update loop, where `sign_transaction` panics if an encrypted
+    // keystore cannot be unlocked, so the keystore is unlocked now.
+    wallet_ctx.config.keystore.ensure_unlocked().await?;
 
     // Init metrics server
     let registry_service = start_prometheus_server(config.metrics_address);
