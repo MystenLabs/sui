@@ -3,7 +3,6 @@
 
 use std::collections::HashMap;
 use std::convert::Infallible;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use futures::StreamExt;
@@ -95,7 +94,8 @@ pub async fn get_transaction(
 /// request for it gets the result. Lookups are rendered as their reads complete, at most
 /// `DEFAULT_RENDER_AHEAD` at a time (the list endpoints' default render-ahead), while later reads
 /// run. A digest without a row, or above the served height, is `NOT_FOUND`, and a render error
-/// answers that digest's requests; a failed read fails the whole batch.
+/// answers that digest's requests; a failed read fails the whole batch. A malformed digest is an
+/// `INVALID_ARGUMENT` for its own request, naming the field `digests[<index>]`, and is not read.
 pub async fn batch_get_transactions(
     client: BigTableClient,
     stages: &StagesConfig,
@@ -115,15 +115,24 @@ pub async fn batch_get_transactions(
     }
 
     let digests = digests
-        .iter()
-        .map(|digest| TransactionDigest::from_str(digest))
-        .collect::<Result<Vec<_>, _>>()?;
+        .into_iter()
+        .enumerate()
+        .map(|(index, digest)| {
+            digest.parse::<TransactionDigest>().map_err(|e| {
+                RpcError::from(
+                    FieldViolation::new_at("digests", index)
+                        .with_description(format!("invalid digest: {e}"))
+                        .with_reason(ErrorReason::FieldInvalid),
+                )
+            })
+        })
+        .collect::<Vec<_>>();
 
     // Requests for the same digest share one lookup: `lookups` holds each distinct digest once,
     // in order of its first request, and `requests_left` counts the requests for each.
     let mut requests_left: HashMap<TransactionDigest, usize> = HashMap::new();
     let mut lookups = Vec::new();
-    for &digest in &digests {
+    for &digest in digests.iter().flatten() {
         *requests_left.entry(digest).or_insert_with(|| {
             lookups.push(digest);
             0
@@ -183,6 +192,10 @@ pub async fn batch_get_transactions(
     let transactions = digests
         .into_iter()
         .map(|digest| {
+            let digest = match digest {
+                Ok(digest) => digest,
+                Err(err) => return GetTransactionResult::new_error(err.into_status_proto()),
+            };
             let last_request = requests_left.get_mut(&digest).is_some_and(|left| {
                 *left -= 1;
                 *left == 0
@@ -622,6 +635,85 @@ mod tests {
         assert_batch_objects(one_permit_response, &checkpoint, false);
 
         one_permit_server.abort();
+        server.abort();
+    }
+
+    /// A malformed digest is an `INVALID_ARGUMENT` for its own request, naming the field
+    /// `digests[<index>]`, and is not read; the other digests are answered in request order.
+    #[tokio::test]
+    async fn batch_get_transactions_malformed_digest_fails_only_its_request() {
+        use sui_rpc::proto::google::rpc::BadRequest;
+
+        let (ctx, _registry, mock, server) =
+            query_context_with_mock_and_registry("batch_get_transactions", 1).await;
+        let checkpoint = two_transaction_object_checkpoint();
+        insert_checkpoint_rows(&mock, &checkpoint).await;
+        let stages = StagesConfig::default();
+        let first_digest = checkpoint.transactions[0].transaction.digest();
+        let second_digest = checkpoint.transactions[1].transaction.digest();
+
+        mock.clear_read_rows_calls().await;
+        let mut batch_request = BatchGetTransactionsRequest::default();
+        batch_request.digests = vec![
+            first_digest.to_string(),
+            "not-a-digest-0OIl".to_string(),
+            second_digest.to_string(),
+        ];
+        batch_request.read_mask = Some(FieldMask::from_paths(["digest"]));
+        let results = batch_get_transactions(
+            ctx.client().clone(),
+            &stages,
+            UNBOUNDED_SERVED_HEIGHT,
+            batch_request,
+            ctx.package_resolver(),
+        )
+        .await
+        .expect("BatchGetTransactions succeeds")
+        .transactions;
+        let [first, malformed, second] = <[_; 3]>::try_from(results).expect("one per digest");
+
+        let first = first.to_result().expect("valid digest is found");
+        assert_eq!(first.digest, Some(first_digest.to_string()));
+        let second = second.to_result().expect("valid digest is found");
+        assert_eq!(second.digest, Some(second_digest.to_string()));
+
+        let status = malformed
+            .to_result()
+            .expect_err("malformed digest should return an error");
+        assert_eq!(status.code, tonic::Code::InvalidArgument as i32);
+        let violations: Vec<_> = status
+            .details
+            .iter()
+            .filter_map(|detail| detail.to_msg::<BadRequest>().ok())
+            .flat_map(|bad_request| bad_request.field_violations)
+            .collect();
+        let [violation] = <[_; 1]>::try_from(violations).expect("one field violation");
+        assert_eq!(violation.field, "digests[1]");
+        assert!(
+            violation.description.starts_with("invalid digest: "),
+            "unexpected description: {}",
+            violation.description
+        );
+
+        let mut read_transaction_rows = mock
+            .read_rows_calls()
+            .await
+            .into_iter()
+            .filter(|call| call.table == sui_kvstore::tables::transactions::NAME)
+            .flat_map(|call| call.row_keys)
+            .map(|key| key.to_vec())
+            .collect::<Vec<_>>();
+        read_transaction_rows.sort();
+        let mut expected_transaction_rows = [first_digest, second_digest]
+            .iter()
+            .map(sui_kvstore::tables::transactions::encode_key)
+            .collect::<Vec<_>>();
+        expected_transaction_rows.sort();
+        assert_eq!(
+            read_transaction_rows, expected_transaction_rows,
+            "only the well-formed digests are read"
+        );
+
         server.abort();
     }
 }
