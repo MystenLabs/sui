@@ -395,7 +395,9 @@ fn partly_gathered_checkpoint<E: From<anyhow::Error>>(
 /// `resolve_checkpoints` over a one-item stream and return the sole result.
 /// `resolve_checkpoints` emits exactly one item per input checkpoint (a
 /// checkpoint without transactions reads none) or propagates a fetch error, so
-/// the stream is never empty — hence no "missing result" failure mode.
+/// the stream is never empty — hence no "missing result" failure mode. The
+/// stream is read to its end, so no read is dropped before BigTable ends its
+/// response, which would cancel it and reset its HTTP/2 stream.
 pub(crate) async fn resolve_checkpoint(
     client: BigTableClient,
     read_mask: &FieldMaskTree,
@@ -415,33 +417,42 @@ pub(crate) async fn resolve_checkpoint(
         cp_stream,
     );
     futures::pin_mut!(stream);
+    let mut resolved = None;
     while let Some(item) = stream.next().await {
-        if let Watermarked::Item(resolved) = item.map_err(RpcError::from)? {
-            return Ok(resolved);
+        if let Watermarked::Item(item) = item.map_err(RpcError::from)? {
+            resolved = Some(item);
         }
     }
-    unreachable!("resolve_checkpoints emits exactly one item per input checkpoint")
+    Ok(resolved.expect("resolve_checkpoints emits exactly one item per input checkpoint"))
 }
+
+/// A transaction found by [`resolve_transactions`], with the objects its read
+/// mask needs.
+pub(crate) type ResolvedTransaction = (TransactionDigest, TransactionData, ObjectMap);
 
 /// Resolve `digests` into transactions and the object data needed to render
 /// complete `ExecutedTransaction.objects` sets or annotate effects object
-/// types, keyed by digest for request-order reconstruction. Transaction rows
-/// stream in by chunk and their object reads overlap the transaction fetch. An
-/// empty `digests` issues no BigTable read.
+/// types. Transaction rows stream in by chunk and their object reads overlap the
+/// transaction fetch; each transaction is emitted as soon as its objects are
+/// read, so a consumer can render it while later reads run. Transactions come
+/// in the order their rows arrive, not the order of `digests`, and a digest
+/// without a row is left out. Each digest is read as often as it appears in
+/// `digests`. An empty `digests` issues no BigTable read. A failed read fails
+/// the stream.
 ///
 /// A transaction whose checkpoint is above `checkpoint_hi_inclusive` is left out
-/// of the result before its objects are read: its `transactions` row can be
+/// of the stream before its objects are read: its `transactions` row can be
 /// written before the `objects` rows it references, so reading them could fail.
-pub(crate) async fn resolve_transactions(
+pub(crate) fn resolve_transactions(
     client: BigTableClient,
     digests: Vec<TransactionDigest>,
     checkpoint_hi_inclusive: u64,
     read_mask: &FieldMaskTree,
     transactions_stage: ResolvedStageConfig,
     objects_stage: ResolvedStageConfig,
-) -> Result<HashMap<TransactionDigest, (TransactionData, ObjectMap)>, RpcError> {
+) -> BoxStream<'static, Result<ResolvedTransaction, RpcError>> {
     if digests.is_empty() {
-        return Ok(HashMap::new());
+        return stream::empty().boxed();
     }
     let columns: Arc<[&'static str]> = transaction_columns(read_mask).into();
     let needs_objects = needs_transaction_objects(read_mask);
@@ -475,7 +486,7 @@ pub(crate) async fn resolve_transactions(
     .boxed();
 
     // Stage B: attach each tx's own objects.
-    let with_objects = with_object_maps(
+    with_object_maps(
         tx_stream,
         client,
         objects_stage,
@@ -483,16 +494,16 @@ pub(crate) async fn resolve_transactions(
         |(_, tx): &(TransactionDigest, TransactionData)| {
             compute_object_keys(tx).into_iter().collect()
         },
-    );
-    futures::pin_mut!(with_objects);
-
-    let mut out = HashMap::new();
-    while let Some(item) = with_objects.next().await {
-        if let Watermarked::Item(((digest, tx), objects)) = item.map_err(RpcError::from)? {
-            out.insert(digest, (tx, objects));
-        }
-    }
-    Ok(out)
+    )
+    // The digests carry no watermarks.
+    .map_err(RpcError::from)
+    .try_filter_map(|frame| {
+        std::future::ready(Ok(match frame {
+            Watermarked::Item(((digest, tx), objects)) => Some((digest, tx, objects)),
+            Watermarked::Watermark(_) => None,
+        }))
+    })
+    .boxed()
 }
 
 /// Fetch one chunk of transaction rows as a stream, in arrival order.

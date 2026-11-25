@@ -8,11 +8,12 @@
 //! `sui_kvstore::BigTableClient`.
 //! For streaming methods, the permit is bundled into the returned stream's
 //! state and released only when the stream is dropped. Pipeline helpers drain
-//! those streams inside one chunk future so live permit-holding streams do not
-//! cross stage boundaries. For non-streaming methods, the permit is held for
-//! the duration of the call.
+//! those streams in spawned drainer tasks so live permit-holding streams do not
+//! cross stage boundaries; the dense scans (`scan_tx_seq_digests_stream`,
+//! `scan_checkpoints_stream`) drain themselves the same way. For non-streaming
+//! methods, the permit is held for the duration of the call.
 //!
-//! Bitmap scans are intentionally not gated by this downstream semaphore:
+//! Bitmap scans are the only reads not gated by this downstream semaphore:
 //! their fanout is bounded by `max_bitmap_filter_literals`, and filtered list
 //! requests must still be able to run bitmap discovery with a low downstream
 //! request budget.
@@ -62,6 +63,7 @@ use sui_kvstore::RowFilter;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxCheckpointPosition;
 use sui_kvstore::TxSeqDigestData;
+use sui_kvstore::tables::checkpoints_by_digest;
 use sui_kvstore::tables::objects::ObjectVersionRow;
 use sui_rpc_api::RpcError;
 use sui_rpc_api::ledger_history::cursor::LedgerPoint;
@@ -70,6 +72,7 @@ use sui_rpc_api::ledger_history::row_placement::RowPlacement;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::committee::EpochId;
+use sui_types::digests::CheckpointDigest;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
@@ -77,6 +80,8 @@ use sui_types::storage::ObjectKey;
 use sui_types::storage::PackagePublishKey;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
+
+use crate::pipeline::drain_in_task;
 
 /// Stage label values for the permit timing metrics. `&'static str` so they
 /// satisfy `with_label_values` zero-allocation.
@@ -334,20 +339,33 @@ impl BigTableClient {
         .await
     }
 
+    /// Scan up to `rows_limit` `tx_seq_digest` rows of `range` in `direction`,
+    /// under a `tx_seq_digest` permit. BigTable ends the scan after
+    /// `rows_limit` rows, and its rows are drained by a spawned task (see
+    /// [`drain_in_task`]), so the permit is released when the scan's response
+    /// ends, however slowly the caller takes the rows.
     pub(crate) async fn scan_tx_seq_digests_stream(
         &self,
         range: Range<u64>,
         direction: ScanDirection,
         rows_limit: usize,
     ) -> Result<BoxStream<'static, Result<TxSeqDigestData, anyhow::Error>>, RpcError> {
-        self.inner
-            .clone()
-            .scan_tx_seq_digests_stream(range, direction, rows_limit)
-            .await
-            .map(|stream| stream.boxed())
-            .map_err(RpcError::from)
+        let mut inner = self.inner.clone();
+        let rows = self
+            .open_gated_stream_with_rows_limit(
+                stage::TX_SEQ_DIGEST,
+                inner.scan_tx_seq_digests_stream(range, direction, rows_limit),
+                Some(rows_limit),
+            )
+            .await?;
+        Ok(drain_in_task(rows))
     }
 
+    /// Scan up to `rows_limit` `checkpoints` rows of `range` in `direction`,
+    /// read with `filter`, under a `checkpoints` permit. BigTable ends the scan
+    /// after `rows_limit` rows, and its rows are drained by a spawned task (see
+    /// [`drain_in_task`]), so the permit is released when the scan's response
+    /// ends, however slowly the caller takes the rows.
     pub(crate) async fn scan_checkpoints_stream(
         &self,
         range: Range<u64>,
@@ -355,12 +373,15 @@ impl BigTableClient {
         rows_limit: usize,
         filter: Option<RowFilter>,
     ) -> Result<BoxStream<'static, Result<(u64, CheckpointData), anyhow::Error>>, RpcError> {
-        self.inner
-            .clone()
-            .scan_checkpoints_stream(range, direction, rows_limit, filter)
-            .await
-            .map(|stream| stream.boxed())
-            .map_err(RpcError::from)
+        let mut inner = self.inner.clone();
+        let rows = self
+            .open_gated_stream_with_rows_limit(
+                stage::CHECKPOINTS,
+                inner.scan_checkpoints_stream(range, direction, rows_limit, filter),
+                Some(rows_limit),
+            )
+            .await?;
+        Ok(drain_in_task(rows))
     }
 
     pub(crate) async fn checkpoint_to_tx_range(
@@ -373,6 +394,52 @@ impl BigTableClient {
             inner.checkpoint_to_tx_range(checkpoint_range),
         )
         .await
+    }
+
+    /// The `checkpoints` rows for `sequence_numbers`, reading only `columns` (every column if
+    /// `None`); a sequence number without a row has no entry. One multi-get, under one permit.
+    pub(crate) async fn get_checkpoints_filtered(
+        &self,
+        sequence_numbers: &[CheckpointSequenceNumber],
+        columns: Option<&[&str]>,
+    ) -> Result<Vec<CheckpointData>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(
+            stage::CHECKPOINTS,
+            inner.get_checkpoints_filtered(sequence_numbers, columns),
+        )
+        .await
+    }
+
+    /// The `checkpoints` row of the checkpoint with `digest`, reading only `columns` (every
+    /// column if `None`), `None` when either the `checkpoints_by_digest` index or the
+    /// `checkpoints` table has no row for it. Two serial point reads, the index then the
+    /// checkpoint, each under its own permit, so the second never waits on a permit the first
+    /// still holds.
+    pub(crate) async fn get_checkpoint_by_digest_filtered(
+        &self,
+        digest: CheckpointDigest,
+        columns: Option<&[&str]>,
+    ) -> Result<Option<CheckpointData>, RpcError> {
+        let mut inner = self.inner.clone();
+        let sequence_number = self
+            .call_gated(stage::CHECKPOINTS, async move {
+                let key = checkpoints_by_digest::encode_key(&digest);
+                inner
+                    .multi_get(checkpoints_by_digest::NAME, vec![key], None)
+                    .await?
+                    .pop()
+                    .map(|(_, row)| checkpoints_by_digest::decode(&row))
+                    .transpose()
+            })
+            .await?;
+        let Some(sequence_number) = sequence_number else {
+            return Ok(None);
+        };
+        Ok(self
+            .get_checkpoints_filtered(&[sequence_number], columns)
+            .await?
+            .pop())
     }
 
     /// Read the tx_sequence_number of each of `checkpoints`' first transaction in one call, and

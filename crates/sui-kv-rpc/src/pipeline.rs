@@ -413,8 +413,10 @@ where
 
 /// Open one item frame: invoke `open` synchronously, in read order, so its
 /// synchronous side effects stay ordered, and spawn the drainer that awaits
-/// the returned future and forwards its rows. `slot` is held until the
-/// consumer finishes the frame.
+/// the returned future and forwards its rows (see [`spawn_drainer`]). `slot`
+/// is held until the consumer finishes the frame. The drainer sends at most
+/// the read's item count of rows under the ~1:1 call-site contract, so its
+/// channel holds O(read items) per in-flight frame.
 fn open_items_frame<R, O, P, E, Open, Fut>(
     open: &Open,
     read: R,
@@ -426,19 +428,41 @@ where
     O: Send + 'static,
     E: Send + 'static,
 {
-    let fut = open(read);
+    let (rx, drain) = spawn_drainer(open(read));
+    FrameHandle::Items {
+        rx,
+        drain,
+        _slot: slot,
+    }
+}
+
+/// Spawn the drainer of one read: a task that awaits `read`, then forwards
+/// each row of the stream it opens into the returned receiver, in order. An
+/// `Err` row is terminal (prefix-then-error): the drainer sends it and stops.
+/// A failed open is forwarded as the single row. The drainer also stops when
+/// the receiver is gone. Dropping the returned guard aborts the drainer,
+/// dropping the read's stream.
+///
+/// The drainer owns the read's stream, so a scarce resource that stream holds
+/// (for example, a request-scoped BigTable permit) is released when the read
+/// ends, whether or not anyone is taking its rows.
+fn spawn_drainer<O, E, Fut>(read: Fut) -> (mpsc::UnboundedReceiver<Result<O, E>>, TaskGuard<()>)
+where
+    Fut: Future<Output = Result<BoxStream<'static, Result<O, E>>, E>> + Send + 'static,
+    O: Send + 'static,
+    E: Send + 'static,
+{
     // Unbounded so the drainer's sends are non-blocking: the drainer holds the
-    // BigTable permit while draining and must NEVER block on the consumer — a
-    // bounded channel would let a stalled consumer wedge the drainer and hold
-    // the permit across downstream backpressure, the exact deadlock class this
-    // design removes. Unbounded in type only: the drainer sends one message per
-    // row of its read (at most the read's item count under the ~1:1 call-site
-    // contract) plus an optional terminal error, so memory is O(read items) per
-    // in-flight frame.
-    #[allow(clippy::disallowed_methods)] // non-blocking; bounded by the read's item count
+    // read's BigTable permit while draining and must NEVER block on the
+    // consumer — a bounded channel would let a stalled consumer wedge the
+    // drainer and hold the permit across downstream backpressure, the exact
+    // deadlock class this design removes. Unbounded in type only: the drainer
+    // sends one message per row of its read plus an optional terminal error,
+    // so memory is O(read rows), bounded by each caller's read size.
+    #[allow(clippy::disallowed_methods)] // non-blocking; bounded by the read's row count
     let (row_tx, row_rx) = mpsc::unbounded_channel();
     let drain = tokio::spawn(async move {
-        match fut.await {
+        match read.await {
             Ok(mut stream) => {
                 while let Some(row) = stream.next().await {
                     // The inner stream's item is exactly the channel's item
@@ -460,11 +484,42 @@ where
             }
         }
     });
-    FrameHandle::Items {
-        rx: row_rx,
-        drain: TaskGuard::new(drain),
-        _slot: slot,
+    (row_rx, TaskGuard::new(drain))
+}
+
+/// Drain `rows` in a spawned task (see [`spawn_drainer`]) and return a stream
+/// of the same rows, in order, ending after a terminal `Err`.
+///
+/// For a gated read whose consumer can be backpressured by a later stage that
+/// itself needs permits, such as a dense scan feeding [`pipelined_chunks`]:
+/// the spawned task reads the response to its end and releases the read's
+/// permit at RPC completion, regardless of whether the consumer is polling, so
+/// the permit never waits on a downstream stage. Rows the consumer has not
+/// taken yet are buffered, so the read must be bounded (for example, by a
+/// BigTable `rows_limit`). Dropping the returned stream aborts the task,
+/// dropping the read. A drainer panic surfaces to the consumer once the rows
+/// before it are taken, instead of silently truncating the stream.
+pub(crate) fn drain_in_task<O, E>(
+    rows: BoxStream<'static, Result<O, E>>,
+) -> BoxStream<'static, Result<O, E>>
+where
+    O: Send + 'static,
+    E: Send + 'static,
+{
+    let (rows, drain) = spawn_drainer(future::ready(Ok(rows)));
+    async_stream::stream! {
+        // Moved in so dropping the returned stream (even unpolled) drops the
+        // guard and aborts the drainer.
+        let drain = drain;
+        let mut rows = rows;
+        while let Some(row) = rows.recv().await {
+            yield row;
+        }
+        // Row channel closed: the drainer finished (or panicked). Await it so
+        // a hidden panic surfaces instead of a silently truncated read.
+        surface_panic(drain.await);
     }
+    .boxed()
 }
 
 /// One frame for [`pipelined_reads`]: a burst of items or a watermark.

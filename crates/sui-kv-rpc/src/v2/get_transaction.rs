@@ -1,7 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
+use std::convert::Infallible;
 use std::str::FromStr;
+use std::sync::Arc;
+
+use futures::StreamExt;
+use futures::TryStreamExt;
+use futures::stream::BoxStream;
 use sui_rpc::field::{FieldMask, FieldMaskTree, FieldMaskUtil};
 use sui_rpc::proto::sui::rpc::v2::{
     BatchGetTransactionsRequest, BatchGetTransactionsResponse, ExecutedTransaction,
@@ -14,8 +21,10 @@ use sui_rpc_api::{
 use sui_types::base_types::TransactionDigest;
 
 use crate::bigtable_client::BigTableClient;
-use crate::config::{PipelineStage, StagesConfig};
+use crate::config::{DEFAULT_RENDER_AHEAD, PipelineStage, StagesConfig};
+use crate::pipeline::{RenderAheadError, ResolvedWatermarked, render_ahead};
 use crate::render::transaction_to_response;
+use crate::resolve::ResolvedTransaction;
 use crate::served_height::ServedHeight;
 use crate::{PackageResolver, resolve};
 
@@ -62,7 +71,9 @@ pub async fn get_transaction(
 
     let transactions_stage = stages.stage(PipelineStage::Transactions);
     let objects_stage = stages.stage(PipelineStage::Objects);
-    let mut resolved = resolve::resolve_transactions(
+    // Read to the end rather than stopping at the first item, so no read is dropped before
+    // BigTable ends its response, which would cancel it and reset its HTTP/2 stream.
+    let (_, transaction, objects) = resolve::resolve_transactions(
         client,
         vec![transaction_digest],
         served_height.checkpoint,
@@ -70,16 +81,21 @@ pub async fn get_transaction(
         transactions_stage,
         objects_stage,
     )
-    .await?;
-    let (transaction, objects) = resolved
-        .remove(&transaction_digest)
-        .ok_or(TransactionNotFoundError(transaction_digest.into()))?;
+    .try_collect::<Vec<_>>()
+    .await?
+    .pop()
+    .ok_or(TransactionNotFoundError(transaction_digest.into()))?;
     Ok(GetTransactionResponse::new(
         transaction_to_response(transaction, &read_mask, objects.as_ref(), resolver).await?,
     ))
 }
 
-/// [`get_transaction`] for each digest, answering per digest.
+/// [`get_transaction`] for each digest, answering per digest, in request order. Requests for the
+/// same digest share one lookup: each distinct digest is read once and rendered once, and every
+/// request for it gets the result. Lookups are rendered as their reads complete, at most
+/// `DEFAULT_RENDER_AHEAD` at a time (the list endpoints' default render-ahead), while later reads
+/// run. A digest without a row, or above the served height, is `NOT_FOUND`, and a render error
+/// answers that digest's requests; a failed read fails the whole batch.
 pub async fn batch_get_transactions(
     client: BigTableClient,
     stages: &StagesConfig,
@@ -102,33 +118,93 @@ pub async fn batch_get_transactions(
         .iter()
         .map(|digest| TransactionDigest::from_str(digest))
         .collect::<Result<Vec<_>, _>>()?;
+
+    // Requests for the same digest share one lookup: `request_lookups[i]` is the index in
+    // `lookups` of request `i`'s digest.
+    let mut lookups = Vec::new();
+    let mut lookup_indexes = HashMap::new();
+    let request_lookups: Vec<usize> = digests
+        .iter()
+        .map(|&digest| {
+            *lookup_indexes.entry(digest).or_insert_with(|| {
+                lookups.push(digest);
+                lookups.len() - 1
+            })
+        })
+        .collect();
+    let lookup_count = lookups.len();
+
     let transactions_stage = stages.stage(PipelineStage::Transactions);
     let objects_stage = stages.stage(PipelineStage::Objects);
-    let resolved = resolve::resolve_transactions(
-        client,
-        digests.clone(),
-        served_height.checkpoint,
-        &read_mask,
-        transactions_stage,
-        objects_stage,
-    )
-    .await?;
+    let resolved: BoxStream<'static, Result<ResolvedWatermarked<ResolvedTransaction>, RpcError>> =
+        resolve::resolve_transactions(
+            client,
+            lookups,
+            served_height.checkpoint,
+            &read_mask,
+            transactions_stage,
+            objects_stage,
+        )
+        .map_ok(ResolvedWatermarked::Item)
+        .boxed();
 
-    let mut transactions = Vec::with_capacity(digests.len());
-    for digest in digests {
-        if let Some((tx, objects)) = resolved.get(&digest) {
-            match transaction_to_response(tx.clone(), &read_mask, objects.as_ref(), resolver).await
-            {
-                Ok(tx) => transactions.push(GetTransactionResult::new_transaction(tx)),
-                Err(err) => {
-                    transactions.push(GetTransactionResult::new_error(err.into_status_proto()))
+    let mut rendered = render_ahead(resolved, DEFAULT_RENDER_AHEAD, {
+        let read_mask = Arc::new(read_mask);
+        let resolver = resolver.clone();
+        move |(digest, transaction, objects): ResolvedTransaction| {
+            let read_mask = read_mask.clone();
+            let resolver = resolver.clone();
+            async move {
+                let result =
+                    match transaction_to_response(transaction, &read_mask, &objects, &resolver)
+                        .await
+                    {
+                        Ok(transaction) => GetTransactionResult::new_transaction(transaction),
+                        Err(err) => GetTransactionResult::new_error(err.into_status_proto()),
+                    };
+                Ok::<_, Infallible>((digest, result))
+            }
+        }
+    });
+
+    let mut results: Vec<Option<GetTransactionResult>> = vec![None; lookup_count];
+    while let Some(frame) = rendered.next().await {
+        match frame {
+            // Rows arrive in no particular order, so each result finds its lookup by digest.
+            Ok(ResolvedWatermarked::Item((digest, result))) => {
+                if let Some(&lookup) = lookup_indexes.get(&digest) {
+                    results[lookup] = Some(result);
                 }
             }
-        } else {
-            let err: RpcError = TransactionNotFoundError(digest.into()).into();
-            transactions.push(GetTransactionResult::new_error(err.into_status_proto()));
+            Ok(ResolvedWatermarked::Watermark { .. }) => {}
+            Err(RenderAheadError::Upstream(err)) => return Err(err),
+            Err(RenderAheadError::Render(never)) => match never {},
         }
     }
+
+    // A lookup's result goes to every request for it; the last of those requests takes it. A
+    // lookup without a result had no row, or its checkpoint is above the served height.
+    let mut requests_left = vec![0usize; lookup_count];
+    for &lookup in &request_lookups {
+        requests_left[lookup] += 1;
+    }
+    let transactions = request_lookups
+        .into_iter()
+        .enumerate()
+        .map(|(request, lookup)| {
+            let digest = digests[request];
+            requests_left[lookup] -= 1;
+            let result = if requests_left[lookup] == 0 {
+                results[lookup].take()
+            } else {
+                results[lookup].clone()
+            };
+            result.unwrap_or_else(|| {
+                let err: RpcError = TransactionNotFoundError(digest.into()).into();
+                GetTransactionResult::new_error(err.into_status_proto())
+            })
+        })
+        .collect();
     Ok(BatchGetTransactionsResponse::new(transactions))
 }
 
@@ -137,7 +213,7 @@ mod tests {
     use mysten_common::ZipDebugEqIteratorExt;
     use std::collections::BTreeSet;
 
-    use sui_kvstore::testing::insert_checkpoint_rows;
+    use sui_kvstore::testing::{MockBigtableServer, ReadRowsResponseOrder, insert_checkpoint_rows};
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
     use super::*;
@@ -157,17 +233,21 @@ mod tests {
         request
     }
 
+    /// Assert `response` answers the digests `[second, missing, first, second, missing]` of
+    /// `checkpoint`, in that order, with each repeated digest answered as at its first request.
     fn assert_batch_objects(
         response: BatchGetTransactionsResponse,
         checkpoint: &sui_types::full_checkpoint_content::Checkpoint,
         identity_only: bool,
     ) {
-        assert_eq!(response.transactions.len(), 3);
+        assert_eq!(response.transactions.len(), 5);
+        assert_eq!(response.transactions[3], response.transactions[0]);
+        assert_eq!(response.transactions[4], response.transactions[1]);
         for (result, expected_index) in
             response
                 .transactions
                 .into_iter()
-                .zip_debug_eq([Some(1), None, Some(0)])
+                .zip_debug_eq([Some(1), None, Some(0), Some(1), None])
         {
             let Some(index) = expected_index else {
                 let status = result
@@ -416,12 +496,32 @@ mod tests {
         server.abort();
     }
 
+    /// Every `transactions` row key the mock was asked for since its calls were last cleared,
+    /// sorted.
+    async fn transaction_rows_read(mock: &MockBigtableServer) -> Vec<Vec<u8>> {
+        let mut rows = mock
+            .read_rows_calls()
+            .await
+            .into_iter()
+            .filter(|call| call.table == sui_kvstore::tables::transactions::NAME)
+            .flat_map(|call| call.row_keys)
+            .map(|key| key.to_vec())
+            .collect::<Vec<_>>();
+        rows.sort();
+        rows
+    }
+
+    /// Repeated and missing digests come back in request order, a repeated digest answered as at
+    /// its first request, while each distinct digest and object is read once. Rows arrive in the
+    /// reverse of request order, so results placed by arrival would land out of order.
     #[tokio::test]
     async fn batch_get_transaction_objects_preserve_order_and_deduplicate_reads() {
         let (ctx, _registry, mock, server) =
             query_context_with_mock_and_registry("batch_get_transactions", 1).await;
         let checkpoint = two_transaction_object_checkpoint();
         insert_checkpoint_rows(&mock, &checkpoint).await;
+        mock.set_read_rows_response_order(ReadRowsResponseOrder::ReverseRequestOrder)
+            .await;
         let stages = StagesConfig::default();
         let first_digest = checkpoint.transactions[0].transaction.digest();
         let second_digest = checkpoint.transactions[1].transaction.digest();
@@ -430,8 +530,16 @@ mod tests {
             second_digest.to_string(),
             missing_digest.to_string(),
             first_digest.to_string(),
+            second_digest.to_string(),
+            missing_digest.to_string(),
         ];
+        let mut expected_transaction_rows = [first_digest, second_digest, missing_digest]
+            .iter()
+            .map(sui_kvstore::tables::transactions::encode_key)
+            .collect::<Vec<_>>();
+        expected_transaction_rows.sort();
 
+        mock.clear_read_rows_calls().await;
         let mut parent_request = BatchGetTransactionsRequest::default();
         parent_request.digests = digests.clone();
         parent_request.read_mask = Some(FieldMask::from_paths(["objects"]));
@@ -445,6 +553,11 @@ mod tests {
         .await
         .expect("parent objects BatchGetTransactions should succeed");
         assert_batch_objects(parent_response, &checkpoint, false);
+        assert_eq!(
+            transaction_rows_read(&mock).await,
+            expected_transaction_rows,
+            "each distinct digest is read once"
+        );
 
         mock.clear_read_rows_calls().await;
         let mut nested_request = BatchGetTransactionsRequest::default();
@@ -463,6 +576,11 @@ mod tests {
         .await
         .expect("nested objects BatchGetTransactions should succeed");
         assert_batch_objects(nested_response, &checkpoint, true);
+        assert_eq!(
+            transaction_rows_read(&mock).await,
+            expected_transaction_rows,
+            "each distinct digest is read once"
+        );
 
         let mut actual_object_rows = mock
             .read_rows_calls()
