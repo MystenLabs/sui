@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// init with entry used to be allowed
+// init with entry used to be allowed, but direct calls are rejected once the ban is enabled
 
-//# init --addresses test=0x0 v2=0x0 --protocol-version 6 --file-format 6 --accounts A
+//# init --addresses test=0x0 v2=0x0 --protocol-version 6 --file-format 6 --accounts A --simulator
 
 //# publish --sender A --upgradeable
 mvir 0x0::m {
@@ -23,17 +23,22 @@ mvir 0x0::m {
 
 //# run test::m::init
 
-// TODO advance protocol version
-// //# run test::m::init --protocol-version 7
+//# advance-epoch --protocol-version 103
 
-// // m still loads
-// //# run test::m::foo --protocol-version 7
+//# run test::m::init --sender A
 
-// //# upgrade --package test  --sender A --upgrade-capability 1,1
-// module v2::m {
-//     use sui::tx_context::TxContext;
-//     fun init(_: &mut TxContext) {
-//     }
+//# advance-epoch --protocol-version 104
 
-//     public fun foo() {}
-// }
+//# run test::m::init --sender A
+
+//# advance-epoch --protocol-version 118
+
+//# run test::m::init --sender A
+
+//# advance-epoch --protocol-version 119
+
+//# run test::m::init --sender A
+
+//# advance-epoch --protocol-version 137
+
+//# run test::m::init --sender A
