@@ -1040,4 +1040,51 @@ mod tests {
             Some(100),
         );
     }
+
+    /// With both `protocol_config` from the table and the running epoch's `system_state` failing,
+    /// the protocol config's error is returned, even though the system state's fails first: rows
+    /// arrive slowly, so the malformed `protocol_configs_v2` row is decoded long after the empty
+    /// read of `0x5`'s version index.
+    #[tokio::test]
+    async fn protocol_config_error_takes_precedence_over_system_state_error() {
+        use sui_kvstore::tables::protocol_configs_v2;
+
+        let mock = MockBigtableServer::new();
+        let (addr, _server) = mock.start().await.expect("start mock BigTable");
+        let client = KvStoreClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .expect("connect to mock BigTable");
+        // Epoch 0 runs protocol version 1, whose `protocol_configs_v2` row lacks its feature flags
+        // column; the system state has no version index rows at all.
+        crate::v2::test_utils::insert_epoch_protocol_version(&mock, 0, 1).await;
+        let [attributes, _feature_flags] =
+            protocol_configs_v2::encode(Default::default(), Default::default());
+        mock.insert_row(
+            protocol_configs_v2::NAME,
+            protocol_configs_v2::encode_key(1),
+            [attributes],
+        )
+        .await;
+        mock.set_read_rows_latency(std::time::Duration::from_millis(500))
+            .await;
+
+        let error = try_get(
+            &client,
+            AlphaFeatures {
+                object_at_checkpoint: true,
+                protocol_configs_v2: true,
+            },
+            ServedHeight {
+                checkpoint: 10,
+                epoch: 0,
+            },
+            None,
+            &["protocol_config", "system_state"],
+        )
+        .await
+        .expect_err("both the protocol config and the system state fail");
+        let status = tonic::Status::from(error);
+        assert_eq!(status.code(), tonic::Code::Internal);
+        assert_eq!(status.message(), "missing feature flags column");
+    }
 }
