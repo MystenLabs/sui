@@ -112,8 +112,9 @@ pub(crate) async fn get_object(
 ///    version's row, by the tombstone row of the removal the index records, or by a reverse scan
 ///    of `objects` down from `max_version`. The scans run in groups of at most the `objects`
 ///    stage's `max-seeks-per-read`, each group one read of a [`pipelined_chunks`] stage, at most
-///    the stage's `concurrency` groups at a time. Each lookup's answer moves on as its own scan
-///    ends, without waiting for the rest of its group.
+///    the stage's `concurrency` groups at a time. Groups are taken in order; within the group
+///    being taken, each lookup's answer moves on as its own scan ends, without waiting for the
+///    rest of its group.
 /// 2. The rows the lookups name are read as the lookups arrive, by [`pipelined_keyed_batches`]
 ///    under the `objects` stage ([`crate::config::StagesConfig::objects`]): reads of at most
 ///    `max-seeks-per-read` keys, at most `concurrency` of them at a time, and each row at most
@@ -199,8 +200,9 @@ pub(crate) async fn batch_get_objects(
     // Scans run in groups of at most the `objects` stage's `max-seeks-per-read`, at most its
     // `concurrency` groups at a time. A group's drainer task runs its scans at once and each to
     // its end, so a scan returns its permit whether or not the `objects` reads below are taking
-    // lookups, and each lookup's answer moves on as its own scan ends. Answers carry their
-    // lookup's index, so the order they end in does not matter.
+    // lookups. Groups are taken in order, and within the group being taken each lookup's answer
+    // moves on as its own scan ends. Answers carry their lookup's index, so the order they end
+    // in does not matter.
     let objects_stage = server.stages.stage(PipelineStage::Objects);
     let scans: BoxStream<'static, Result<Watermarked<(usize, Scan)>, RpcError>> =
         stream::iter(scans.into_iter().map(|scan| Ok(Watermarked::Item(scan)))).boxed();
