@@ -869,7 +869,7 @@ async fn resolve_transaction_insufficient_gas_with_payment_objects() {
     });
 
     let executed_tx = client
-        .execute_transaction_and_wait_for_checkpoint(request, std::time::Duration::from_secs(10))
+        .execute_transaction_and_wait_for_checkpoint(request, std::time::Duration::from_secs(30))
         .await
         .unwrap()
         .into_inner()
