@@ -190,7 +190,7 @@ for ws in "${WORKSPACES[@]}"; do
     id=$(jq -r '.id' <<< "$adv")
     pkg=$(jq -r '.pkg' <<< "$adv")
     ver=$(jq -r '.ver' <<< "$adv")
-    still_keys["${id}|${pkg}|${ver}"]=1
+    still_keys["${id}|${pkg}"]=1
     echo "- [${id}](https://rustsec.org/advisories/${id}): \`${pkg}\` ${ver} in \`${ws}\` (no semver-compatible fix; needs a manual bump or a \`deny.toml\` ignore)" >> "$REMAINING_MD"
   done
   for adv in "${found[@]}"; do
@@ -198,7 +198,10 @@ for ws in "${WORKSPACES[@]}"; do
     pkg=$(jq -r '.pkg' <<< "$adv")
     ver=$(jq -r '.ver' <<< "$adv")
     key="${id}|${pkg}|${ver}"
-    if [[ -z "${still_keys[$key]:-}" && -n "${new_ver[$key]:-}" ]]; then
+    advisory_key="${id}|${pkg}"
+    # Later updates can change the version again; only claim a fix when this
+    # advisory no longer affects any locked version of the package.
+    if [[ -z "${still_keys[$advisory_key]:-}" && -n "${new_ver[$key]:-}" ]]; then
       echo "- [${id}](https://rustsec.org/advisories/${id}): \`${pkg}\` ${ver} → ${new_ver[$key]} in \`${ws}\`" >> "$FIXED_MD"
     fi
   done
