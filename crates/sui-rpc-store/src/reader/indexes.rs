@@ -327,6 +327,11 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
                 coin_balance: balance.coin.clamp(0, u64::MAX as i128) as u64,
                 address_balance: balance.address.clamp(0, u64::MAX as i128) as u64,
             };
+            // Merged balance deltas that net to zero remain in RocksDB until compaction drops
+            // them; hide them from listings just like deleted keys.
+            if info.coin_balance == 0 && info.address_balance == 0 {
+                return None;
+            }
             let struct_tag = match key.coin_type {
                 move_core_types::language_storage::TypeTag::Struct(b) => *b,
                 _ => return None,
@@ -1514,6 +1519,82 @@ mod tests {
         unique.sort();
         unique.dedup();
         assert_eq!(unique.len(), names.len(), "no duplicate coin types");
+    }
+
+    #[test]
+    fn balance_iter_skips_zero_sum_merged_rows() {
+        use crate::schema::balance::{address_delta, coin_delta};
+        use move_core_types::language_storage::{StructTag, TypeTag};
+        use sui_types::base_types::SuiAddress;
+
+        let tag = |name: &str| -> StructTag {
+            StructTag {
+                address: move_core_types::account_address::AccountAddress::TWO,
+                module: move_core_types::identifier::Identifier::new("coin").unwrap(),
+                name: move_core_types::identifier::Identifier::new(name).unwrap(),
+                type_params: vec![],
+            }
+        };
+
+        let (_dir, db, reader) = setup();
+        let owner = SuiAddress::ZERO;
+        let a = tag("A");
+        let b = tag("B");
+        let c = tag("C");
+        let d = tag("D");
+        let e = tag("E");
+
+        let mut batch = db.batch();
+        for (t, v) in [(&a, 100i128), (&b, 50), (&d, 200)] {
+            let (k, delta) = coin_delta(owner, TypeTag::Struct(Box::new(t.clone())), v);
+            batch.merge(&reader.schema().balance, &k, &delta).unwrap();
+        }
+        for (t, v) in [(&c, 75i128), (&e, 30)] {
+            let (k, delta) = address_delta(owner, TypeTag::Struct(Box::new(t.clone())), v);
+            batch.merge(&reader.schema().balance, &k, &delta).unwrap();
+        }
+        batch.commit().unwrap();
+
+        // Cancel B, C (between A and D) and E (trailing) to zero in a second uncompacted batch.
+        let mut cancel = db.batch();
+        let (kb, vb) = coin_delta(owner, TypeTag::Struct(Box::new(b.clone())), -50);
+        cancel.merge(&reader.schema().balance, &kb, &vb).unwrap();
+        for (t, v) in [(&c, -75i128), (&e, -30)] {
+            let (k, delta) = address_delta(owner, TypeTag::Struct(Box::new(t.clone())), v);
+            cancel.merge(&reader.schema().balance, &k, &delta).unwrap();
+        }
+        cancel.commit().unwrap();
+
+        let all: Vec<_> = reader
+            .balance_iter(&owner, None)
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0].0, a);
+        assert_eq!(all[0].1.coin_balance, 100);
+        assert_eq!(all[1].0, d);
+        assert_eq!(all[1].1.coin_balance, 200);
+
+        // Resuming from a cursor pointing at a zero-sum row skips directly to D, and
+        // lookahead after D stops without surfacing trailing E.
+        let resumed: Vec<_> = reader
+            .balance_iter(&owner, Some((owner, b)))
+            .unwrap()
+            .map(|r| r.unwrap().0)
+            .collect();
+        assert_eq!(resumed, vec![d.clone()]);
+
+        let mut page1 = reader.balance_iter(&owner, None).unwrap();
+        assert_eq!(page1.next().unwrap().unwrap().0, a);
+        let next_cursor = page1.next().unwrap().unwrap().0;
+        assert_eq!(next_cursor, d);
+
+        let mut page2 = reader
+            .balance_iter(&owner, Some((owner, next_cursor)))
+            .unwrap();
+        assert_eq!(page2.next().unwrap().unwrap().0, d);
+        assert!(page2.next().is_none());
     }
 
     #[test]
