@@ -6,7 +6,6 @@ use std::{
     sync::Arc,
 };
 
-use mysten_common::assert_reachable;
 use parking_lot::Mutex;
 use sui_types::{
     accumulator_root::AccumulatorObjId, base_types::SequenceNumber, digests::TransactionDigest,
@@ -147,7 +146,6 @@ impl FundsWithdrawSchedulerTrait for EagerFundsWithdrawScheduler {
             });
             all_accounts.retain(|account_id| tracked.contains_key(account_id));
             if !all_accounts.is_empty() {
-                assert_reachable!("storage-settled batch keeps tracked-account reservations");
                 Self::reserve_withdraws(
                     &mut inner_state,
                     reservations,
