@@ -26,14 +26,21 @@ use sui_types::{
 };
 
 /// Fails if the transaction touches a paused coin type, or a coin type for which an involved
-/// address is frozen.
+/// address is frozen. The coin types of declared withdrawals are touched whether or not they are
+/// redeemed.
 pub(crate) fn check(
     state_view: &dyn ExecutionState,
     tracking: &BalanceTracking,
+    withdrawal_coin_types: &BTreeSet<TypeTag>,
     protocol_config: &ProtocolConfig,
     metrics: &LimitsMetrics,
 ) -> Result<(), ExecutionError> {
-    let touched = touched_coin_types(tracking);
+    let mut touched = touched_coin_types(tracking);
+    touched.extend(
+        withdrawal_coin_types
+            .iter()
+            .filter(|coin_type| !GAS::is_gas_type(coin_type)),
+    );
     if touched.is_empty() {
         return Ok(());
     }

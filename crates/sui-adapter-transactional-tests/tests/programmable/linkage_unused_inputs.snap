@@ -72,6 +72,7 @@ task 10, lines 61-63:
 // An unused explicit withdrawal also raises the public call's dependency to v2.
 //> Consumer::m::check(Input(1));
 mutated: object(0,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 11, lines 65-67:

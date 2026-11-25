@@ -119,7 +119,7 @@ task 17, lines 79-81:
 // The unused allowance-backed inputs resolve the custom type without spending it.
 //> Consumer::m::check(Input(2));
 mutated: object(0,1)
-unchanged_shared: object(16,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(16,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 18, lines 83-85:

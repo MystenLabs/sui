@@ -491,11 +491,21 @@ where
         let mut gas_payment_location = None;
         let mut input_owners = vec![];
         let mut withdrawal_addresses = vec![];
+        let mut withdrawal_coin_types = BTreeSet::new();
         for withdrawal in &self.locations.input_withdrawal_metadata {
             withdrawal_addresses.push(withdrawal.source.source_account().into());
             if let T::WithdrawalSource::Allowance { id, .. } = &withdrawal.source {
                 withdrawal_addresses.push((*id).into());
             }
+            let T::Type::Datatype(dt) = &withdrawal.ty else {
+                invariant_violation!("withdrawal input must be a datatype");
+            };
+            let [balance_type] = dt.type_arguments.as_slice() else {
+                invariant_violation!("withdrawal input must have exactly one type argument");
+            };
+            let balance_type = TypeTag::try_from(balance_type.clone())
+                .map_err(|_| make_invariant_violation!("Unable to convert Type to TypeTag"))?;
+            withdrawal_coin_types.extend(Balance::maybe_get_balance_type_param(&balance_type));
         }
         let gas = gas
             .map(|(payment_location, m, mut g)| {
@@ -733,6 +743,7 @@ where
             coin_regulation::check(
                 env.state_view,
                 &balance_tracking,
+                &withdrawal_coin_types,
                 env.protocol_config,
                 &metrics.limits_metrics,
             )?;
