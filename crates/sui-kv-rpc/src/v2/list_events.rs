@@ -856,14 +856,23 @@ async fn resolve_event_range(
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
+    use sui_kvstore::testing::MockBigtableServer;
     use sui_kvstore::testing::insert_checkpoint_rows;
     use sui_types::digests::TransactionDigest;
 
     use super::*;
+    use crate::AlphaFeatures;
+    use crate::StageConfig;
+    use crate::bigtable_client::stage;
+    use crate::config::StagesConfig;
+    use crate::served_height::ServedHeight;
     use crate::v2::test_utils::query_context_with_mock_and_registry as metric_context;
     use crate::v2::test_utils::{
         ascending_options, assert_list_metric_absent, list_counter, list_histogram,
-        query_context_with_registry, unparseable_event_filter,
+        query_context_with_registry, start_kv_rpc_with_request_concurrency,
+        unparseable_event_filter,
     };
     use move_core_types::ident_str;
     use sui_rpc::proto::sui::rpc::v2 as proto;
@@ -1169,6 +1178,145 @@ mod tests {
             .collect();
         read_sizes.sort();
         assert_eq!(read_sizes, [1, 2]);
+    }
+
+    /// With one BigTable permit per request, an unfiltered listing whose dense `tx_seq_digest`
+    /// scan feeds more transaction reads than the `transactions` stage runs at once still
+    /// completes, in order, and stops at its item limit: the scan's permit is released when its
+    /// response ends, not when the stage that waits on later reads gets around to taking the
+    /// scan's last rows.
+    #[tokio::test]
+    async fn unfiltered_listing_completes_with_one_permit() {
+        const OPERATION: &str = "list_events";
+        const EVENTS_PER_TRANSACTION: u8 = 2;
+        // Ends inside the third of four transactions, past the events the `transactions`
+        // stage takes before it waits for its first read to be consumed. The last event is
+        // its transaction's second, so the read its first event started has ended before the
+        // last event is handed over and every transaction read counts as completed.
+        const LIMIT_ITEMS: u32 = 6;
+        let mock = MockBigtableServer::new();
+        let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
+        let event = |sender: u8, index: u8| {
+            Event::new(
+                &ObjectID::ZERO,
+                ident_str!("one_permit"),
+                TestCheckpointBuilder::derive_address(sender),
+                GAS::type_(),
+                vec![sender, index],
+            )
+        };
+        let mut builder = TestCheckpointBuilder::new(0);
+        for sender in 1..=4 {
+            builder = builder
+                .start_transaction(sender)
+                .with_events(
+                    (0..EVENTS_PER_TRANSACTION)
+                        .map(|index| event(sender, index))
+                        .collect(),
+                )
+                .finish_transaction();
+        }
+        let checkpoint = builder.build_checkpoint();
+        insert_checkpoint_rows(&mock, &checkpoint).await;
+        // One transaction per read and one read at a time, so the scan's rows outnumber the
+        // reads the stage takes before it waits for the first to be consumed.
+        let stages = StagesConfig {
+            transactions: Some(StageConfig {
+                max_seeks_per_read: Some(1),
+                concurrency: Some(1),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let kv_rpc =
+            start_kv_rpc_with_request_concurrency(addr, stages, AlphaFeatures::default(), 1).await;
+        let ctx = kv_rpc
+            .query_context(
+                OPERATION,
+                kv_rpc.limited_client(OPERATION),
+                ServedHeight {
+                    checkpoint: 0,
+                    epoch: 0,
+                },
+            )
+            .unwrap();
+        let mut request = ListEventsRequest::default();
+        request.start_checkpoint = Some(0);
+        request.end_checkpoint = Some(1);
+        request.read_mask = Some(FieldMask::from_paths([
+            "contents",
+            "transaction_digest",
+            "event_index",
+        ]));
+        let mut options = ascending_options();
+        options.limit = Some(LIMIT_ITEMS);
+        request.options = Some(options);
+
+        let responses: Vec<_> = tokio::time::timeout(Duration::from_secs(5), async {
+            list_events(ctx, request)
+                .await
+                .expect("construct ListEvents stream")
+                .try_collect()
+                .await
+                .expect("collect ListEvents stream")
+        })
+        .await
+        .expect("ListEvents hung with one permit");
+
+        let listed: Vec<(String, u32, Vec<u8>)> = responses
+            .iter()
+            .filter_map(|response| response.event.as_ref())
+            .map(|event| {
+                (
+                    event.transaction_digest.clone().expect("digest requested"),
+                    event.event_index.expect("event index requested"),
+                    event
+                        .contents
+                        .as_ref()
+                        .and_then(|contents| contents.value.clone())
+                        .expect("contents requested")
+                        .to_vec(),
+                )
+            })
+            .collect();
+        let expected: Vec<(String, u32, Vec<u8>)> = checkpoint
+            .transactions
+            .iter()
+            .enumerate()
+            .flat_map(|(position, transaction)| {
+                let sender = position as u8 + 1;
+                let digest = transaction.transaction.digest().to_string();
+                (0..EVENTS_PER_TRANSACTION)
+                    .map(move |index| (digest.clone(), index as u32, vec![sender, index]))
+            })
+            .take(LIMIT_ITEMS as usize)
+            .collect();
+        assert_eq!(listed, expected, "every event up to the limit, in order");
+        assert_eq!(
+            responses
+                .last()
+                .and_then(|response| response.end.as_ref())
+                .and_then(|end| end.reason),
+            Some(QueryEndReason::ItemLimit as i32),
+        );
+        let reads = |stage_label, outcome| {
+            kv_rpc
+                .metrics
+                .bigtable_limiter
+                .reads_finished
+                .with_label_values(&[OPERATION, stage_label, outcome])
+                .get()
+        };
+        // The limit's events span three transactions, each read once.
+        assert_eq!(
+            (
+                reads(stage::TX_SEQ_DIGEST, "completed"),
+                reads(stage::TX_SEQ_DIGEST, "cancelled"),
+                reads(stage::TRANSACTIONS, "completed"),
+            ),
+            (1, 0, 3),
+        );
+        mock_server.abort();
     }
 
     #[tokio::test]
