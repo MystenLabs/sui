@@ -10,7 +10,7 @@ The module is designed to be used with a <code>TreasuryCap</code> to allow for m
 and burning of the <code><a href="../sui/token.md#sui_token_Token">Token</a></code>s. And can act as a replacement / extension or a
 companion to existing open-loop (<code>Coin</code>) systems.
 
-```
+```move
 Module:      sui::balance       sui::coin             sui::token
 Main type:   Balance<T>         Coin<T>               Token<T>
 Capability:  Supply<T>  <---->  TreasuryCap<T> <----> TreasuryCap<T>
