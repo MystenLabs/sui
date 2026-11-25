@@ -1,0 +1,36 @@
+[profile.default]
+src = 'src'                                                   # the source directory
+test = 'test'                                                 # the test directory
+out = 'out'                                                   # the output directory (for artifacts)
+libs = ['lib']                                                # a list of library directories
+remappings = ["@openzeppelin/=lib/openzeppelin-contracts/"]   # a list of remappings
+libraries = []                                                # a list of deployed libraries to link against
+cache = true                                                  # whether to cache builds or not
+force = false                                                 # whether to ignore the cache (clean build)
+evm_version = 'london'                                        # the evm version (by hardfork name)
+#solc_version = '0.8.10'                                      # override for the solc version (setting this ignores `auto_detect_solc`)
+auto_detect_solc = true                                       # enable auto-detection of the appropriate solc version to use
+offline = false                                               # disable downloading of missing solc version(s)
+optimizer = true                                              # enable or disable the solc optimizer
+optimizer_runs = 20000                                          # the number of optimizer runs
+verbosity = 0                                                 # the verbosity of tests
+ignored_error_codes = []                                      # a list of ignored solc error codes
+fuzz-runs = 100000                                            # the number of fuzz runs for tests
+fuzz_max_local_rejects = 65536                                # max number of individual inputs that may be rejected before the test aborts
+fuzz_max_global_rejects = 1024                                # max number of combined inputs that may be rejected before the test aborts
+ffi = false                                                   # whether to enable ffi or not
+sender = '0x00a329c0648769a73afac7f9381e08fb43dbea72'         # the address of `msg.sender` in tests
+tx_origin = '0x00a329c0648769a73afac7f9381e08fb43dbea72'      # the address of `tx.origin` in tests
+initial_balance = '0xffffffffffffffffffffffff'                # the initial balance of the test contract
+block_number = 0                                              # the block number we are at in tests
+chain_id = 99                                                 # the chain id we are on in tests
+gas_limit = 9223372036854775807                               # the gas limit in tests
+gas_price = 0                                                 # the gas price (in wei) in tests
+block_base_fee_per_gas = 0                                    # the base fee (in wei) in tests
+block_coinbase = '0x0000000000000000000000000000000000000000' # the address of `block.coinbase` in tests
+block_timestamp = 0                                           # the value of `block.timestamp` in tests
+block_difficulty = 0                                          # the value of `block.difficulty` in tests
+gas_reports = ["*"]
+fs_permissions = [{ access = "read", path = "lib/foundry-chainlink-toolkit/out"}]
+solc-version = "0.8.20"
+via_ir = true
