@@ -59,7 +59,6 @@ prost.workspace = true
 sui-framework.workspace = true
 sui-framework-snapshot.workspace = true
 sui-macros.workspace = true
-sui-node = { workspace = true, features = ["testing"] }
 sui-rpc.workspace = true
 sui-simulator.workspace = true
 typed-store.workspace = true

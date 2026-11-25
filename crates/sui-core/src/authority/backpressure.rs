@@ -50,7 +50,7 @@ impl BackpressureMetrics {
         Self {
             effective: register_int_gauge_with_registry!(
                 "backpressure_effective",
-                "1 if backpressure is on and not suppressed, so that the consensus handler pauses before its next commit, 0 otherwise",
+                "1 if backpressure is on and not suppressed, 0 otherwise. On a node that runs consensus, the consensus handler pauses before its next commit while this is 1",
                 registry,
             )
             .unwrap(),
@@ -265,6 +265,7 @@ impl BackpressureSubscriber {
             return;
         }
 
+        fail_point!("backpressure-paused");
         info!("waiting for backpressure to be lifted");
         let _scope = monitored_scope("await_backpressure");
 

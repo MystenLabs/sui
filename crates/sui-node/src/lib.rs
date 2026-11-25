@@ -2248,6 +2248,8 @@ impl SuiNode {
                     info!(
                         "This node has new role {new_role} and no longer runs consensus after reconfiguration"
                     );
+                    self.backpressure_manager
+                        .set_checkpoint_rebuild_pending(false);
                     None
                 }
             } else {

@@ -1090,7 +1090,7 @@ mod test {
     async fn build_backpressure_test_cluster(epoch_duration_ms: u64) -> Arc<TestCluster> {
         let mut cache_config: ExecutionCacheConfig = Default::default();
         // make sure we don't halt even with absurdly low backpressure threshold
-        // To validate this, change backpressure::Watermarks::is_backpressure_suppressed() to
+        // To validate this, change backpressure::Watermarks::should_suppress_backpressure() to
         // always return false and verify the test fails.
         match &mut cache_config {
             ExecutionCacheConfig::WritebackCache {
@@ -1148,6 +1148,15 @@ mod test {
                 .insert(sui_simulator::current_simnode_id());
         });
 
+        let reengaged_nodes: Arc<Mutex<HashSet<sui_simulator::task::NodeId>>> = Default::default();
+        let reengaged_nodes_clone = reengaged_nodes.clone();
+        register_fail_point("backpressure-paused", move || {
+            let node_id = sui_simulator::current_simnode_id();
+            if suppressed_nodes.lock().unwrap().contains(&node_id) {
+                reengaged_nodes_clone.lock().unwrap().insert(node_id);
+            }
+        });
+
         // Delay the replayed commits on restarted validators, so that state sync verifies newer
         // checkpoints before the rebuild completes.
         let original_nodes: HashSet<_> = test_cluster
@@ -1175,58 +1184,68 @@ mod test {
         let validators = test_cluster.get_validator_pubkeys();
         let cluster = test_cluster.clone();
         let restarter = tokio::task::spawn(async move {
-            for validator in validators.iter().cycle().take(16) {
+            let checkpoint_store = |validator| {
+                cluster
+                    .swarm
+                    .node(validator)
+                    .unwrap()
+                    .get_node_handle()
+                    .unwrap()
+                    .with(|node| node.clone_checkpoint_store())
+            };
+            let highest_built = |validator| {
+                checkpoint_store(validator)
+                    .get_latest_locally_computed_checkpoint()
+                    .unwrap()
+                    .map_or(0, |checkpoint| checkpoint.sequence_number)
+            };
+            let highest_executed = |validator| {
+                checkpoint_store(validator)
+                    .get_highest_executed_checkpoint_seq_number()
+                    .unwrap()
+                    .unwrap_or(0)
+            };
+
+            // The restarts must end before the load does.
+            for validator in validators.iter().cycle().take(8) {
                 // Stop the validator once it holds checkpoints that it built but did not execute.
-                let deadline = Instant::now() + Duration::from_secs(10);
-                while Instant::now() < deadline {
-                    let store = cluster
-                        .swarm
-                        .node(validator)
-                        .unwrap()
-                        .get_node_handle()
-                        .unwrap()
-                        .with(|node| node.clone_checkpoint_store());
-                    let built = store
-                        .get_latest_locally_computed_checkpoint()
-                        .unwrap()
-                        .map_or(0, |checkpoint| checkpoint.sequence_number);
-                    let executed = store
-                        .get_highest_executed_checkpoint_seq_number()
-                        .unwrap()
-                        .unwrap_or(0);
-                    if built >= executed + 3 {
-                        break;
+                let has_unexecuted = tokio::time::timeout(Duration::from_secs(10), async {
+                    while highest_built(validator) < highest_executed(validator) + 3 {
+                        tokio::time::sleep(Duration::from_millis(10)).await;
                     }
-                    tokio::time::sleep(Duration::from_millis(10)).await;
+                })
+                .await;
+                if has_unexecuted.is_err() {
+                    continue;
                 }
+                let built_before_stop = highest_built(validator);
                 cluster.stop_node(validator);
                 tokio::time::sleep(Duration::from_secs(5)).await;
                 cluster.start_node(validator).await;
 
-                let deadline = Instant::now() + Duration::from_secs(10);
-                while Instant::now() < deadline {
-                    let node = cluster
-                        .swarm
-                        .node(validator)
-                        .unwrap()
-                        .get_node_handle()
-                        .unwrap();
-                    let (node_id, effective) = node.with(|node| {
-                        let effective = node
-                            .prometheus_metrics_for_testing()
-                            .iter()
-                            .find(|family| family.name() == "backpressure_effective")
-                            .unwrap()
-                            .get_metric()[0]
-                            .get_gauge()
-                            .value();
-                        (node.get_sim_node_id(), effective)
-                    });
-                    drop(node);
-                    if effective == 1.0 && suppressed_nodes.lock().unwrap().contains(&node_id) {
-                        return true;
+                tokio::time::timeout(Duration::from_secs(30), async {
+                    while highest_executed(validator) <= built_before_stop {
+                        tokio::time::sleep(Duration::from_millis(10)).await;
                     }
-                    tokio::time::sleep(Duration::from_millis(10)).await;
+                })
+                .await
+                .expect("restarted validator did not execute past its previously built checkpoint");
+
+                let node_id = cluster
+                    .swarm
+                    .node(validator)
+                    .unwrap()
+                    .get_node_handle()
+                    .unwrap()
+                    .with(|node| node.get_sim_node_id());
+                let reengaged = tokio::time::timeout(Duration::from_secs(10), async {
+                    while !reengaged_nodes.lock().unwrap().contains(&node_id) {
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+                    }
+                })
+                .await;
+                if reengaged.is_ok() {
+                    return true;
                 }
             }
             false
