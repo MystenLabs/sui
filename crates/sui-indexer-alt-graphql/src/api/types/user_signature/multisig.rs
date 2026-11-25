@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{SimpleObject, Union};
+use fastcrypto::traits::ToFromBytes;
 use sui_types::crypto::{CompressedSignature, PublicKey};
 use sui_types::multisig::MultiSig;
+use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
+use sui_types::zk_login_authenticator::ZkLoginAuthenticatorV2;
 
 use crate::api::scalars::base64::Base64;
 use crate::api::types::user_signature::passkey::PasskeySignature;
-use crate::api::types::user_signature::zklogin::ZkLoginSignature;
+use crate::api::types::user_signature::zklogin::{ZkLoginSignature, ZkLoginV2Signature};
 use crate::api::types::user_signature::{
     Ed25519Signature, MlDsa65Signature, Secp256k1Signature, Secp256r1Signature, SignatureScheme,
 };
@@ -98,6 +101,15 @@ pub(crate) struct ZkLoginPublicIdentifier {
     pub(crate) address_seed: Option<String>,
 }
 
+impl ZkLoginPublicIdentifier {
+    pub(super) fn new(iss: &str, address_seed: String) -> Self {
+        Self {
+            iss: Some(iss.to_owned()),
+            address_seed: Some(address_seed),
+        }
+    }
+}
+
 impl From<&MultiSig> for MultisigSignature {
     fn from(m: &MultiSig) -> Self {
         Self {
@@ -130,11 +142,12 @@ fn compressed_signature_to_scheme(sig: &CompressedSignature) -> Option<Signature
             signature: Some(Base64(b.0.to_vec())),
             public_key: None,
         })),
-        CompressedSignature::ZkLogin(b) => {
-            bcs::from_bytes::<sui_types::zk_login_authenticator::ZkLoginAuthenticator>(&b.0)
-                .ok()
-                .map(|native| SignatureScheme::ZkLogin(ZkLoginSignature { native }))
-        }
+        CompressedSignature::ZkLogin(b) => ZkLoginAuthenticator::from_bytes(&b.0)
+            .ok()
+            .map(|native| SignatureScheme::ZkLogin(ZkLoginSignature { native })),
+        CompressedSignature::ZkLoginV2(b) => ZkLoginAuthenticatorV2::from_bytes(&b.0)
+            .ok()
+            .map(|native| SignatureScheme::ZkLoginV2(ZkLoginV2Signature { native })),
         CompressedSignature::Passkey(b) => {
             bcs::from_bytes::<sui_types::passkey_authenticator::PasskeyAuthenticator>(&b.0)
                 .ok()
@@ -179,20 +192,65 @@ impl From<&PublicKey> for MultisigMemberPublicKey {
             PublicKey::Passkey(_) => MultisigMemberPublicKey::Passkey(PasskeyPublicKey {
                 bytes: Some(Base64(pk.as_ref().to_vec())),
             }),
-            PublicKey::ZkLogin(z) => {
-                // Convert through sui_sdk_types for clean field extraction.
-                MultisigMemberPublicKey::ZkLogin(
-                    sui_sdk_types::ZkLoginPublicIdentifier::try_from(z.to_owned())
-                        .map(|id| ZkLoginPublicIdentifier {
-                            iss: Some(id.iss().to_owned()),
-                            address_seed: Some(id.address_seed().to_string()),
-                        })
-                        .unwrap_or_default(),
-                )
-            }
+            PublicKey::ZkLogin(z) | PublicKey::ZkLoginV2(z) => MultisigMemberPublicKey::ZkLogin(
+                sui_sdk_types::ZkLoginPublicIdentifier::try_from(z.to_owned())
+                    .map(|id| ZkLoginPublicIdentifier::new(id.iss(), id.address_seed().to_string()))
+                    .unwrap_or_default(),
+            ),
             PublicKey::MLDSA65(_) => MultisigMemberPublicKey::MlDsa65(MlDsa65PublicKey {
                 bytes: Some(Base64(pk.as_ref().to_vec())),
             }),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
+    use sui_types::crypto::Signature;
+    use sui_types::multisig::MultiSigPublicKey;
+    use sui_types::utils::load_zklogin_v2_test_vector;
+    use sui_types::utils::sign_zklogin_personal_msg;
+
+    use super::MultiSig;
+    use super::MultisigMemberPublicKey;
+    use super::MultisigSignature;
+    use super::SignatureScheme;
+    use super::ZkLoginAuthenticatorV2;
+
+    #[test]
+    fn multisig_keeps_zklogin_member_details() {
+        let message = PersonalMessage { message: vec![] };
+        let (_, v1) = sign_zklogin_personal_msg(message.clone());
+        let (signer, public_key, inputs, _, max_epoch) = load_zklogin_v2_test_vector();
+        let intent = IntentMessage::new(Intent::personal_message(), message);
+        let authenticator =
+            ZkLoginAuthenticatorV2::new(inputs, max_epoch, Signature::new_secure(&intent, &signer))
+                .unwrap();
+        let committee =
+            MultiSigPublicKey::new(vec![v1.to_public_key().unwrap(), public_key], vec![1, 1], 2)
+                .unwrap();
+        let multisig =
+            MultiSig::combine(vec![v1.clone(), authenticator.clone().into()], committee).unwrap();
+
+        let signature = MultisigSignature::from(&multisig);
+        let [
+            SignatureScheme::ZkLogin(v1_member),
+            SignatureScheme::ZkLoginV2(v2_member),
+        ] = signature.signatures.as_deref().unwrap()
+        else {
+            panic!("expected both zkLogin member signatures");
+        };
+        assert_eq!(v1_member.native.as_ref(), v1.as_ref());
+        assert_eq!(v2_member.native.as_ref(), authenticator.as_ref());
+        assert_eq!(signature.bitmap, Some(multisig.get_bitmap()));
+
+        let committee = signature.committee.unwrap();
+        let members = committee.members.unwrap();
+        let Some(MultisigMemberPublicKey::ZkLogin(identifier)) = &members[1].public_key else {
+            panic!("expected a zkLogin public identifier");
+        };
+        assert_eq!(identifier.iss.as_deref(), Some(authenticator.get_iss()));
+        assert!(identifier.address_seed.is_some());
     }
 }

@@ -1,6 +1,5 @@
 ---
 source: crates/sui-indexer-alt-graphql/src/api/types/available_range.rs
-assertion_line: 632
 expression: output
 ---
 AccumulatorRootCreateTransaction._
@@ -1915,6 +1914,30 @@ ZkLoginSignature.inputs
   => {}
 
 ZkLoginSignature.jwkId
+  => {}
+
+ZkLoginV2Inputs.proofPoints
+  => {}
+
+ZkLoginV2Inputs.extIss
+  => {}
+
+ZkLoginV2Inputs.headerBase64
+  => {}
+
+ZkLoginV2Inputs.addressSeed
+  => {}
+
+ZkLoginV2Signature.maxEpoch
+  => {}
+
+ZkLoginV2Signature.signature
+  => {}
+
+ZkLoginV2Signature.publicIdentifier
+  => {}
+
+ZkLoginV2Signature.inputs
   => {}
 
 ZkLoginVerifyResult.success

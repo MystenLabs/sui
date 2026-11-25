@@ -191,7 +191,7 @@ impl OCSInclusionProof {
         }
 
         self.merkle_proof
-            .verify_proof_with_unserialized_leaf(
+            .verify_for_trusted_tree_with_unserialized_leaf(
                 &Node::from(self.tree_root.into_inner()),
                 &target.object_ref,
                 self.leaf_index,
@@ -213,7 +213,7 @@ impl OCSNonInclusionProof {
         }
 
         self.non_inclusion_proof
-            .verify_proof(&Node::from(self.tree_root.into_inner()), &target.object_ref)
+            .verify_for_trusted_tree(&Node::from(self.tree_root.into_inner()), &target.object_ref)
             .map_err(|_| ProofError::InvalidProof)
     }
 }

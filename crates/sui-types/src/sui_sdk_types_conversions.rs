@@ -120,10 +120,29 @@ bcs_convert_impl!(
     crate::crypto::ZkLoginAuthenticatorAsBytes,
     ZkLoginAuthenticator
 );
+
+bcs_convert_impl!(
+    crate::crypto::ZkLoginAuthenticatorAsBytes,
+    sui_sdk_types::ZkLoginAuthenticatorV2
+);
+
 bcs_convert_impl!(
     crate::zk_login_authenticator::ZkLoginAuthenticator,
     ZkLoginAuthenticator
 );
+
+impl TryFrom<&crate::zk_login_authenticator::ZkLoginAuthenticatorV2>
+    for sui_sdk_types::ZkLoginAuthenticatorV2
+{
+    type Error = bcs::Error;
+
+    fn try_from(
+        value: &crate::zk_login_authenticator::ZkLoginAuthenticatorV2,
+    ) -> Result<Self, Self::Error> {
+        Self::from_bytes(value.as_ref())
+    }
+}
+
 bcs_convert_impl!(
     crate::crypto::PasskeyAuthenticatorAsBytes,
     PasskeyAuthenticator
@@ -1217,6 +1236,7 @@ impl TryFrom<crate::crypto::PublicKey> for MultisigMemberPublicKey {
                 Self::Secp256r1(Secp256r1PublicKey::new(bytes_representation.0))
             }
             crate::crypto::PublicKey::ZkLogin(z) => Self::ZkLogin(z.try_into()?),
+            crate::crypto::PublicKey::ZkLoginV2(z) => Self::ZkLoginV2(z.try_into()?),
             crate::crypto::PublicKey::Passkey(p) => {
                 Self::Passkey(PasskeyPublicKey::new(Secp256r1PublicKey::new(p.0)))
             }
@@ -1244,6 +1264,9 @@ impl TryFrom<crate::crypto::CompressedSignature> for MultisigMemberSignature {
             }
             crate::crypto::CompressedSignature::ZkLogin(z) => {
                 Self::ZkLogin(Box::new(z.try_into()?))
+            }
+            crate::crypto::CompressedSignature::ZkLoginV2(z) => {
+                Self::ZkLoginV2(Box::new(z.try_into()?))
             }
             crate::crypto::CompressedSignature::Passkey(p) => Self::Passkey(p.try_into()?),
             crate::crypto::CompressedSignature::MLDSA65(s) => {
@@ -1304,6 +1327,7 @@ impl TryFrom<crate::crypto::SignatureScheme> for SignatureScheme {
             crate::crypto::SignatureScheme::BLS12381 => Ok(Self::Bls12381),
             crate::crypto::SignatureScheme::MultiSig => Ok(Self::Multisig),
             crate::crypto::SignatureScheme::ZkLoginAuthenticator => Ok(Self::ZkLogin),
+            crate::crypto::SignatureScheme::ZkLoginAuthenticatorV2 => Ok(Self::ZkLoginV2),
             crate::crypto::SignatureScheme::PasskeyAuthenticator => Ok(Self::Passkey),
             crate::crypto::SignatureScheme::MLDSA65 => Ok(Self::MlDsa65),
         }

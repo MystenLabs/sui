@@ -357,6 +357,10 @@ CompressedSignature:
           TUPLEARRAY:
             CONTENT: U8
             SIZE: 3309
+    6:
+      ZkLoginV2:
+        NEWTYPE:
+          TYPENAME: ZkLoginAuthenticatorAsBytes
 CongestedObjects:
   NEWTYPESTRUCT:
     SEQ:
@@ -1080,6 +1084,10 @@ PublicKey:
           TUPLEARRAY:
             CONTENT: U8
             SIZE: 1952
+    6:
+      ZkLoginV2:
+        NEWTYPE:
+          TYPENAME: ZkLoginPublicIdentifier
 RandomnessRound:
   NEWTYPESTRUCT: U64
 RandomnessStateUpdate:

@@ -289,6 +289,8 @@ pub enum PublicKey {
     // unchanged, since deprecated JSON-RPC will never serve ML-DSA.
     #[schemars(skip)]
     MLDSA65(Box<MLDSA65PublicKeyAsBytes>),
+    #[schemars(skip)]
+    ZkLoginV2(ZkLoginPublicIdentifier),
 }
 
 /// A wrapper struct to retrofit in [enum PublicKey] for zkLogin.
@@ -299,13 +301,16 @@ pub struct ZkLoginPublicIdentifier(#[schemars(with = "Base64")] pub Vec<u8>);
 impl ZkLoginPublicIdentifier {
     /// Consists of iss_bytes_len || iss_bytes || padded_32_byte_address_seed.
     pub fn new(iss: &str, address_seed: &Bn254FrElement) -> SuiResult<Self> {
-        let mut bytes = Vec::new();
-        let iss_bytes = iss.as_bytes();
-        bytes.extend([iss_bytes.len() as u8]);
-        bytes.extend(iss_bytes);
-        bytes.extend(address_seed.padded());
+        Ok(Self::new_from_padded_bytes(iss, address_seed.padded()))
+    }
 
-        Ok(Self(bytes))
+    /// Constructs an identifier from a seed already padded to 32 bytes.
+    pub(crate) fn new_from_padded_bytes(iss: &str, address_seed: &[u8]) -> Self {
+        let mut bytes = Vec::with_capacity(1 + iss.len() + address_seed.len());
+        bytes.push(iss.len() as u8);
+        bytes.extend_from_slice(iss.as_bytes());
+        bytes.extend_from_slice(address_seed);
+        Self(bytes)
     }
 
     /// Validates zkLogin public identifier structure: iss_len || iss || padded_32_byte_address_seed.
@@ -357,7 +362,7 @@ impl AsRef<[u8]> for PublicKey {
             PublicKey::Ed25519(pk) => &pk.0,
             PublicKey::Secp256k1(pk) => &pk.0,
             PublicKey::Secp256r1(pk) => &pk.0,
-            PublicKey::ZkLogin(z) => &z.0,
+            PublicKey::ZkLogin(z) | PublicKey::ZkLoginV2(z) => &z.0,
             PublicKey::Passkey(pk) => &pk.0,
             PublicKey::MLDSA65(pk) => &pk.0,
         }
@@ -446,6 +451,7 @@ impl PublicKey {
             PublicKey::Secp256k1(_) => Secp256k1SuiSignature::SCHEME,
             PublicKey::Secp256r1(_) => Secp256r1SuiSignature::SCHEME,
             PublicKey::ZkLogin(_) => SignatureScheme::ZkLoginAuthenticator,
+            PublicKey::ZkLoginV2(_) => SignatureScheme::ZkLoginAuthenticatorV2,
             PublicKey::Passkey(_) => SignatureScheme::PasskeyAuthenticator,
             PublicKey::MLDSA65(_) => MLDSA65SuiSignature::SCHEME,
         }
@@ -1836,10 +1842,11 @@ pub enum SignatureScheme {
     ZkLoginAuthenticator,
     PasskeyAuthenticator,
     MLDSA65,
+    ZkLoginAuthenticatorV2,
 }
 
 impl SignatureScheme {
-    pub fn flag(&self) -> u8 {
+    pub const fn flag(&self) -> u8 {
         match self {
             SignatureScheme::ED25519 => 0x00,
             SignatureScheme::Secp256k1 => 0x01,
@@ -1849,6 +1856,7 @@ impl SignatureScheme {
             SignatureScheme::ZkLoginAuthenticator => 0x05,
             SignatureScheme::PasskeyAuthenticator => 0x06,
             SignatureScheme::MLDSA65 => 0x07,
+            SignatureScheme::ZkLoginAuthenticatorV2 => 0x08,
         }
     }
 
@@ -1869,6 +1877,7 @@ impl SignatureScheme {
             0x05 => Ok(SignatureScheme::ZkLoginAuthenticator),
             0x06 => Ok(SignatureScheme::PasskeyAuthenticator),
             0x07 => Ok(SignatureScheme::MLDSA65),
+            0x08 => Ok(SignatureScheme::ZkLoginAuthenticatorV2),
             _ => Err(SuiErrorKind::KeyConversionError("Invalid key scheme".to_string()).into()),
         }
     }
@@ -1884,6 +1893,8 @@ pub enum CompressedSignature {
     // Boxed and schema-skipped for the same reasons as `PublicKey::MLDSA65`.
     #[schemars(skip)]
     MLDSA65(Box<MLDSA65SignatureAsBytes>),
+    #[schemars(skip)]
+    ZkLoginV2(ZkLoginAuthenticatorAsBytes),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
@@ -1898,7 +1909,7 @@ impl AsRef<[u8]> for CompressedSignature {
             CompressedSignature::Ed25519(sig) => &sig.0,
             CompressedSignature::Secp256k1(sig) => &sig.0,
             CompressedSignature::Secp256r1(sig) => &sig.0,
-            CompressedSignature::ZkLogin(sig) => &sig.0,
+            CompressedSignature::ZkLogin(sig) | CompressedSignature::ZkLoginV2(sig) => &sig.0,
             CompressedSignature::Passkey(sig) => &sig.0,
             CompressedSignature::MLDSA65(sig) => &sig.0,
         }

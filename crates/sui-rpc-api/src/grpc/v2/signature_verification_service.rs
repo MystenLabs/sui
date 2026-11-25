@@ -131,6 +131,7 @@ fn verify_signature(
                     Some(id.derive_address_unpadded()),
                 ]
             }
+            sui_sdk_types::UserSignature::ZkLoginV2(z) => [Some(z.derive_address()), None],
             sui_sdk_types::UserSignature::Passkey(p) => {
                 [Some(p.public_key().derive_address()), None]
             }
@@ -238,12 +239,15 @@ fn address_aliases(
 
 fn signature_may_contain_zklogin(signature: &sui_sdk_types::UserSignature) -> bool {
     match signature {
-        sui_sdk_types::UserSignature::ZkLogin(_) => true,
+        sui_sdk_types::UserSignature::ZkLogin(_) | sui_sdk_types::UserSignature::ZkLoginV2(_) => {
+            true
+        }
         sui_sdk_types::UserSignature::Multisig(multisig) => {
             multisig.committee().members().iter().any(|member| {
                 matches!(
                     member.public_key(),
                     sui_sdk_types::MultisigMemberPublicKey::ZkLogin(_)
+                        | sui_sdk_types::MultisigMemberPublicKey::ZkLoginV2(_)
                 )
             })
         }

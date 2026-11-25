@@ -1,7 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::crypto::PublicKey;
+use crate::crypto::{PublicKey, ZkLoginPublicIdentifier};
 use crate::signature_verification::VerifiedDigestCache;
 use crate::{
     base_types::{EpochId, SuiAddress},
@@ -10,14 +10,13 @@ use crate::{
     error::{SuiError, SuiErrorKind, SuiResult},
     signature::{AuthenticatorTrait, VerifyParams},
 };
+use fastcrypto::hash::HashFunction;
 use fastcrypto::{error::FastCryptoError, traits::ToFromBytes};
-use fastcrypto_zkp::bn254::zk_login::JwkId;
-use fastcrypto_zkp::bn254::zk_login::{JWK, OIDCProvider};
-use fastcrypto_zkp::bn254::zk_login_api::{ZkLoginCircuitMode, ZkLoginEnv};
-use fastcrypto_zkp::bn254::{zk_login::ZkLoginInputs, zk_login_api::verify_zk_login};
+use fastcrypto_zkp::bn254::zk_login::{OIDCProvider, VersionedZkLoginInputs, ZkLoginInputs};
+use fastcrypto_zkp::bn254::zk_login_api::{verify_zk_login, verify_zk_login_extended};
 use once_cell::sync::OnceCell;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use shared_crypto::intent::IntentMessage;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -26,15 +25,36 @@ use std::sync::Arc;
 #[path = "unit_tests/zk_login_authenticator_test.rs"]
 mod zk_login_authenticator_test;
 
+pub(crate) fn zklogin_mode_allows_v1(mode: u64) -> bool {
+    matches!(mode, 0 | 1)
+}
+
+pub(crate) fn zklogin_mode_allows_v2(mode: u64) -> bool {
+    mode == 1
+}
+
 /// An zk login authenticator with all the necessary fields.
 #[derive(Debug, Clone, JsonSchema, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ZkLoginAuthenticator {
+    #[serde(deserialize_with = "deserialize_v1_inputs")]
     pub inputs: ZkLoginInputs,
     max_epoch: EpochId,
     pub user_signature: Signature,
     #[serde(skip)]
     pub bytes: OnceCell<Vec<u8>>,
+}
+
+/// A zkLogin authenticator for the v2 circuit.
+#[derive(Debug, Clone, JsonSchema, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ZkLoginAuthenticatorV2 {
+    #[serde(deserialize_with = "deserialize_v2_inputs")]
+    inputs: VersionedZkLoginInputs,
+    max_epoch: EpochId,
+    user_signature: Signature,
+    #[serde(skip)]
+    bytes: OnceCell<Vec<u8>>,
 }
 
 /// A helper struct that contains the necessary fields to calculate caching key.
@@ -50,32 +70,20 @@ struct ZkLoginCachingParams {
 
 impl ZkLoginCachingParams {
     fn digest(&self) -> ZKLoginInputsDigest {
-        use fastcrypto::hash::HashFunction;
         let mut hasher = DefaultHash::default();
         bcs::serialize_into(&mut hasher, self).expect("serde should not fail");
         ZKLoginInputsDigest::new(hasher.finalize().into())
     }
 }
 
-/// Map the protocol config circuit mode flag to the fastcrypto circuit mode:
-/// 0 = v1 circuit only, 1 = v2 circuit with fallback to v1 (migration mode), 2 = v2 circuit only.
-/// The flag comes from protocol config, so any other value is a config bug.
-pub fn zklogin_circuit_mode_from_flag(flag: u64) -> ZkLoginCircuitMode {
-    match flag {
-        0 => ZkLoginCircuitMode::V1Only,
-        1 => ZkLoginCircuitMode::Both,
-        2 => ZkLoginCircuitMode::V2Only,
-        _ => panic!("invalid zklogin circuit mode flag: {flag}"),
-    }
-}
-
 impl ZkLoginAuthenticator {
+    pub const FLAG: u8 = SignatureScheme::ZkLoginAuthenticator.flag();
+
     /// The caching key for zklogin signature, it is the hash of bcs bytes of
     /// ZkLoginInputs || max_epoch || flagged_pk_bytes || zklogin_circuit_mode. If any of these
     /// fields change, zklogin signature is re-verified without using the caching result.
     fn get_caching_params(&self, zklogin_circuit_mode: u64) -> ZkLoginCachingParams {
-        let mut extended_pk_bytes = vec![self.user_signature.scheme().flag()];
-        extended_pk_bytes.extend(self.user_signature.public_key_bytes());
+        let extended_pk_bytes = flagged_ephemeral_key(&self.user_signature);
         ZkLoginCachingParams {
             inputs: self.inputs.clone(),
             max_epoch: self.max_epoch,
@@ -121,20 +129,44 @@ impl ZkLoginAuthenticator {
     }
 }
 
-/// Necessary trait for [struct SenderSignedData].
-impl PartialEq for ZkLoginAuthenticator {
-    fn eq(&self, other: &Self) -> bool {
-        self.as_ref() == other.as_ref()
+impl ZkLoginAuthenticatorV2 {
+    pub const FLAG: u8 = SignatureScheme::ZkLoginAuthenticatorV2.flag();
+
+    pub fn new(
+        mut inputs: VersionedZkLoginInputs,
+        max_epoch: EpochId,
+        user_signature: Signature,
+    ) -> Result<Self, FastCryptoError> {
+        inputs.init()?;
+        Ok(Self {
+            inputs,
+            max_epoch,
+            user_signature,
+            bytes: OnceCell::new(),
+        })
     }
-}
 
-/// Necessary trait for [struct SenderSignedData].
-impl Eq for ZkLoginAuthenticator {}
+    pub fn get_max_epoch(&self) -> EpochId {
+        self.max_epoch
+    }
 
-/// Necessary trait for [struct SenderSignedData].
-impl Hash for ZkLoginAuthenticator {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.as_ref().hash(state);
+    pub fn user_signature(&self) -> &Signature {
+        &self.user_signature
+    }
+
+    pub fn get_iss(&self) -> &str {
+        self.inputs.get_iss()
+    }
+
+    pub fn address_seed(&self) -> &[u8; 32] {
+        self.inputs.get_address_seed()
+    }
+
+    pub fn get_pk(&self) -> PublicKey {
+        PublicKey::ZkLoginV2(ZkLoginPublicIdentifier::new_from_padded_bytes(
+            self.get_iss(),
+            self.address_seed(),
+        ))
     }
 }
 
@@ -144,34 +176,7 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         epoch: EpochId,
         max_epoch_upper_bound_delta: Option<u64>,
     ) -> SuiResult {
-        // the checks here ensure that `current_epoch + max_epoch_upper_bound_delta >= self.max_epoch >= current_epoch`.
-        // 1. if the config for upper bound is set, ensure that the max epoch in signature is not larger than epoch + upper_bound.
-        if let Some(delta) = max_epoch_upper_bound_delta {
-            let max_epoch_upper_bound = epoch + delta;
-            if self.get_max_epoch() > max_epoch_upper_bound {
-                return Err(SuiErrorKind::InvalidSignature {
-                    error: format!(
-                        "ZKLogin max epoch too large {}, current epoch {}, max accepted: {}",
-                        self.get_max_epoch(),
-                        epoch,
-                        max_epoch_upper_bound
-                    ),
-                }
-                .into());
-            }
-        }
-        // 2. ensure that max epoch in signature is greater than the current epoch.
-        if epoch > self.get_max_epoch() {
-            return Err(SuiErrorKind::InvalidSignature {
-                error: format!(
-                    "ZKLogin expired at epoch {}, current epoch {}",
-                    self.get_max_epoch(),
-                    epoch
-                ),
-            }
-            .into());
-        }
-        Ok(())
+        verify_epoch(self.max_epoch, epoch, max_epoch_upper_bound_delta)
     }
 
     /// Verify an intent message of a transaction with an zk login authenticator.
@@ -185,6 +190,10 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
     where
         T: Serialize,
     {
+        if !zklogin_mode_allows_v1(aux_verify_data.zklogin_circuit_mode) {
+            return Err(invalid_signature("zkLogin v1 is not enabled"));
+        }
+
         // Always evaluate the unpadded address derivation.
         if author != SuiAddress::try_from_unpadded(&self.inputs)? {
             // If the verify_legacy_zklogin_address flag is set, also evaluate the padded address derivation.
@@ -195,118 +204,241 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
             }
         }
 
-        // Only when supported_providers list is not empty, we check if the provider is supported. Otherwise,
-        // we just use the JWK map to check if its supported.
-        if !aux_verify_data.supported_providers.is_empty()
-            && !aux_verify_data.supported_providers.contains(
-                &OIDCProvider::from_iss(self.inputs.get_iss()).map_err(|_| {
-                    SuiErrorKind::InvalidSignature {
-                        error: "Unknown provider".to_string(),
-                    }
-                })?,
-            )
-        {
-            return Err(SuiErrorKind::InvalidSignature {
-                error: format!("OIDC provider not supported: {}", self.inputs.get_iss()),
-            }
-            .into());
-        }
-
-        // zkLogin is classical (Groth16 over BN254); a PQ ephemeral key adds nothing.
-        match self.user_signature.scheme() {
-            SignatureScheme::ED25519 | SignatureScheme::Secp256k1 | SignatureScheme::Secp256r1 => {}
-            s => {
-                return Err(SuiErrorKind::InvalidSignature {
-                    error: format!("zkLogin ephemeral signature scheme not supported: {s}"),
-                }
-                .into());
-            }
-        }
-
-        aux_verify_data.reject_compact_signature_key(&self.user_signature)?;
-
-        // Verify the ephemeral signature over the intent message of the transaction data.
-        self.user_signature.verify_secure(
+        verify_ephemeral_signature(
+            self.get_iss(),
+            &self.user_signature,
             intent_msg,
             author,
-            SignatureScheme::ZkLoginAuthenticator,
+            aux_verify_data,
         )?;
 
         let zklogin_circuit_mode = aux_verify_data.zklogin_circuit_mode;
         let caching_params = self.get_caching_params(zklogin_circuit_mode);
         let inputs_digest = caching_params.digest();
-        if zklogin_inputs_cache.is_cached(&inputs_digest) {
-            // If the zklogin inputs hits the cache, we don't need to verify the zklogin
-            // again that contains the heavy computation.
-            Ok(())
-        } else {
-            // if it is not cached, we verify the full zklogin inputs.
-            verify_zklogin_inputs_wrapper(
-                caching_params,
+        if !zklogin_inputs_cache.is_cached(&inputs_digest) {
+            verify_zk_login(
+                &caching_params.inputs,
+                caching_params.max_epoch,
+                &caching_params.extended_pk_bytes,
                 &aux_verify_data.oidc_provider_jwks,
                 &aux_verify_data.zk_login_env,
             )
-            .map_err(|e| -> SuiError {
-                SuiErrorKind::InvalidSignature {
-                    error: e.to_string(),
-                }
-                .into()
-            })?;
-            // If it's verified ok, we cache the digest.
+            .map_err(invalid_signature)?;
             zklogin_inputs_cache.cache_digest(inputs_digest);
-            Ok(())
         }
+        Ok(())
     }
 }
 
-fn verify_zklogin_inputs_wrapper(
-    params: ZkLoginCachingParams,
-    all_jwk: &imbl::HashMap<JwkId, JWK>,
-    env: &ZkLoginEnv,
-) -> SuiResult<()> {
-    verify_zk_login(
-        &params.inputs,
-        params.max_epoch,
-        &params.extended_pk_bytes,
-        all_jwk,
-        env,
-        zklogin_circuit_mode_from_flag(params.zklogin_circuit_mode),
-    )
-    .map_err(|e| {
-        SuiErrorKind::InvalidSignature {
-            error: e.to_string(),
+impl AuthenticatorTrait for ZkLoginAuthenticatorV2 {
+    fn verify_user_authenticator_epoch(
+        &self,
+        epoch: EpochId,
+        max_epoch_upper_bound_delta: Option<u64>,
+    ) -> SuiResult {
+        verify_epoch(self.max_epoch, epoch, max_epoch_upper_bound_delta)
+    }
+
+    fn verify_claims<T: Serialize>(
+        &self,
+        intent_msg: &IntentMessage<T>,
+        author: SuiAddress,
+        params: &VerifyParams,
+        zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
+    ) -> SuiResult {
+        if !zklogin_mode_allows_v2(params.zklogin_circuit_mode) {
+            return Err(invalid_signature("zkLogin v2 is not enabled"));
         }
-        .into()
-    })
+        if author != SuiAddress::from(&self.get_pk()) {
+            return Err(SuiErrorKind::InvalidAddress.into());
+        }
+        verify_ephemeral_signature(
+            self.get_iss(),
+            &self.user_signature,
+            intent_msg,
+            author,
+            params,
+        )?;
+
+        let extended_pk_bytes = flagged_ephemeral_key(&self.user_signature);
+
+        let mut hasher = DefaultHash::default();
+        hasher.update(b"Sui zkLogin v2 proof");
+        bcs::serialize_into(
+            &mut hasher,
+            &(
+                &self.inputs,
+                self.max_epoch,
+                &extended_pk_bytes,
+                params.zk_login_env,
+            ),
+        )
+        .expect("zkLogin inputs have a BCS representation");
+        let digest = ZKLoginInputsDigest::new(hasher.finalize().into());
+        zklogin_inputs_cache.is_verified(
+            digest,
+            || {
+                verify_zk_login_extended(
+                    &self.inputs,
+                    self.max_epoch,
+                    &extended_pk_bytes,
+                    &params.oidc_provider_jwks,
+                    &params.zk_login_env,
+                )
+                .map_err(invalid_signature)
+            },
+            || Ok(()),
+        )
+    }
+}
+
+fn flagged_ephemeral_key(signature: &Signature) -> Vec<u8> {
+    let mut key = vec![signature.scheme().flag()];
+    key.extend_from_slice(signature.public_key_bytes());
+    key
+}
+
+fn invalid_signature(error: impl ToString) -> SuiError {
+    SuiErrorKind::InvalidSignature {
+        error: error.to_string(),
+    }
+    .into()
+}
+
+fn verify_epoch(
+    max_epoch: EpochId,
+    epoch: EpochId,
+    max_epoch_upper_bound_delta: Option<u64>,
+) -> SuiResult {
+    if let Some(delta) = max_epoch_upper_bound_delta {
+        let max_epoch_upper_bound = epoch + delta;
+        if max_epoch > max_epoch_upper_bound {
+            return Err(invalid_signature(format!(
+                "ZKLogin max epoch too large {max_epoch}, current epoch {epoch}, max accepted: {max_epoch_upper_bound}",
+            )));
+        }
+    }
+    if epoch > max_epoch {
+        return Err(invalid_signature(format!(
+            "ZKLogin expired at epoch {max_epoch}, current epoch {epoch}",
+        )));
+    }
+    Ok(())
+}
+
+fn verify_ephemeral_signature<T: Serialize>(
+    iss: &str,
+    signature: &Signature,
+    intent_msg: &IntentMessage<T>,
+    author: SuiAddress,
+    params: &VerifyParams,
+) -> SuiResult {
+    if !params.supported_providers.is_empty()
+        && !params.supported_providers.contains(
+            &OIDCProvider::from_iss(iss).map_err(|_| invalid_signature("Unknown provider"))?,
+        )
+    {
+        return Err(invalid_signature(format!(
+            "OIDC provider not supported: {iss}"
+        )));
+    }
+    match signature.scheme() {
+        SignatureScheme::ED25519 | SignatureScheme::Secp256k1 | SignatureScheme::Secp256r1 => {}
+        scheme => {
+            return Err(invalid_signature(format!(
+                "zkLogin ephemeral signature scheme not supported: {scheme}"
+            )));
+        }
+    }
+    params.reject_compact_signature_key(signature)?;
+    signature.verify_secure(intent_msg, author, SignatureScheme::ZkLoginAuthenticator)
+}
+
+fn deserialize_v1_inputs<'de, D>(deserializer: D) -> Result<ZkLoginInputs, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let mut inputs = ZkLoginInputs::deserialize(deserializer)?;
+    inputs.init().map_err(serde::de::Error::custom)
+}
+
+fn deserialize_v2_inputs<'de, D>(deserializer: D) -> Result<VersionedZkLoginInputs, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let mut inputs = VersionedZkLoginInputs::deserialize(deserializer)?;
+    inputs.init().map_err(serde::de::Error::custom)
 }
 
 impl ToFromBytes for ZkLoginAuthenticator {
     fn from_bytes(bytes: &[u8]) -> Result<Self, FastCryptoError> {
-        // The first byte matches the flag of MultiSig.
-        if bytes.first().ok_or(FastCryptoError::InvalidInput)?
-            != &SignatureScheme::ZkLoginAuthenticator.flag()
-        {
-            return Err(FastCryptoError::InvalidInput);
-        }
-        let mut zk_login: ZkLoginAuthenticator =
-            bcs::from_bytes(&bytes[1..]).map_err(|_| FastCryptoError::InvalidSignature)?;
-        zk_login.inputs.init()?;
-        Ok(zk_login)
+        decode_zklogin_authenticator(bytes, Self::FLAG)
+    }
+}
+
+impl ToFromBytes for ZkLoginAuthenticatorV2 {
+    fn from_bytes(bytes: &[u8]) -> Result<Self, FastCryptoError> {
+        decode_zklogin_authenticator(bytes, Self::FLAG)
     }
 }
 
 impl AsRef<[u8]> for ZkLoginAuthenticator {
     fn as_ref(&self) -> &[u8] {
         self.bytes
-            .get_or_try_init::<_, eyre::Report>(|| {
-                let as_bytes = bcs::to_bytes(self).expect("BCS serialization should not fail");
-                let mut bytes = Vec::with_capacity(1 + as_bytes.len());
-                bytes.push(SignatureScheme::ZkLoginAuthenticator.flag());
-                bytes.extend_from_slice(as_bytes.as_slice());
-                Ok(bytes)
-            })
-            .expect("OnceCell invariant violated")
+            .get_or_init(|| encode_zklogin_authenticator(self, Self::FLAG))
     }
+}
+
+impl AsRef<[u8]> for ZkLoginAuthenticatorV2 {
+    fn as_ref(&self) -> &[u8] {
+        self.bytes
+            .get_or_init(|| encode_zklogin_authenticator(self, Self::FLAG))
+    }
+}
+
+impl PartialEq for ZkLoginAuthenticator {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_ref() == other.as_ref()
+    }
+}
+
+impl PartialEq for ZkLoginAuthenticatorV2 {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_ref() == other.as_ref()
+    }
+}
+
+impl Eq for ZkLoginAuthenticator {}
+
+impl Eq for ZkLoginAuthenticatorV2 {}
+
+impl Hash for ZkLoginAuthenticator {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_ref().hash(state);
+    }
+}
+
+impl Hash for ZkLoginAuthenticatorV2 {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_ref().hash(state);
+    }
+}
+
+fn decode_zklogin_authenticator<T: serde::de::DeserializeOwned>(
+    bytes: &[u8],
+    flag: u8,
+) -> Result<T, FastCryptoError> {
+    let payload = bytes
+        .strip_prefix(&[flag])
+        .ok_or(FastCryptoError::InvalidInput)?;
+    bcs::from_bytes(payload).map_err(|_| FastCryptoError::InvalidSignature)
+}
+
+fn encode_zklogin_authenticator(authenticator: &impl Serialize, flag: u8) -> Vec<u8> {
+    let mut bytes = vec![flag];
+    bcs::serialize_into(&mut bytes, authenticator)
+        .expect("zkLogin authenticator has a BCS representation");
+    bytes
 }
 
 #[derive(Debug, Clone)]

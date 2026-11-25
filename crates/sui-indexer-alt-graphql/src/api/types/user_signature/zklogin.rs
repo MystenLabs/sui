@@ -3,6 +3,7 @@
 
 use async_graphql::{Object, SimpleObject};
 use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
+use sui_types::zk_login_authenticator::ZkLoginAuthenticatorV2;
 
 use crate::api::scalars::uint53::UInt53;
 
@@ -41,30 +42,10 @@ impl ZkLoginSignature {
     async fn inputs(&self) -> Option<ZkLoginInputs> {
         let sdk = sui_sdk_types::ZkLoginAuthenticator::try_from(self.native.clone()).ok()?;
         let inputs = &sdk.inputs;
-        let proof = inputs.proof_points();
         let claim = inputs.iss_base64_details();
 
         Some(ZkLoginInputs {
-            proof_points: Some(ZkLoginProof {
-                a: Some(CircomG1 {
-                    e0: Some(proof.a.0[0].to_string()),
-                    e1: Some(proof.a.0[1].to_string()),
-                    e2: Some(proof.a.0[2].to_string()),
-                }),
-                b: Some(CircomG2 {
-                    e00: Some(proof.b.0[0][0].to_string()),
-                    e01: Some(proof.b.0[0][1].to_string()),
-                    e10: Some(proof.b.0[1][0].to_string()),
-                    e11: Some(proof.b.0[1][1].to_string()),
-                    e20: Some(proof.b.0[2][0].to_string()),
-                    e21: Some(proof.b.0[2][1].to_string()),
-                }),
-                c: Some(CircomG1 {
-                    e0: Some(proof.c.0[0].to_string()),
-                    e1: Some(proof.c.0[1].to_string()),
-                    e2: Some(proof.c.0[2].to_string()),
-                }),
-            }),
+            proof_points: Some(ZkLoginProof::from(inputs.proof_points())),
             iss_base64_details: Some(ZkLoginClaim {
                 value: Some(claim.value.clone()),
                 index_mod_4: Some(claim.index_mod_4),
@@ -85,6 +66,50 @@ impl ZkLoginSignature {
     }
 }
 
+/// A zkLogin v2 signature.
+#[derive(Clone)]
+pub(crate) struct ZkLoginV2Signature {
+    pub(super) native: ZkLoginAuthenticatorV2,
+}
+
+#[Object]
+impl ZkLoginV2Signature {
+    /// The maximum epoch for which this signature is valid.
+    async fn max_epoch(&self) -> Option<UInt53> {
+        Some(self.native.get_max_epoch().into())
+    }
+
+    /// The inner user signature.
+    async fn signature(&self) -> Option<SignatureScheme> {
+        simple_signature_to_scheme(self.native.user_signature())
+    }
+
+    /// The public identifier (issuer + address seed) for this zkLogin authenticator.
+    async fn public_identifier(&self) -> Option<ZkLoginPublicIdentifier> {
+        let sdk = sui_sdk_types::ZkLoginAuthenticatorV2::try_from(&self.native).ok()?;
+        let id = sdk.public_identifier();
+        Some(ZkLoginPublicIdentifier {
+            iss: Some(id.iss().to_owned()),
+            address_seed: Some(id.address_seed().to_string()),
+        })
+    }
+
+    /// The zkLogin v2 inputs including proof, extended issuer claim, and JWT header.
+    async fn inputs(&self) -> Option<ZkLoginV2Inputs> {
+        let sdk = sui_sdk_types::ZkLoginAuthenticatorV2::try_from(&self.native).ok()?;
+        let sui_sdk_types::VersionedZkLoginInputs::V2(inputs) = &sdk.inputs else {
+            return None;
+        };
+
+        Some(ZkLoginV2Inputs {
+            proof_points: Some(ZkLoginProof::from(inputs.proof_points())),
+            ext_iss: Some(inputs.ext_iss().to_owned()),
+            header_base64: Some(inputs.header_base64().to_owned()),
+            address_seed: Some(sdk.public_identifier().address_seed().to_string()),
+        })
+    }
+}
+
 /// The zkLogin inputs including proof, claim details, and JWT header.
 #[derive(SimpleObject, Clone)]
 pub(crate) struct ZkLoginInputs {
@@ -92,6 +117,19 @@ pub(crate) struct ZkLoginInputs {
     proof_points: Option<ZkLoginProof>,
     /// The Base64-encoded issuer claim details.
     iss_base64_details: Option<ZkLoginClaim>,
+    /// The Base64-encoded JWT header.
+    header_base64: Option<String>,
+    /// The address seed as a base10-encoded string.
+    address_seed: Option<String>,
+}
+
+/// The zkLogin v2 proof inputs.
+#[derive(SimpleObject, Clone)]
+pub(crate) struct ZkLoginV2Inputs {
+    /// The zero-knowledge proof points.
+    proof_points: Option<ZkLoginProof>,
+    /// The extended issuer claim from the JWT.
+    ext_iss: Option<String>,
     /// The Base64-encoded JWT header.
     header_base64: Option<String>,
     /// The address seed as a base10-encoded string.
@@ -107,6 +145,31 @@ pub(crate) struct ZkLoginProof {
     b: Option<CircomG2>,
     /// G1 point 'c'.
     c: Option<CircomG1>,
+}
+
+impl From<&sui_sdk_types::ZkLoginProof> for ZkLoginProof {
+    fn from(proof: &sui_sdk_types::ZkLoginProof) -> Self {
+        Self {
+            a: Some(CircomG1 {
+                e0: Some(proof.a.0[0].to_string()),
+                e1: Some(proof.a.0[1].to_string()),
+                e2: Some(proof.a.0[2].to_string()),
+            }),
+            b: Some(CircomG2 {
+                e00: Some(proof.b.0[0][0].to_string()),
+                e01: Some(proof.b.0[0][1].to_string()),
+                e10: Some(proof.b.0[1][0].to_string()),
+                e11: Some(proof.b.0[1][1].to_string()),
+                e20: Some(proof.b.0[2][0].to_string()),
+                e21: Some(proof.b.0[2][1].to_string()),
+            }),
+            c: Some(CircomG1 {
+                e0: Some(proof.c.0[0].to_string()),
+                e1: Some(proof.c.0[1].to_string()),
+                e2: Some(proof.c.0[2].to_string()),
+            }),
+        }
+    }
 }
 
 /// A G1 elliptic curve point with 3 base10-encoded Bn254 field elements.

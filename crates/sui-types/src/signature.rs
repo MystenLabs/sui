@@ -11,7 +11,7 @@ use crate::error::{SuiError, SuiErrorKind};
 use crate::multisig_legacy::MultiSigLegacy;
 use crate::passkey_authenticator::PasskeyAuthenticator;
 use crate::signature_verification::VerifiedDigestCache;
-use crate::zk_login_authenticator::ZkLoginAuthenticator;
+use crate::zk_login_authenticator::{ZkLoginAuthenticator, ZkLoginAuthenticatorV2};
 use crate::{base_types::SuiAddress, crypto::Signature, error::SuiResult, multisig::MultiSig};
 pub use enum_dispatch::enum_dispatch;
 use fastcrypto::ed25519::{Ed25519PublicKey, Ed25519Signature};
@@ -36,8 +36,6 @@ pub struct VerifyParams {
     pub oidc_provider_jwks: ImHashMap<JwkId, JWK>,
     pub supported_providers: Vec<OIDCProvider>,
     pub zk_login_env: ZkLoginEnv,
-    // zkLogin circuit verify mode: 0 = v1 circuit only, 1 = v2 circuit with
-    // fallback to v1, 2 = v2 circuit only.
     pub zklogin_circuit_mode: u64,
     pub verify_legacy_zklogin_address: bool,
     pub accept_zklogin_in_multisig: bool,
@@ -171,13 +169,18 @@ pub enum GenericSignature {
     MultiSigLegacy,
     Signature,
     ZkLoginAuthenticator,
+    ZkLoginAuthenticatorV2,
     PasskeyAuthenticator,
 }
 
 impl GenericSignature {
     pub fn is_zklogin(&self) -> bool {
-        matches!(self, GenericSignature::ZkLoginAuthenticator(_))
+        matches!(
+            self,
+            Self::ZkLoginAuthenticator(_) | Self::ZkLoginAuthenticatorV2(_)
+        )
     }
+
     pub fn is_passkey(&self) -> bool {
         matches!(self, GenericSignature::PasskeyAuthenticator(_))
     }
@@ -259,6 +262,9 @@ impl GenericSignature {
             GenericSignature::ZkLoginAuthenticator(s) => Ok(CompressedSignature::ZkLogin(
                 ZkLoginAuthenticatorAsBytes(s.as_ref().to_vec()),
             )),
+            GenericSignature::ZkLoginAuthenticatorV2(s) => Ok(CompressedSignature::ZkLoginV2(
+                ZkLoginAuthenticatorAsBytes(s.as_ref().to_vec()),
+            )),
             GenericSignature::PasskeyAuthenticator(s) => Ok(CompressedSignature::Passkey(
                 PasskeyAuthenticatorAsBytes(s.as_ref().to_vec()),
             )),
@@ -311,6 +317,7 @@ impl GenericSignature {
                 }
             }
             GenericSignature::ZkLoginAuthenticator(s) => s.get_pk(),
+            GenericSignature::ZkLoginAuthenticatorV2(s) => Ok(s.get_pk()),
             GenericSignature::PasskeyAuthenticator(s) => s.get_pk(),
             _ => Err(SuiErrorKind::UnsupportedFeatureError {
                 error: "Unsupported signature scheme".to_string(),
@@ -348,6 +355,9 @@ impl ToFromBytes for GenericSignature {
                     let zk_login = ZkLoginAuthenticator::from_bytes(bytes)?;
                     Ok(GenericSignature::ZkLoginAuthenticator(zk_login))
                 }
+                SignatureScheme::ZkLoginAuthenticatorV2 => {
+                    ZkLoginAuthenticatorV2::from_bytes(bytes).map(Into::into)
+                }
                 SignatureScheme::PasskeyAuthenticator => {
                     let passkey = PasskeyAuthenticator::from_bytes(bytes)?;
                     Ok(GenericSignature::PasskeyAuthenticator(passkey))
@@ -367,6 +377,7 @@ impl AsRef<[u8]> for GenericSignature {
             GenericSignature::MultiSigLegacy(s) => s.as_ref(),
             GenericSignature::Signature(s) => s.as_ref(),
             GenericSignature::ZkLoginAuthenticator(s) => s.as_ref(),
+            GenericSignature::ZkLoginAuthenticatorV2(s) => s.as_ref(),
             GenericSignature::PasskeyAuthenticator(s) => s.as_ref(),
         }
     }

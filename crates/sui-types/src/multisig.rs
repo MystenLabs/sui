@@ -8,7 +8,10 @@ use crate::{
     passkey_authenticator::PasskeyAuthenticator,
     signature::{AuthenticatorTrait, GenericSignature, VerifyParams},
     signature_verification::VerifiedDigestCache,
-    zk_login_authenticator::ZkLoginAuthenticator,
+    zk_login_authenticator::{
+        ZkLoginAuthenticator, ZkLoginAuthenticatorV2, zklogin_mode_allows_v1,
+        zklogin_mode_allows_v2,
+    },
 };
 pub use enum_dispatch::enum_dispatch;
 use fastcrypto::{
@@ -91,6 +94,9 @@ impl AuthenticatorTrait for MultiSig {
         // TODO: call this on all sigs to avoid future lapses
         self.get_zklogin_sigs()?.iter().try_for_each(|s| {
             s.verify_user_authenticator_epoch(epoch_id, max_epoch_upper_bound_delta)
+        })?;
+        self.get_zklogin_v2_sigs()?.iter().try_for_each(|s| {
+            s.verify_user_authenticator_epoch(epoch_id, max_epoch_upper_bound_delta)
         })
     }
 
@@ -137,6 +143,23 @@ impl AuthenticatorTrait for MultiSig {
             .into());
         }
 
+        if self.multisig_pk.has_zklogin_v1_member()
+            && !zklogin_mode_allows_v1(verify_params.zklogin_circuit_mode)
+        {
+            return Err(SuiErrorKind::InvalidSignature {
+                error: "zkLogin v1 member not supported inside multisig".to_string(),
+            }
+            .into());
+        }
+        if self.multisig_pk.has_zklogin_v2_member()
+            && !zklogin_mode_allows_v2(verify_params.zklogin_circuit_mode)
+        {
+            return Err(SuiErrorKind::InvalidSignature {
+                error: "zkLogin v2 member not supported inside multisig".to_string(),
+            }
+            .into());
+        }
+
         if self.has_passkey_sigs() && !verify_params.accept_passkey_in_multisig {
             return Err(SuiErrorKind::InvalidSignature {
                 error: "Passkey sig not supported inside multisig".to_string(),
@@ -167,19 +190,29 @@ impl AuthenticatorTrait for MultiSig {
                     .ok_or(SuiErrorKind::InvalidSignature {
                         error: "Invalid public keys index".to_string(),
                     })?;
+            if verify_params.additional_multisig_checks {
+                let signature_scheme = match sig {
+                    CompressedSignature::Ed25519(_) => SignatureScheme::ED25519,
+                    CompressedSignature::Secp256k1(_) => SignatureScheme::Secp256k1,
+                    CompressedSignature::Secp256r1(_) => SignatureScheme::Secp256r1,
+                    CompressedSignature::ZkLogin(_) => SignatureScheme::ZkLoginAuthenticator,
+                    CompressedSignature::ZkLoginV2(_) => SignatureScheme::ZkLoginAuthenticatorV2,
+                    CompressedSignature::Passkey(_) => SignatureScheme::PasskeyAuthenticator,
+                    CompressedSignature::MLDSA65(_) => SignatureScheme::MLDSA65,
+                };
+                if subsig_pubkey.scheme() != signature_scheme {
+                    return Err(SuiErrorKind::InvalidSignature {
+                        error: format!(
+                            "Invalid sig for pk={} address={:?} error=signature/pubkey type mismatch",
+                            subsig_pubkey.encode_base64(),
+                            SuiAddress::from(subsig_pubkey)
+                        ),
+                    }
+                    .into());
+                }
+            }
             let res = match sig {
                 CompressedSignature::Ed25519(s) => {
-                    if verify_params.additional_multisig_checks
-                        && !matches!(subsig_pubkey.scheme(), SignatureScheme::ED25519)
-                    {
-                        return Err(SuiErrorKind::InvalidSignature {
-                            error: format!(
-                                "Invalid sig for pk={} address={:?} error=signature/pubkey type mismatch",
-                                subsig_pubkey.encode_base64(),
-                                SuiAddress::from(subsig_pubkey)
-                            ),
-                        }.into());
-                    }
                     let pk =
                         Ed25519PublicKey::from_bytes(subsig_pubkey.as_ref()).map_err(|_| {
                             SuiErrorKind::InvalidSignature {
@@ -194,17 +227,6 @@ impl AuthenticatorTrait for MultiSig {
                     )
                 }
                 CompressedSignature::Secp256k1(s) => {
-                    if verify_params.additional_multisig_checks
-                        && !matches!(subsig_pubkey.scheme(), SignatureScheme::Secp256k1)
-                    {
-                        return Err(SuiErrorKind::InvalidSignature {
-                            error: format!(
-                                "Invalid sig for pk={} address={:?} error=signature/pubkey type mismatch",
-                                subsig_pubkey.encode_base64(),
-                                SuiAddress::from(subsig_pubkey)
-                            ),
-                        }.into());
-                    }
                     let pk =
                         Secp256k1PublicKey::from_bytes(subsig_pubkey.as_ref()).map_err(|_| {
                             SuiErrorKind::InvalidSignature {
@@ -219,17 +241,6 @@ impl AuthenticatorTrait for MultiSig {
                     )
                 }
                 CompressedSignature::Secp256r1(s) => {
-                    if verify_params.additional_multisig_checks
-                        && !matches!(subsig_pubkey.scheme(), SignatureScheme::Secp256r1)
-                    {
-                        return Err(SuiErrorKind::InvalidSignature {
-                            error: format!(
-                                "Invalid sig for pk={} address={:?} error=signature/pubkey type mismatch",
-                                subsig_pubkey.encode_base64(),
-                                SuiAddress::from(subsig_pubkey)
-                            ),
-                        }.into());
-                    }
                     let pk = verify_params
                         .parse_secp256r1_public_key(subsig_pubkey.as_ref())
                         .map_err(|_| SuiErrorKind::InvalidSignature {
@@ -243,17 +254,6 @@ impl AuthenticatorTrait for MultiSig {
                     )
                 }
                 CompressedSignature::MLDSA65(s) => {
-                    if verify_params.additional_multisig_checks
-                        && !matches!(subsig_pubkey.scheme(), SignatureScheme::MLDSA65)
-                    {
-                        return Err(SuiErrorKind::InvalidSignature {
-                            error: format!(
-                                "Invalid sig for pk={} address={:?} error=signature/pubkey type mismatch",
-                                subsig_pubkey.encode_base64(),
-                                SuiAddress::from(subsig_pubkey)
-                            ),
-                        }.into());
-                    }
                     let pk =
                         MLDSA65PublicKey::from_bytes(subsig_pubkey.as_ref()).map_err(|_| {
                             SuiErrorKind::InvalidSignature {
@@ -269,25 +269,14 @@ impl AuthenticatorTrait for MultiSig {
                         })?,
                     )
                 }
-                CompressedSignature::ZkLogin(z) => {
-                    if verify_params.additional_multisig_checks
-                        && !matches!(
-                            subsig_pubkey.scheme(),
-                            SignatureScheme::ZkLoginAuthenticator
-                        )
-                    {
-                        return Err(SuiErrorKind::InvalidSignature {
-                            error: format!(
-                                "Invalid sig for pk={} address={:?} error=signature/pubkey type mismatch",
-                                subsig_pubkey.encode_base64(),
-                                SuiAddress::from(subsig_pubkey)
-                            ),
-                        }.into());
+                CompressedSignature::ZkLogin(z) | CompressedSignature::ZkLoginV2(z) => {
+                    let authenticator = if matches!(sig, CompressedSignature::ZkLoginV2(_)) {
+                        ZkLoginAuthenticatorV2::from_bytes(&z.0).map(GenericSignature::from)
+                    } else {
+                        ZkLoginAuthenticator::from_bytes(&z.0).map(GenericSignature::from)
                     }
-                    let authenticator = ZkLoginAuthenticator::from_bytes(&z.0).map_err(|_| {
-                        SuiErrorKind::InvalidSignature {
-                            error: "Invalid zklogin authenticator bytes".to_string(),
-                        }
+                    .map_err(|_| SuiErrorKind::InvalidSignature {
+                        error: "Invalid zklogin authenticator bytes".to_string(),
                     })?;
                     authenticator
                         .verify_claims(
@@ -448,18 +437,32 @@ impl MultiSig {
     }
 
     pub fn get_zklogin_sigs(&self) -> Result<Vec<ZkLoginAuthenticator>, SuiError> {
-        let authenticator_as_bytes: Vec<_> = self
-            .sigs
+        self.sigs
             .iter()
             .filter_map(|s| match s {
                 CompressedSignature::ZkLogin(z) => Some(z),
                 _ => None,
             })
-            .collect();
-        authenticator_as_bytes
-            .iter()
             .map(|z| {
                 ZkLoginAuthenticator::from_bytes(&z.0).map_err(|_| {
+                    SuiErrorKind::InvalidSignature {
+                        error: "Invalid zklogin authenticator bytes".to_string(),
+                    }
+                    .into()
+                })
+            })
+            .collect()
+    }
+
+    pub fn get_zklogin_v2_sigs(&self) -> Result<Vec<ZkLoginAuthenticatorV2>, SuiError> {
+        self.sigs
+            .iter()
+            .filter_map(|s| match s {
+                CompressedSignature::ZkLoginV2(z) => Some(z),
+                _ => None,
+            })
+            .map(|z| {
+                ZkLoginAuthenticatorV2::from_bytes(&z.0).map_err(|_| {
                     SuiErrorKind::InvalidSignature {
                         error: "Invalid zklogin authenticator bytes".to_string(),
                     }
@@ -605,6 +608,18 @@ impl MultiSigPublicKey {
             .any(|(pk, _)| matches!(pk, PublicKey::MLDSA65(_)))
     }
 
+    fn has_zklogin_v1_member(&self) -> bool {
+        self.pk_map
+            .iter()
+            .any(|(pk, _)| matches!(pk, PublicKey::ZkLogin(_)))
+    }
+
+    fn has_zklogin_v2_member(&self) -> bool {
+        self.pk_map
+            .iter()
+            .any(|(pk, _)| matches!(pk, PublicKey::ZkLoginV2(_)))
+    }
+
     pub fn validate(&self) -> Result<MultiSigPublicKey, FastCryptoError> {
         let pk_map = self.pubkeys();
         if self.threshold == 0
@@ -624,6 +639,14 @@ impl MultiSigPublicKey {
             })
         {
             return Err(FastCryptoError::InvalidInput);
+        }
+
+        // For zklogin v2, also validate the address seed to be exactly 32 bytes.
+        for (pk, _) in pk_map {
+            if let PublicKey::ZkLoginV2(id) = pk {
+                sui_sdk_types::ZkLoginPublicIdentifier::try_from(id.clone())
+                    .map_err(|_| FastCryptoError::InvalidInput)?;
+            }
         }
         Ok(self.to_owned())
     }
