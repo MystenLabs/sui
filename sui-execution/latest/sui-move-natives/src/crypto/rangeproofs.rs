@@ -24,6 +24,8 @@ pub const NOT_SUPPORTED: u64 = 0;
 pub const INVALID_PROOF: u64 = 1;
 pub const INVALID_RANGE: u64 = 2;
 pub const INVALID_BATCH_SIZE: u64 = 3;
+// Codes 4 and 5 are used by the Move module `sui::rangeproofs`.
+pub const INVALID_COMMITMENT: u64 = 6;
 
 /// Upper bound for batch size * range in bits, used when the protocol config does not set one.
 const DEFAULT_MAX_TOTAL_BITS: u64 = 512;
@@ -129,25 +131,24 @@ pub fn verify_bulletproofs_with_dst_ristretto255(
             .saturating_mul(total_bits)
     );
 
-    let commitments = (0..length)
-        .map(|i| {
-            commitments
-                .borrow_elem(i as usize, &vector_u8_type)
-                .and_then(|reference| reference.value_as::<VectorRef>())
-                .and_then(|v| Ok(v.as_bytes_ref()?.to_vec()))
-                .and_then(|v| {
-                    v.try_into()
-                        .map_err(|_| partial_vm_error!(INTERNAL_TYPE_ERROR))
-                })
-                .and_then(|b| {
-                    RistrettoPoint::from_trusted_byte_array(&b)
-                        .map_err(|_| partial_vm_error!(INTERNAL_TYPE_ERROR))
-                })
-                .map(PedersenCommitment)
-        })
-        .collect::<PartialVMResult<Vec<PedersenCommitment>>>()?;
+    let mut points = Vec::with_capacity(length as usize);
+    for i in 0..length {
+        let bytes = commitments
+            .borrow_elem(i as usize, &vector_u8_type)?
+            .value_as::<VectorRef>()?
+            .as_bytes_ref()?
+            .to_vec();
+        let Some(point) = bytes
+            .try_into()
+            .ok()
+            .and_then(|b| RistrettoPoint::from_trusted_byte_array(&b).ok())
+        else {
+            return Ok(NativeResult::err(context.gas_used(), INVALID_COMMITMENT));
+        };
+        points.push(PedersenCommitment(point));
+    }
 
-    let result = proof.verify_batch(&commitments, &range, &dst, &mut thread_rng());
+    let result = proof.verify_batch(&points, &range, &dst, &mut thread_rng());
 
     Ok(NativeResult::ok(
         context.gas_used(),
