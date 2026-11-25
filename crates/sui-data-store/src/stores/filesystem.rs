@@ -772,9 +772,9 @@ impl FileSystemStore {
 
         // Update or add the mapping for this node
         let mut found = false;
-        for (node, _) in &mut mappings {
+        for (node, existing_chain_id) in &mut mappings {
             if node == node_key {
-                *node = node_key.to_string();
+                *existing_chain_id = chain_id.clone();
                 found = true;
                 break;
             }
@@ -782,14 +782,6 @@ impl FileSystemStore {
 
         if !found {
             mappings.push((node_key.to_string(), chain_id.clone()));
-        } else {
-            // Update the existing mapping
-            for (node, existing_chain_id) in &mut mappings {
-                if node == node_key {
-                    *existing_chain_id = chain_id.clone();
-                    break;
-                }
-            }
         }
 
         // Write the updated mappings back to the file
