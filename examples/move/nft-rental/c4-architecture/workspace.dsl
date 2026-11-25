@@ -25,7 +25,7 @@ workspace {
                 borrow -> item "Grants access temporarily to"
                 borrow -> promise "Produces a"
                 reclaim -> item "Releases the"
-                rentable -> rent "Is transferred to borrower's Kiosk Extension"
+                rentable -> rent "Is transferred to the borrower's Kiosk Extension"
 
                 # person relationships
                 renter -> install "Invokes"
