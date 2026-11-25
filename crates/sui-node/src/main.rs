@@ -63,6 +63,21 @@ fn main() {
     );
     config.supported_protocol_versions = Some(SupportedProtocolVersions::SYSTEM_DEFAULT);
 
+    // Temporarily enable dry run for testnet validators
+    let chain_id = sui_types::digests::ChainIdentifier::from(
+        *config.genesis.genesis().unwrap().checkpoint().digest(),
+    );
+    if chain_id == sui_types::digests::get_testnet_chain_identifier() {
+        if let Some(policy_config) = &mut config.policy_config {
+            if *policy_config
+                == sui_types::traffic_control::PolicyConfig::default_dos_protection_policy()
+            {
+                info!("Enabling DoS protection for testnet validator");
+                policy_config.dry_run = false;
+            }
+        }
+    }
+
     // match run_with_range args
     // this means that we always modify the config used to start the node
     // for run_with_range. i.e if this is set in the config, it is ignored. only the cli args
