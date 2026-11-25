@@ -16,8 +16,6 @@ where
         return size;
     }
 
-    let mut rng = get_rng();
-
     // Three choices for cache size
     //
     // 2: constant evictions
@@ -33,6 +31,11 @@ where
         panic!("Failed to convert 2 to T");
     };
 
+    if size <= two {
+        return size;
+    }
+
+    let mut rng = get_rng();
     let random_size = rng.gen_range(two..size);
     let choices = [two, size, random_size];
     *choices.choose(&mut rng).unwrap()
@@ -44,4 +47,29 @@ pub type TempDir = tempfile::TempDir;
 /// Ensure the name is randomized even in simtests.
 pub fn tempdir() -> std::io::Result<TempDir> {
     nondeterministic!(tempfile::tempdir())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn small_cache_capacities_are_preserved() {
+        for size in [2_u64, 1, 0] {
+            assert_eq!(randomize_cache_capacity_in_tests(size), size);
+        }
+        for size in [2_usize, 1, 0] {
+            assert_eq!(randomize_cache_capacity_in_tests(size), size);
+        }
+    }
+
+    #[test]
+    fn randomized_cache_capacity_stays_within_bounds() {
+        for size in [3_u64, 10, 100_000] {
+            for _ in 0..100 {
+                let capacity = randomize_cache_capacity_in_tests(size);
+                assert!((2..=size).contains(&capacity));
+            }
+        }
+    }
 }
