@@ -725,6 +725,13 @@ struct EventRef {
 /// using each row's `event_count` to enumerate real event coordinates per tx
 /// without touching the tx body. This direct driver source speaks the terminal
 /// [`ScanStop`] type because it is its own single-source merge.
+///
+/// The scan stops reading after the row that brings the in-bounds events read
+/// so far to `options.limit_items`. The caller takes this stream through
+/// [`take_items`] with that same limit, which ends the page at its last item
+/// without polling for another, so neither the rows past that row nor the
+/// stream's end after it (natural, or the SCAN_LIMIT stop of a clamped range)
+/// is ever observed.
 fn unfiltered_event_refs(
     client: BigTableClient,
     bounds: IntraTxScanBounds,
@@ -737,8 +744,18 @@ fn unfiltered_event_refs(
         };
         let (scan_range, scan_limited, frontier_tx) =
             clamp_tx_scan_range(tx_range, source_limit, &options);
+        let page_items = options.limit_items;
+        let mut events_read = 0usize;
         let rows = client
-            .scan_tx_seq_digests_stream(scan_range, options.scan_direction(), source_limit)
+            .scan_tx_seq_digests_stream_until(
+                scan_range,
+                options.scan_direction(),
+                source_limit,
+                move |row| {
+                    events_read += in_bounds_event_count(row, bounds);
+                    events_read >= page_items
+                },
+            )
             .await
             .map_err(|e| ScanStop::Fault(anyhow::Error::new(e)))?;
 
@@ -801,16 +818,21 @@ fn expand_event_refs(
     refs
 }
 
+/// How many event refs [`expand_event_refs`] makes of `row`: its events
+/// within `bounds`.
+fn in_bounds_event_count(row: &TxSeqDigestData, bounds: IntraTxScanBounds) -> usize {
+    (0..row.event_count)
+        .filter(|&index| bounds.contains(event_position(row, index)))
+        .count()
+}
+
 fn push_event_ref_if_in_bounds(
     refs: &mut Vec<EventRef>,
     row: TxSeqDigestData,
     index: u32,
     bounds: IntraTxScanBounds,
 ) {
-    let position = IntraTxCoordinate {
-        tx_seq: row.tx_sequence_number,
-        index,
-    };
+    let position = event_position(&row, index);
     if !bounds.contains(position) {
         return;
     }
@@ -818,6 +840,13 @@ fn push_event_ref_if_in_bounds(
         position,
         tx_seq_digest: Some(row),
     });
+}
+
+fn event_position(row: &TxSeqDigestData, index: u32) -> IntraTxCoordinate {
+    IntraTxCoordinate {
+        tx_seq: row.tx_sequence_number,
+        index,
+    }
 }
 
 fn validate_event_read_mask(read_mask: Option<FieldMask>) -> Result<FieldMaskTree, RpcError> {
@@ -1182,9 +1211,9 @@ mod tests {
 
     /// With one BigTable permit per request, an unfiltered listing whose dense `tx_seq_digest`
     /// scan feeds more transaction reads than the `transactions` stage runs at once still
-    /// completes, in order, and stops at its item limit: the scan's permit is released when its
-    /// response ends, not when the stage that waits on later reads gets around to taking the
-    /// scan's last rows.
+    /// completes, in order, and stops at its item limit: the scan's permit is released when the
+    /// scan stops at the row that fills the page, not when the stage that waits on later reads
+    /// gets around to taking the scan's last rows.
     #[tokio::test]
     async fn unfiltered_listing_completes_with_one_permit() {
         const OPERATION: &str = "list_events";
@@ -1307,16 +1336,266 @@ mod tests {
                 .with_label_values(&[OPERATION, stage_label, outcome])
                 .get()
         };
-        // The limit's events span three transactions, each read once.
+        // The scan stops at the third of its four rows, which fills the page, so it is dropped
+        // before its response ends. The limit's events span three transactions, each read once.
         assert_eq!(
             (
                 reads(stage::TX_SEQ_DIGEST, "completed"),
                 reads(stage::TX_SEQ_DIGEST, "cancelled"),
                 reads(stage::TRANSACTIONS, "completed"),
             ),
-            (1, 0, 3),
+            (0, 1, 3),
         );
         mock_server.abort();
+    }
+
+    /// Events emitted by each transaction of [`sparse_event_checkpoint`]: most emit none, and
+    /// transaction 3's three events alone fill a page of [`SPARSE_PAGE_ITEMS`].
+    const SPARSE_EVENT_COUNTS: [u8; 14] = [1, 0, 0, 3, 0, 0, 0, 1, 0, 2, 0, 0, 1, 0];
+    const SPARSE_PAGE_ITEMS: u32 = 3;
+
+    /// A checkpoint whose `i`-th transaction emits `SPARSE_EVENT_COUNTS[i]` events, the event
+    /// at `index` with contents `[i, index]`.
+    fn sparse_event_checkpoint() -> sui_types::full_checkpoint_content::Checkpoint {
+        let mut builder = TestCheckpointBuilder::new(0);
+        for (tx, &event_count) in SPARSE_EVENT_COUNTS.iter().enumerate() {
+            let tx = tx as u8;
+            builder = builder.start_transaction(tx);
+            if event_count > 0 {
+                builder = builder.with_events(
+                    (0..event_count)
+                        .map(|index| {
+                            Event::new(
+                                &ObjectID::ZERO,
+                                ident_str!("sparse"),
+                                TestCheckpointBuilder::derive_address(tx),
+                                GAS::type_(),
+                                vec![tx, index],
+                            )
+                        })
+                        .collect(),
+                );
+            }
+            builder = builder.finish_transaction();
+        }
+        builder.build_checkpoint()
+    }
+
+    /// Every frame of an unfiltered listing of at most `limit` events in `ordering`, resumed
+    /// after `cursor` if set.
+    async fn list_unfiltered(
+        ctx: &QueryContext,
+        ordering: proto::Ordering,
+        limit: u32,
+        cursor: Option<prost::bytes::Bytes>,
+    ) -> Vec<ListEventsResponse> {
+        let mut options = proto::QueryOptions::default();
+        options.limit = Some(limit);
+        options.ordering = Some(ordering as i32);
+        if ordering == proto::Ordering::Ascending {
+            options.after = cursor;
+        } else {
+            options.before = cursor;
+        }
+        let mut request = ListEventsRequest::default();
+        request.read_mask = Some(FieldMask::from_paths([
+            "contents",
+            "transaction_digest",
+            "event_index",
+        ]));
+        request.options = Some(options);
+        list_events(ctx.clone(), request)
+            .await
+            .expect("construct ListEvents stream")
+            .try_collect()
+            .await
+            .expect("collect ListEvents stream")
+    }
+
+    /// The `[tx, index]` contents of [`sparse_event_checkpoint`]'s event in `frame`.
+    fn sparse_event_key(frame: &ListEventsResponse) -> Option<(u8, u8)> {
+        let event = frame.event.as_ref()?;
+        let contents = event
+            .contents
+            .as_ref()
+            .and_then(|contents| contents.value.as_ref())
+            .expect("contents requested");
+        Some((contents[0], contents[1]))
+    }
+
+    /// Pages of an unfiltered listing, each resumed from the previous page's cursor, are the
+    /// frames of an unlimited listing from the same cursor up to the page's limit, and together
+    /// list every event once, in order. The pages need more transactions than they hold events,
+    /// and some resume inside transaction 3, whose events fill a page though only some of them
+    /// are left to list.
+    #[tokio::test]
+    async fn unfiltered_pages_join_into_the_whole_listing() {
+        let (ctx, _registry, mock, server) = metric_context("list_events", 1).await;
+        insert_checkpoint_rows(&mock, &sparse_event_checkpoint()).await;
+        let cases = [
+            (
+                proto::Ordering::Ascending,
+                vec![
+                    vec![(0, 0), (3, 0), (3, 1)],
+                    vec![(3, 2), (7, 0), (9, 0)],
+                    vec![(9, 1), (12, 0)],
+                ],
+            ),
+            (
+                proto::Ordering::Descending,
+                vec![
+                    vec![(12, 0), (9, 1), (9, 0)],
+                    vec![(7, 0), (3, 2), (3, 1)],
+                    vec![(3, 0), (0, 0)],
+                ],
+            ),
+        ];
+        for (ordering, expected_pages) in cases {
+            let whole = list_unfiltered(&ctx, ordering, 100, None).await;
+            let mut pages = Vec::new();
+            let mut listed = Vec::new();
+            let mut cursor = None;
+            loop {
+                let page = list_unfiltered(&ctx, ordering, SPARSE_PAGE_ITEMS, cursor.clone()).await;
+                // The same listing without the page's limit, cut after the page's last item.
+                let mut expected = list_unfiltered(&ctx, ordering, 100, cursor).await;
+                let last_item = expected
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, frame)| frame.event.is_some())
+                    .nth(SPARSE_PAGE_ITEMS as usize - 1)
+                    .map(|(position, _)| position);
+                if let Some(last_item) = last_item {
+                    expected.truncate(last_item + 1);
+                    let mut end = QueryEnd::default();
+                    end.reason = Some(QueryEndReason::ItemLimit as i32);
+                    expected[last_item].end = Some(end);
+                }
+                assert_eq!(page, expected, "{ordering:?} page {}", pages.len());
+
+                pages.push(page.iter().filter_map(sparse_event_key).collect::<Vec<_>>());
+                listed.extend(page.iter().filter_map(|frame| frame.event.clone()));
+                if last_item.is_none() {
+                    break;
+                }
+                cursor = page
+                    .last()
+                    .and_then(|frame| frame.watermark.as_ref())
+                    .and_then(|watermark| watermark.cursor.clone());
+                assert!(cursor.is_some(), "{ordering:?}: a full page has a cursor");
+            }
+            assert_eq!(pages, expected_pages, "{ordering:?}");
+            let whole_events: Vec<_> = whole
+                .iter()
+                .filter_map(|frame| frame.event.clone())
+                .collect();
+            assert_eq!(listed, whole_events, "{ordering:?}");
+        }
+        server.abort();
+    }
+
+    /// `kv_rpc_bigtable_reads_finished_total` for `tx_seq_digest` reads that ended with
+    /// `outcome`.
+    fn tx_seq_digest_reads_finished(registry: &prometheus::Registry, outcome: &str) -> u64 {
+        registry
+            .gather()
+            .iter()
+            .filter(|family| family.name() == "kv_rpc_bigtable_reads_finished_total")
+            .flat_map(|family| family.get_metric())
+            .filter(|metric| {
+                let has = |name: &str, value: &str| {
+                    metric
+                        .get_label()
+                        .iter()
+                        .any(|label| label.name() == name && label.value() == value)
+                };
+                has("stage", stage::TX_SEQ_DIGEST) && has("outcome", outcome)
+            })
+            .map(|metric| metric.get_counter().value() as u64)
+            .sum()
+    }
+
+    /// The unfiltered scan reads up to the row that brings the events it has read within its
+    /// bounds to the page's item limit, and no further: its stream ends after that row, every
+    /// in-bounds event of which it forwards, and the scan is dropped before its response ends.
+    /// Transaction 3's events alone would fill the page, but only those within the bounds
+    /// count, and zero-event rows count nothing. The scan still asks for its whole range.
+    #[tokio::test]
+    async fn unfiltered_scan_stops_at_the_row_that_fills_the_page() {
+        let (ctx, registry, mock, server) = metric_context("list_events", 1).await;
+        insert_checkpoint_rows(&mock, &sparse_event_checkpoint()).await;
+        let event = |tx_seq, index| IntraTxCoordinate { tx_seq, index };
+        let cases = [
+            (
+                proto::Ordering::Ascending,
+                IntraTxScanBounds {
+                    lo: Bound::Included(event(3, 1)),
+                    hi: Bound::Excluded(IntraTxCoordinate::start_of_tx(14)),
+                },
+                3..14,
+                vec![(3, 1), (3, 2), (7, 0)],
+            ),
+            (
+                proto::Ordering::Descending,
+                IntraTxScanBounds {
+                    lo: Bound::Included(IntraTxCoordinate::start_of_tx(0)),
+                    hi: Bound::Excluded(event(9, 1)),
+                },
+                0..10,
+                vec![(9, 0), (7, 0), (3, 2), (3, 1), (3, 0)],
+            ),
+        ];
+        for (ordering, bounds, scan_range, expected) in cases {
+            let mut request = proto::QueryOptions::default();
+            request.limit = Some(SPARSE_PAGE_ITEMS);
+            request.ordering = Some(ordering as i32);
+            let options = QueryOptions::events_from_proto(Some(&request), 10, 100).unwrap();
+            let finished_before = (
+                tx_seq_digest_reads_finished(&registry, "completed"),
+                tx_seq_digest_reads_finished(&registry, "cancelled"),
+            );
+            mock.clear_read_rows_calls().await;
+
+            let refs = tokio::time::timeout(
+                Duration::from_secs(5),
+                unfiltered_event_refs(ctx.client().clone(), bounds, options, 100)
+                    .map_ok(|frame| match frame {
+                        Watermarked::Item(event_ref) => {
+                            (event_ref.position.tx_seq, event_ref.position.index)
+                        }
+                        Watermarked::Watermark(_) => panic!("the scan sends no watermark"),
+                    })
+                    .try_collect::<Vec<_>>(),
+            )
+            .await
+            .expect("the scan ends");
+            let Ok(refs) = refs else {
+                panic!("{ordering:?}: the scan stopped with an error");
+            };
+            assert_eq!(refs, expected, "{ordering:?}");
+
+            let scans: Vec<_> = mock
+                .read_rows_calls()
+                .await
+                .into_iter()
+                .filter(|call| call.table == tx_seq_digest::NAME)
+                .collect();
+            assert_eq!(scans.len(), 1, "{ordering:?}: {scans:?}");
+            assert_eq!(
+                scans[0].rows_limit,
+                (scan_range.end - scan_range.start) as i64,
+                "{ordering:?}"
+            );
+            assert_eq!(
+                (
+                    tx_seq_digest_reads_finished(&registry, "completed"),
+                    tx_seq_digest_reads_finished(&registry, "cancelled"),
+                ),
+                (finished_before.0, finished_before.1 + 1),
+                "{ordering:?}: the scan is dropped before its response ends"
+            );
+        }
+        server.abort();
     }
 
     #[tokio::test]

@@ -81,6 +81,7 @@ use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 
 use crate::pipeline::drain_in_task;
+use crate::pipeline::drain_in_task_until;
 
 /// Stage label values for the permit timing metrics. `&'static str` so they
 /// satisfy `with_label_values` zero-allocation.
@@ -354,15 +355,43 @@ impl BigTableClient {
         direction: ScanDirection,
         rows_limit: usize,
     ) -> Result<BoxStream<'static, Result<TxSeqDigestData, anyhow::Error>>, RpcError> {
-        let mut inner = self.inner.clone();
         let rows = self
-            .open_gated_stream_with_rows_limit(
-                stage::TX_SEQ_DIGEST,
-                inner.scan_tx_seq_digests_stream(range, direction, rows_limit),
-                Some(rows_limit),
-            )
+            .open_tx_seq_digest_scan(range, direction, rows_limit)
             .await?;
         Ok(drain_in_task(rows))
+    }
+
+    /// [`Self::scan_tx_seq_digests_stream`] for a caller that needs only a
+    /// prefix of the scan: the stream ends after the first row for which
+    /// `stop_after` returns true, and the scan stops reading there and
+    /// releases its permit (see [`drain_in_task_until`]). A scan stopped
+    /// before its response ends records as cancelled.
+    pub(crate) async fn scan_tx_seq_digests_stream_until(
+        &self,
+        range: Range<u64>,
+        direction: ScanDirection,
+        rows_limit: usize,
+        stop_after: impl FnMut(&TxSeqDigestData) -> bool + Send + 'static,
+    ) -> Result<BoxStream<'static, Result<TxSeqDigestData, anyhow::Error>>, RpcError> {
+        let rows = self
+            .open_tx_seq_digest_scan(range, direction, rows_limit)
+            .await?;
+        Ok(drain_in_task_until(rows, stop_after))
+    }
+
+    async fn open_tx_seq_digest_scan(
+        &self,
+        range: Range<u64>,
+        direction: ScanDirection,
+        rows_limit: usize,
+    ) -> Result<BoxStream<'static, Result<TxSeqDigestData, anyhow::Error>>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.open_gated_stream_with_rows_limit(
+            stage::TX_SEQ_DIGEST,
+            inner.scan_tx_seq_digests_stream(range, direction, rows_limit),
+            Some(rows_limit),
+        )
+        .await
     }
 
     /// Scan up to `rows_limit` `checkpoints` rows of `range` in `direction`,

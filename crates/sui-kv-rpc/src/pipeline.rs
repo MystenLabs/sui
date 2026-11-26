@@ -505,6 +505,38 @@ where
     .boxed()
 }
 
+/// [`drain_in_task`] for a consumer that needs only a prefix of `rows`: the
+/// drainer forwards the first row for which `stop_after` returns true, then
+/// drops the read without taking another row from it, and the returned stream
+/// ends after that row. `stop_after` runs in the drainer, on each `Ok` row in
+/// order, before the row is forwarded.
+///
+/// The stream ends there just as it would at the read's end, so the consumer
+/// cannot tell the two apart: `stop_after` must return true only once the
+/// consumer holds every row it will take.
+pub(crate) fn drain_in_task_until<O, E, S>(
+    rows: BoxStream<'static, Result<O, E>>,
+    mut stop_after: S,
+) -> BoxStream<'static, Result<O, E>>
+where
+    O: Send + 'static,
+    E: Send + 'static,
+    S: FnMut(&O) -> bool + Send + 'static,
+{
+    let rows = async_stream::stream! {
+        let mut rows = rows;
+        while let Some(row) = rows.next().await {
+            let stop = row.as_ref().is_ok_and(&mut stop_after);
+            yield row;
+            if stop {
+                break;
+            }
+        }
+    }
+    .boxed();
+    drain_in_task(rows)
+}
+
 /// One frame for [`pipelined_reads`]: a burst of items or a watermark.
 /// Watermarks are zero-cost passthroughs that occupy a slot in the input-order
 /// sequence so the dispatcher forwards them in place between item frames.
@@ -2093,6 +2125,30 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(drained, vec![Ok(0), Ok(1), Err("boom")]);
+    }
+
+    #[tokio::test]
+    async fn drain_in_task_until_drops_the_read_after_its_stop_row() {
+        // The read would go on to rows 2 and 3 and then never end, so only
+        // stopping at row 1 drops it (and its permit) while the consumer
+        // sits on the first row. The stream ends after the stop row.
+        let limiter = Arc::new(Semaphore::new(1));
+        let mut rows = drain_in_task_until(
+            permit_holding_rows(&limiter, vec![0, 1, 2, 3], true),
+            |row| *row == 1,
+        );
+
+        let first = timeout(Duration::from_secs(5), rows.next()).await.unwrap();
+        assert_eq!(first, Some(Ok(0)));
+        let _released = timeout(Duration::from_secs(5), limiter.acquire())
+            .await
+            .expect("the drainer must drop the read after its stop row")
+            .unwrap();
+
+        let rest = timeout(Duration::from_secs(5), rows.collect::<Vec<_>>())
+            .await
+            .unwrap();
+        assert_eq!(rest, vec![Ok(1)]);
     }
 
     #[tokio::test]
