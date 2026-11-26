@@ -303,10 +303,10 @@ pub struct StagesConfig {
     /// Before those multi-gets, `BatchGetObjects` scans: one reverse scan of
     /// `objects` per latest lookup, which shares this stage's `objects` metric
     /// label, and one `object_versions_by_checkpoint` read per `at_checkpoint`
-    /// lookup. The scans run in groups of `max-seeks-per-read` lookups, so that
-    /// knob also sets the scan group size, and every group starts at once:
-    /// `concurrency` does not bound the scans, only `request-bigtable-concurrency`
-    /// does. `GetObject`'s reads likewise use only `request-bigtable-concurrency`.
+    /// lookup. The scans run in groups of at most `max-seeks-per-read` lookups,
+    /// at most `concurrency` groups at a time. Groups are taken in order, and
+    /// within the group being taken each lookup's answer moves on as its scan
+    /// ends. `GetObject`'s reads use only `request-bigtable-concurrency`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub objects: Option<StageConfig>,
 

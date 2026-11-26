@@ -693,14 +693,115 @@ fn clamp_cp_frontier_past_last(
 mod tests {
     use super::*;
     use mysten_common::ZipDebugEqIteratorExt;
+    use sui_kvstore::testing::MockBigtableServer;
+    use sui_kvstore::testing::insert_checkpoint_rows;
     use sui_rpc_api::ledger_history::cursor::CursorToken;
     use sui_rpc_api::ledger_history::cursor::LedgerPoint;
     use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
+    use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
+    use crate::AlphaFeatures;
+    use crate::StageConfig;
+    use crate::StagesConfig;
+    use crate::served_height::ServedHeight;
     use crate::v2::test_utils::{
         LIST_PIPELINE_METRICS, ascending_options, assert_list_metric_absent, list_counter,
-        list_histogram, query_context, query_context_with_registry, unparseable_transaction_filter,
+        list_histogram, query_context, query_context_with_registry,
+        start_kv_rpc_with_request_concurrency, unparseable_transaction_filter,
     };
+
+    /// With one BigTable permit per request, an unfiltered listing that reads transactions
+    /// still completes when the dense `checkpoints` scan feeds more transaction reads than the
+    /// `transactions` stage runs at once: the scan's permit is released when its response ends,
+    /// not when the stage that waits on later reads gets around to taking the scan's end.
+    #[tokio::test]
+    async fn unfiltered_listing_with_transactions_completes_with_one_permit() {
+        const OPERATION: &str = "list_checkpoints";
+        let mock = MockBigtableServer::new();
+        let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
+        let mut builder = TestCheckpointBuilder::new(0);
+        for sender in 1..=4 {
+            builder = builder.start_transaction(sender).finish_transaction();
+        }
+        let checkpoint = builder.build_checkpoint();
+        insert_checkpoint_rows(&mock, &checkpoint).await;
+        // One transaction per read and one read at a time, so the checkpoint's transactions
+        // outnumber the reads the stage takes before it waits for the first to be consumed.
+        let stages = StagesConfig {
+            transactions: Some(StageConfig {
+                max_seeks_per_read: Some(1),
+                concurrency: Some(1),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let kv_rpc =
+            start_kv_rpc_with_request_concurrency(addr, stages, AlphaFeatures::default(), 1).await;
+        let ctx = kv_rpc
+            .query_context(
+                OPERATION,
+                kv_rpc.limited_client(OPERATION),
+                ServedHeight {
+                    checkpoint: 0,
+                    epoch: 0,
+                },
+            )
+            .unwrap();
+        let mut request = ListCheckpointsRequest::default();
+        request.start_checkpoint = Some(0);
+        request.end_checkpoint = Some(1);
+        request.read_mask = Some(FieldMask::from_paths([
+            "sequence_number",
+            "transactions.digest",
+        ]));
+        request.options = Some(ascending_options());
+
+        let responses: Vec<_> = tokio::time::timeout(Duration::from_secs(5), async {
+            list_checkpoints(ctx, request)
+                .await
+                .expect("construct ListCheckpoints stream")
+                .try_collect()
+                .await
+                .expect("collect ListCheckpoints stream")
+        })
+        .await
+        .expect("ListCheckpoints hung with one permit");
+
+        let listed: Vec<_> = responses
+            .into_iter()
+            .filter_map(|response| response.checkpoint)
+            .collect();
+        let [listed] = listed.as_slice() else {
+            panic!("expected one checkpoint, got {listed:?}");
+        };
+        assert_eq!(listed.sequence_number, Some(0));
+        let listed_digests = listed
+            .transactions
+            .iter()
+            .map(|transaction| transaction.digest.clone().expect("digest requested"));
+        let expected_digests = checkpoint
+            .transactions
+            .iter()
+            .map(|transaction| transaction.transaction.digest().to_string());
+        assert!(listed_digests.eq(expected_digests));
+        let reads = |stage_label, outcome| {
+            kv_rpc
+                .metrics
+                .bigtable_limiter
+                .reads_finished
+                .with_label_values(&[OPERATION, stage_label, outcome])
+                .get()
+        };
+        assert_eq!(
+            (
+                reads(stage::CHECKPOINTS, "completed"),
+                reads(stage::CHECKPOINTS, "cancelled"),
+                reads(stage::TRANSACTIONS, "completed"),
+            ),
+            (1, 0, checkpoint.transactions.len() as u64),
+        );
+        mock_server.abort();
+    }
 
     /// A filter that does not compile is `InvalidArgument` even when the request leaves nothing
     /// to scan: a window starting past the tip, or an `after` cursor past it.

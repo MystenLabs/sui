@@ -120,7 +120,6 @@ impl LedgerService for KvRpcServer {
         request: tonic::Request<GetCheckpointRequest>,
     ) -> Result<tonic::Response<GetCheckpointResponse>, tonic::Status> {
         get_checkpoint::get_checkpoint(
-            self.client.clone(),
             self.limited_client("GetCheckpoint"),
             &self.stages,
             ServedHeight::of(&request)?,

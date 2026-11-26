@@ -6,6 +6,7 @@ use futures::TryStreamExt;
 use futures::future;
 use futures::stream;
 use futures::stream::BoxStream;
+use futures::stream::FuturesUnordered;
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_kvstore::ObjectStatus;
@@ -109,10 +110,11 @@ pub(crate) async fn get_object(
 ///    planned, and its row counts only if the index shows the version was written by then; an
 ///    `at_checkpoint` or `max_version` lookup is answered as [`bounded_read`] decides, by a live
 ///    version's row, by the tombstone row of the removal the index records, or by a reverse scan
-///    of `objects` down from `max_version`. The scans run in groups of the `objects` stage's
-///    `max-seeks-per-read`, each group one read of a [`pipelined_chunks`] stage, and every group
-///    starts at once. A group's answers move on together, so the rows they name fill at most one
-///    `objects` read.
+///    of `objects` down from `max_version`. The scans run in groups of at most the `objects`
+///    stage's `max-seeks-per-read`, each group one read of a [`pipelined_chunks`] stage, at most
+///    the stage's `concurrency` groups at a time. Groups are taken in order; within the group
+///    being taken, each lookup's answer moves on as its own scan ends, without waiting for the
+///    rest of its group.
 /// 2. The rows the lookups name are read as the lookups arrive, by [`pipelined_keyed_batches`]
 ///    under the `objects` stage ([`crate::config::StagesConfig::objects`]): reads of at most
 ///    `max-seeks-per-read` keys, at most `concurrency` of them at a time, and each row at most
@@ -195,29 +197,35 @@ pub(crate) async fn batch_get_objects(
         }
     }
 
-    // A group's drainer task runs its scans at once and to their ends, so each scan returns its
-    // permit whether or not the `objects` reads below are taking lookups. Every group starts at
-    // once: the request limiter alone bounds how many scans reach BigTable.
+    // Scans run in groups of at most the `objects` stage's `max-seeks-per-read`, at most its
+    // `concurrency` groups at a time. A group's drainer task runs its scans at once and each to
+    // its end, so a scan returns its permit whether or not the `objects` reads below are taking
+    // lookups. Groups are taken in order, and within the group being taken each lookup's answer
+    // moves on as its own scan ends. Answers carry their lookup's index, so the order they end
+    // in does not matter.
     let objects_stage = server.stages.stage(PipelineStage::Objects);
-    let scans_per_group = objects_stage.max_seeks_per_read;
-    let scan_groups = scans.len().div_ceil(scans_per_group).max(1);
     let scans: BoxStream<'static, Result<Watermarked<(usize, Scan)>, RpcError>> =
         stream::iter(scans.into_iter().map(|scan| Ok(Watermarked::Item(scan)))).boxed();
-    let scanned = pipelined_chunks(scans, scans_per_group, scan_groups, None, SeekUnit::Item, {
-        let objects = objects.clone();
-        move |group: Vec<(usize, Scan)>| {
+    let scanned = pipelined_chunks(
+        scans,
+        objects_stage.max_seeks_per_read,
+        objects_stage.concurrency,
+        None,
+        SeekUnit::Item,
+        {
             let objects = objects.clone();
-            async move {
-                let answers = future::try_join_all(group.into_iter().map(|(index, scan)| {
-                    let objects = &objects;
-                    async move { Ok::<_, RpcError>((index, scan.run(objects).await?)) }
-                }))
-                .await?;
-
-                Ok::<_, RpcError>(stream::iter(answers.into_iter().map(Ok)).boxed())
+            move |group: Vec<(usize, Scan)>| {
+                let answers: FuturesUnordered<_> = group
+                    .into_iter()
+                    .map(|(index, scan)| {
+                        let objects = objects.clone();
+                        async move { Ok::<_, RpcError>((index, scan.run(&objects).await?)) }
+                    })
+                    .collect();
+                future::ready(Ok::<_, RpcError>(answers.boxed()))
             }
-        }
-    });
+        },
+    );
     // Exact versions go out in key order, so an `objects` read covers one run of adjacent keys.
     resolved_without_scan.sort_by_key(|(_, answer)| answer.row_key());
     let resolved_without_scan = stream::iter(
@@ -2286,12 +2294,14 @@ mod tests {
         mock_server.abort();
     }
 
-    /// The `objects` rows that `at_checkpoint` scans name go out together, as reads of the
-    /// stage's `max-seeks-per-read` keys, even when the scans finish a few at a time.
+    /// A lookup's `objects` row is read as soon as its own scan ends, without waiting for the
+    /// rest of its scan group: when one group's `at_checkpoint` scans end one at a time, their
+    /// rows go out in more than one `objects` read, each row once, and every request is answered.
     #[tokio::test]
-    async fn test_batch_at_checkpoint_rows_go_out_as_objects_stage_reads() {
+    async fn test_batch_scan_answers_reach_objects_reads_as_each_scan_ends() {
         let mock = MockBigtableServer::new();
         let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
+        // One group of four scans.
         let stages = StagesConfig {
             objects: Some(StageConfig {
                 max_seeks_per_read: Some(4),
@@ -2299,13 +2309,13 @@ mod tests {
             }),
             ..Default::default()
         };
-        // Two permits per request, and 10ms per row read, so the scans finish two at a time.
+        // One permit per request, and 25ms per row read, so the scans end 25ms apart.
         let kv_rpc =
-            start_kv_rpc_with_request_concurrency(addr, stages, OBJECT_AT_CHECKPOINT, 2).await;
-        mock.set_read_rows_latency(Duration::from_millis(10)).await;
+            start_kv_rpc_with_request_concurrency(addr, stages, OBJECT_AT_CHECKPOINT, 1).await;
+        mock.set_read_rows_latency(Duration::from_millis(25)).await;
 
-        // Eight objects, each live at version 1 from checkpoint 1.
-        let stored: Vec<Object> = (0..8)
+        // Four objects, each live at version 1 from checkpoint 1.
+        let stored: Vec<Object> = (0..4)
             .map(|_| {
                 Object::with_id_owner_version_for_testing(
                     ObjectID::random(),
@@ -2338,24 +2348,49 @@ mod tests {
                 req
             })
             .collect();
-        batch.read_mask = Some(mask(&["version", "digest"]));
+        batch.read_mask = Some(mask(&["object_id", "version", "digest"]));
 
         mock.clear_read_rows_calls().await;
-        let response = batch_get_objects(&kv_rpc, kv_rpc.admitted_request(batch))
-            .await
-            .unwrap();
-        for item in &response.objects {
-            assert_eq!(item.object().version, Some(1), "{item:?}");
+        let response = tokio::time::timeout(
+            Duration::from_secs(10),
+            batch_get_objects(&kv_rpc, kv_rpc.admitted_request(batch)),
+        )
+        .await
+        .expect("the batch stalled")
+        .unwrap();
+        assert_eq!(response.objects.len(), stored.len());
+        for (item, object) in response.objects.iter().zip_debug_eq(&stored) {
+            assert_eq!(
+                item.object().object_id,
+                Some(object.id().to_canonical_string(true)),
+                "{item:?}"
+            );
+            assert_eq!(
+                item.object().digest,
+                Some(object.digest().to_string()),
+                "{item:?}"
+            );
         }
 
-        let read_sizes: Vec<usize> = mock
+        let reads: Vec<_> = mock
             .read_rows_calls()
             .await
             .into_iter()
             .filter(|call| call.table == objects::NAME)
-            .map(|call| call.row_keys.len())
+            .map(|call| call.row_keys)
             .collect();
-        assert_eq!(read_sizes, [4, 4], "eight rows in reads of four");
+        assert!(
+            reads.len() > 1,
+            "the group's rows waited for its slowest scan: {reads:?}"
+        );
+        let mut read_keys: Vec<_> = reads.into_iter().flatten().collect();
+        read_keys.sort();
+        let mut stored_keys: Vec<_> = stored
+            .iter()
+            .map(|object| objects::encode_key(&ObjectKey(object.id(), object.version())))
+            .collect();
+        stored_keys.sort();
+        assert_eq!(read_keys, stored_keys, "each row is read exactly once");
 
         mock_server.abort();
     }
@@ -2472,64 +2507,66 @@ mod tests {
         mock_server.abort();
     }
 
-    /// A batch whose scans outnumber its request's permits still completes: a scan that holds a
-    /// permit runs to its end and returns the permit, whether or not the `objects` reads it feeds
-    /// are taking lookups.
+    /// A batch completes on a single permit with more scan groups than the `objects` stage runs
+    /// at once, its lookups split between scans and plain version reads: a scan that holds the
+    /// permit runs to its end and returns it, whether or not the `objects` reads it feeds are
+    /// taking lookups. Every request gets its own lookup's answer, found or `NOT_FOUND`.
     #[tokio::test]
     async fn test_batch_scans_do_not_starve_object_reads_of_permits() {
         let mock = MockBigtableServer::new();
         let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
-        // Two permits per request, and one `objects` read of one key at a time.
+        // One permit per request, scan groups of two, and one group and one `objects` read of
+        // two keys at a time.
         let stages = StagesConfig {
             objects: Some(StageConfig {
-                max_seeks_per_read: Some(1),
+                max_seeks_per_read: Some(2),
                 concurrency: Some(1),
                 ..Default::default()
             }),
             ..Default::default()
         };
         let kv_rpc =
-            start_kv_rpc_with_request_concurrency(addr, stages, OBJECT_AT_CHECKPOINT, 2).await;
+            start_kv_rpc_with_request_concurrency(addr, stages, OBJECT_AT_CHECKPOINT, 1).await;
 
-        // Eight objects, each live at version 1 from checkpoint 1.
-        let stored: Vec<Object> = (0..8)
-            .map(|_| {
-                Object::with_id_owner_version_for_testing(
-                    ObjectID::random(),
-                    SequenceNumber::from_u64(1),
-                    Owner::AddressOwner(SuiAddress::ZERO),
-                )
-            })
-            .collect();
-        for object in &stored {
-            mock.insert_row(
-                objects::NAME,
-                objects::encode_key(&ObjectKey(object.id(), object.version())),
-                objects::encode(object).unwrap(),
-            )
-            .await;
-            mock.insert_row(
-                object_versions_by_checkpoint::NAME,
-                object_versions_by_checkpoint::encode_key(&object.id(), 1),
-                object_versions_by_checkpoint::encode(object.version(), ObjectStatus::Live),
-            )
-            .await;
+        // Eight objects. The even ones are live at version 1 from checkpoint 1 and at version 2
+        // from checkpoint 7; the odd ones only at version 1, from checkpoint 7. One object's
+        // lookups have different answers, so an answer that reaches another lookup's request
+        // fails the test.
+        let ids: Vec<ObjectID> = (0..8).map(|_| ObjectID::random()).collect();
+        for (index, &id) in ids.iter().enumerate() {
+            let history: &[(u64, u64, ObjectStatus)] = if index % 2 == 0 {
+                &[(1, 1, ObjectStatus::Live), (7, 2, ObjectStatus::Live)]
+            } else {
+                &[(7, 1, ObjectStatus::Live)]
+            };
+            insert_history(&mock, id, history).await;
         }
 
-        // Each object at version 1, latest, and at checkpoint 5.
-        let mut batch = BatchGetObjectsRequest::default();
-        batch.requests = stored
+        // Each object at version 1, latest, at checkpoint 5, and at the missing version 3: 16
+        // scans in eight groups, and 16 plain version reads.
+        let cases: Vec<(ObjectID, GetObjectRequest, Result<u64, tonic::Code>)> = ids
             .iter()
-            .flat_map(|object| {
-                [(Some(1), None), (None, None), (None, Some(5))].map(|(version, at_checkpoint)| {
-                    let mut req = GetObjectRequest::default();
-                    req.object_id = Some(object.id().to_canonical_string(true));
-                    req.version = version;
-                    req.at_checkpoint = at_checkpoint;
-                    req
-                })
+            .enumerate()
+            .flat_map(|(index, &id)| {
+                let (latest, at_checkpoint_5) = if index % 2 == 0 {
+                    (Ok(2), Ok(1))
+                } else {
+                    (Ok(1), Err(tonic::Code::NotFound))
+                };
+                [
+                    (selector_request(id, Some(1), None, None), Ok(1)),
+                    (selector_request(id, None, None, None), latest),
+                    (selector_request(id, None, None, Some(5)), at_checkpoint_5),
+                    (
+                        selector_request(id, Some(3), None, None),
+                        Err(tonic::Code::NotFound),
+                    ),
+                ]
+                .map(|(req, expected)| (id, req, expected))
             })
             .collect();
+        let mut batch = BatchGetObjectsRequest::default();
+        batch.requests = cases.iter().map(|(_, req, _)| req.clone()).collect();
         batch.read_mask = Some(mask(&["object_id", "version", "digest"]));
 
         let response = tokio::time::timeout(
@@ -2539,9 +2576,16 @@ mod tests {
         .await
         .expect("the batch stalled on its own limiter")
         .unwrap();
-        assert_eq!(response.objects.len(), 24);
-        for item in &response.objects {
-            assert_eq!(item.object().version, Some(1), "{item:?}");
+        assert_eq!(response.objects.len(), cases.len());
+        for (item, (id, req, expected)) in response.objects.iter().zip_debug_eq(&cases) {
+            assert_eq!(batch_outcome(item), *expected, "{req:?}: {item:?}");
+            if expected.is_ok() {
+                assert_eq!(
+                    item.object().object_id,
+                    Some(id.to_canonical_string(true)),
+                    "{req:?}: {item:?}"
+                );
+            }
         }
 
         mock_server.abort();

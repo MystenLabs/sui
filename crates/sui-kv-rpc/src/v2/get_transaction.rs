@@ -1,7 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str::FromStr;
+use std::collections::HashMap;
+use std::convert::Infallible;
+use std::sync::Arc;
+
+use futures::StreamExt;
+use futures::TryStreamExt;
+use futures::stream::BoxStream;
 use sui_rpc::field::{FieldMask, FieldMaskTree, FieldMaskUtil};
 use sui_rpc::proto::sui::rpc::v2::{
     BatchGetTransactionsRequest, BatchGetTransactionsResponse, ExecutedTransaction,
@@ -14,8 +20,10 @@ use sui_rpc_api::{
 use sui_types::base_types::TransactionDigest;
 
 use crate::bigtable_client::BigTableClient;
-use crate::config::{PipelineStage, StagesConfig};
+use crate::config::{DEFAULT_RENDER_AHEAD, PipelineStage, StagesConfig};
+use crate::pipeline::{RenderAheadError, ResolvedWatermarked, render_ahead};
 use crate::render::transaction_to_response;
+use crate::resolve::ResolvedTransaction;
 use crate::served_height::ServedHeight;
 use crate::{PackageResolver, resolve};
 
@@ -62,7 +70,9 @@ pub async fn get_transaction(
 
     let transactions_stage = stages.stage(PipelineStage::Transactions);
     let objects_stage = stages.stage(PipelineStage::Objects);
-    let mut resolved = resolve::resolve_transactions(
+    // Read to the end rather than stopping at the first item, so no read is dropped before
+    // BigTable ends its response, which would cancel it and reset its HTTP/2 stream.
+    let (_, transaction, objects) = resolve::resolve_transactions(
         client,
         vec![transaction_digest],
         served_height.checkpoint,
@@ -70,16 +80,22 @@ pub async fn get_transaction(
         transactions_stage,
         objects_stage,
     )
-    .await?;
-    let (transaction, objects) = resolved
-        .remove(&transaction_digest)
-        .ok_or(TransactionNotFoundError(transaction_digest.into()))?;
+    .try_collect::<Vec<_>>()
+    .await?
+    .pop()
+    .ok_or(TransactionNotFoundError(transaction_digest.into()))?;
     Ok(GetTransactionResponse::new(
         transaction_to_response(transaction, &read_mask, objects.as_ref(), resolver).await?,
     ))
 }
 
-/// [`get_transaction`] for each digest, answering per digest.
+/// [`get_transaction`] for each digest, answering per digest, in request order. Requests for the
+/// same digest share one lookup: each distinct digest is read once and rendered once, and every
+/// request for it gets the result. Lookups are rendered as their reads complete, at most
+/// `DEFAULT_RENDER_AHEAD` at a time (the list endpoints' default render-ahead), while later reads
+/// run. A digest without a row, or above the served height, is `NOT_FOUND`, and a render error
+/// answers that digest's requests; a failed read fails the whole batch. A malformed digest is an
+/// `INVALID_ARGUMENT` for its own request, naming the field `digests[<index>]`, and is not read.
 pub async fn batch_get_transactions(
     client: BigTableClient,
     stages: &StagesConfig,
@@ -99,36 +115,102 @@ pub async fn batch_get_transactions(
     }
 
     let digests = digests
-        .iter()
-        .map(|digest| TransactionDigest::from_str(digest))
-        .collect::<Result<Vec<_>, _>>()?;
+        .into_iter()
+        .enumerate()
+        .map(|(index, digest)| {
+            digest.parse::<TransactionDigest>().map_err(|e| {
+                RpcError::from(
+                    FieldViolation::new_at("digests", index)
+                        .with_description(format!("invalid digest: {e}"))
+                        .with_reason(ErrorReason::FieldInvalid),
+                )
+            })
+        })
+        .collect::<Vec<_>>();
+
+    // Requests for the same digest share one lookup: `lookups` holds each distinct digest once,
+    // in order of its first request, and `requests_left` counts the requests for each.
+    let mut requests_left: HashMap<TransactionDigest, usize> = HashMap::new();
+    let mut lookups = Vec::new();
+    for &digest in digests.iter().flatten() {
+        *requests_left.entry(digest).or_insert_with(|| {
+            lookups.push(digest);
+            0
+        }) += 1;
+    }
+
     let transactions_stage = stages.stage(PipelineStage::Transactions);
     let objects_stage = stages.stage(PipelineStage::Objects);
-    let resolved = resolve::resolve_transactions(
-        client,
-        digests.clone(),
-        served_height.checkpoint,
-        &read_mask,
-        transactions_stage,
-        objects_stage,
-    )
-    .await?;
+    let resolved: BoxStream<'static, Result<ResolvedWatermarked<ResolvedTransaction>, RpcError>> =
+        resolve::resolve_transactions(
+            client,
+            lookups,
+            served_height.checkpoint,
+            &read_mask,
+            transactions_stage,
+            objects_stage,
+        )
+        .map_ok(ResolvedWatermarked::Item)
+        .boxed();
 
-    let mut transactions = Vec::with_capacity(digests.len());
-    for digest in digests {
-        if let Some((tx, objects)) = resolved.get(&digest) {
-            match transaction_to_response(tx.clone(), &read_mask, objects.as_ref(), resolver).await
-            {
-                Ok(tx) => transactions.push(GetTransactionResult::new_transaction(tx)),
-                Err(err) => {
-                    transactions.push(GetTransactionResult::new_error(err.into_status_proto()))
+    let mut rendered = render_ahead(resolved, DEFAULT_RENDER_AHEAD, {
+        let read_mask = Arc::new(read_mask);
+        let resolver = resolver.clone();
+        move |(digest, transaction, objects): ResolvedTransaction| {
+            let read_mask = read_mask.clone();
+            let resolver = resolver.clone();
+            async move {
+                let result =
+                    match transaction_to_response(transaction, &read_mask, &objects, &resolver)
+                        .await
+                    {
+                        Ok(transaction) => GetTransactionResult::new_transaction(transaction),
+                        Err(err) => GetTransactionResult::new_error(err.into_status_proto()),
+                    };
+                Ok::<_, Infallible>((digest, result))
+            }
+        }
+    });
+
+    let mut results: HashMap<TransactionDigest, GetTransactionResult> = HashMap::new();
+    while let Some(frame) = rendered.next().await {
+        match frame {
+            // Rows arrive in no particular order, so results are kept by digest.
+            Ok(ResolvedWatermarked::Item((digest, result))) => {
+                if requests_left.contains_key(&digest) {
+                    results.insert(digest, result);
                 }
             }
-        } else {
-            let err: RpcError = TransactionNotFoundError(digest.into()).into();
-            transactions.push(GetTransactionResult::new_error(err.into_status_proto()));
+            Ok(ResolvedWatermarked::Watermark { .. }) => {}
+            Err(RenderAheadError::Upstream(err)) => return Err(err),
+            Err(RenderAheadError::Render(never)) => match never {},
         }
     }
+
+    // A digest's result goes to every request for it; the last of those requests takes it. A
+    // digest without a result had no row, or its checkpoint is above the served height.
+    let transactions = digests
+        .into_iter()
+        .map(|digest| {
+            let digest = match digest {
+                Ok(digest) => digest,
+                Err(err) => return GetTransactionResult::new_error(err.into_status_proto()),
+            };
+            let last_request = requests_left.get_mut(&digest).is_some_and(|left| {
+                *left -= 1;
+                *left == 0
+            });
+            let result = if last_request {
+                results.remove(&digest)
+            } else {
+                results.get(&digest).cloned()
+            };
+            result.unwrap_or_else(|| {
+                let err: RpcError = TransactionNotFoundError(digest.into()).into();
+                GetTransactionResult::new_error(err.into_status_proto())
+            })
+        })
+        .collect();
     Ok(BatchGetTransactionsResponse::new(transactions))
 }
 
@@ -137,10 +219,11 @@ mod tests {
     use mysten_common::ZipDebugEqIteratorExt;
     use std::collections::BTreeSet;
 
-    use sui_kvstore::testing::insert_checkpoint_rows;
+    use sui_kvstore::testing::{ReadRowsResponseOrder, insert_checkpoint_rows};
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
     use super::*;
+    use crate::StageConfig;
     use crate::v2::test_utils::{
         UNBOUNDED_SERVED_HEIGHT, assert_identity_only_object_mask,
         canonical_transaction_object_keys, query_context_with_mock_and_registry,
@@ -157,17 +240,21 @@ mod tests {
         request
     }
 
+    /// Assert `response` answers the digests `[second, missing, first, second, missing]` of
+    /// `checkpoint`, in that order, with each repeated digest answered as at its first request.
     fn assert_batch_objects(
         response: BatchGetTransactionsResponse,
         checkpoint: &sui_types::full_checkpoint_content::Checkpoint,
         identity_only: bool,
     ) {
-        assert_eq!(response.transactions.len(), 3);
+        assert_eq!(response.transactions.len(), 5);
+        assert_eq!(response.transactions[3], response.transactions[0]);
+        assert_eq!(response.transactions[4], response.transactions[1]);
         for (result, expected_index) in
             response
                 .transactions
                 .into_iter()
-                .zip_debug_eq([Some(1), None, Some(0)])
+                .zip_debug_eq([Some(1), None, Some(0), Some(1), None])
         {
             let Some(index) = expected_index else {
                 let status = result
@@ -416,12 +503,19 @@ mod tests {
         server.abort();
     }
 
+    /// Repeated and missing digests come back in request order, a repeated digest answered as at
+    /// its first request, while each distinct digest and object is read once. Rows arrive in the
+    /// reverse of request order, so results placed by arrival would land out of order. A request
+    /// limited to one BigTable read at once, with every read one key, answers the same way
+    /// rather than hanging.
     #[tokio::test]
     async fn batch_get_transaction_objects_preserve_order_and_deduplicate_reads() {
         let (ctx, _registry, mock, server) =
             query_context_with_mock_and_registry("batch_get_transactions", 1).await;
         let checkpoint = two_transaction_object_checkpoint();
         insert_checkpoint_rows(&mock, &checkpoint).await;
+        mock.set_read_rows_response_order(ReadRowsResponseOrder::ReverseRequestOrder)
+            .await;
         let stages = StagesConfig::default();
         let first_digest = checkpoint.transactions[0].transaction.digest();
         let second_digest = checkpoint.transactions[1].transaction.digest();
@@ -430,8 +524,16 @@ mod tests {
             second_digest.to_string(),
             missing_digest.to_string(),
             first_digest.to_string(),
+            second_digest.to_string(),
+            missing_digest.to_string(),
         ];
+        let mut expected_transaction_rows = [first_digest, second_digest, missing_digest]
+            .iter()
+            .map(sui_kvstore::tables::transactions::encode_key)
+            .collect::<Vec<_>>();
+        expected_transaction_rows.sort();
 
+        mock.clear_read_rows_calls().await;
         let mut parent_request = BatchGetTransactionsRequest::default();
         parent_request.digests = digests.clone();
         parent_request.read_mask = Some(FieldMask::from_paths(["objects"]));
@@ -445,10 +547,23 @@ mod tests {
         .await
         .expect("parent objects BatchGetTransactions should succeed");
         assert_batch_objects(parent_response, &checkpoint, false);
+        let mut actual_transaction_rows = mock
+            .read_rows_calls()
+            .await
+            .into_iter()
+            .filter(|call| call.table == sui_kvstore::tables::transactions::NAME)
+            .flat_map(|call| call.row_keys)
+            .map(|key| key.to_vec())
+            .collect::<Vec<_>>();
+        actual_transaction_rows.sort();
+        assert_eq!(
+            actual_transaction_rows, expected_transaction_rows,
+            "each distinct digest is read once"
+        );
 
         mock.clear_read_rows_calls().await;
         let mut nested_request = BatchGetTransactionsRequest::default();
-        nested_request.digests = digests;
+        nested_request.digests = digests.clone();
         nested_request.read_mask = Some(FieldMask::from_paths([
             "objects.objects.object_id",
             "objects.objects.version",
@@ -481,6 +596,123 @@ mod tests {
             .collect::<Vec<_>>();
         expected_object_rows.sort();
         assert_eq!(actual_object_rows, expected_object_rows);
+
+        let (addr, one_permit_server) = mock.start().await.expect("start mock BigTable");
+        let one_permit = BigTableClient::new(
+            sui_kvstore::BigTableClient::new_local(addr.to_string(), "test".to_string())
+                .await
+                .expect("connect to mock BigTable"),
+            1,
+            crate::bigtable_client::Metrics::for_testing().0,
+            "batch_get_transactions",
+        );
+        let one_key_read = StageConfig {
+            max_seeks_per_read: Some(1),
+            concurrency: Some(1),
+            ..Default::default()
+        };
+        let one_key_stages = StagesConfig {
+            transactions: Some(one_key_read.clone()),
+            objects: Some(one_key_read),
+            ..Default::default()
+        };
+        let mut one_permit_request = BatchGetTransactionsRequest::default();
+        one_permit_request.digests = digests;
+        one_permit_request.read_mask = Some(FieldMask::from_paths(["objects"]));
+        let one_permit_response = tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            batch_get_transactions(
+                one_permit,
+                &one_key_stages,
+                UNBOUNDED_SERVED_HEIGHT,
+                one_permit_request,
+                ctx.package_resolver(),
+            ),
+        )
+        .await
+        .expect("BatchGetTransactions does not hang at a request concurrency of 1")
+        .expect("one-permit BatchGetTransactions should succeed");
+        assert_batch_objects(one_permit_response, &checkpoint, false);
+
+        one_permit_server.abort();
+        server.abort();
+    }
+
+    /// A malformed digest is an `INVALID_ARGUMENT` for its own request, naming the field
+    /// `digests[<index>]`, and is not read; the other digests are answered in request order.
+    #[tokio::test]
+    async fn batch_get_transactions_malformed_digest_fails_only_its_request() {
+        use sui_rpc::proto::google::rpc::BadRequest;
+
+        let (ctx, _registry, mock, server) =
+            query_context_with_mock_and_registry("batch_get_transactions", 1).await;
+        let checkpoint = two_transaction_object_checkpoint();
+        insert_checkpoint_rows(&mock, &checkpoint).await;
+        let stages = StagesConfig::default();
+        let first_digest = checkpoint.transactions[0].transaction.digest();
+        let second_digest = checkpoint.transactions[1].transaction.digest();
+
+        mock.clear_read_rows_calls().await;
+        let mut batch_request = BatchGetTransactionsRequest::default();
+        batch_request.digests = vec![
+            first_digest.to_string(),
+            "not-a-digest-0OIl".to_string(),
+            second_digest.to_string(),
+        ];
+        batch_request.read_mask = Some(FieldMask::from_paths(["digest"]));
+        let results = batch_get_transactions(
+            ctx.client().clone(),
+            &stages,
+            UNBOUNDED_SERVED_HEIGHT,
+            batch_request,
+            ctx.package_resolver(),
+        )
+        .await
+        .expect("BatchGetTransactions succeeds")
+        .transactions;
+        let [first, malformed, second] = <[_; 3]>::try_from(results).expect("one per digest");
+
+        let first = first.to_result().expect("valid digest is found");
+        assert_eq!(first.digest, Some(first_digest.to_string()));
+        let second = second.to_result().expect("valid digest is found");
+        assert_eq!(second.digest, Some(second_digest.to_string()));
+
+        let status = malformed
+            .to_result()
+            .expect_err("malformed digest should return an error");
+        assert_eq!(status.code, tonic::Code::InvalidArgument as i32);
+        let violations: Vec<_> = status
+            .details
+            .iter()
+            .filter_map(|detail| detail.to_msg::<BadRequest>().ok())
+            .flat_map(|bad_request| bad_request.field_violations)
+            .collect();
+        let [violation] = <[_; 1]>::try_from(violations).expect("one field violation");
+        assert_eq!(violation.field, "digests[1]");
+        assert!(
+            violation.description.starts_with("invalid digest: "),
+            "unexpected description: {}",
+            violation.description
+        );
+
+        let mut read_transaction_rows = mock
+            .read_rows_calls()
+            .await
+            .into_iter()
+            .filter(|call| call.table == sui_kvstore::tables::transactions::NAME)
+            .flat_map(|call| call.row_keys)
+            .map(|key| key.to_vec())
+            .collect::<Vec<_>>();
+        read_transaction_rows.sort();
+        let mut expected_transaction_rows = [first_digest, second_digest]
+            .iter()
+            .map(sui_kvstore::tables::transactions::encode_key)
+            .collect::<Vec<_>>();
+        expected_transaction_rows.sort();
+        assert_eq!(
+            read_transaction_rows, expected_transaction_rows,
+            "only the well-formed digests are read"
+        );
 
         server.abort();
     }

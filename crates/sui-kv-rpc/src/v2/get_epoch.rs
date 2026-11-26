@@ -135,10 +135,17 @@ pub async fn get_epoch(
     if read_mask.contains(Epoch::REFERENCE_GAS_PRICE_FIELD.name) {
         message.reference_gas_price = epoch_info.reference_gas_price;
     }
-    if let (Some(submask), Some(version)) = (
-        read_mask.subtree(Epoch::PROTOCOL_CONFIG_FIELD.name),
-        epoch_info.protocol_version,
-    ) {
+    // The protocol config and the served epoch's live system state are independent reads, so they
+    // run concurrently. Their errors are surfaced in the order the response is assembled in:
+    // protocol config, then the end fields, then the system state.
+    let protocol_version = epoch_info.protocol_version;
+    let protocol_config_future = async {
+        let (Some(submask), Some(version)) = (
+            read_mask.subtree(Epoch::PROTOCOL_CONFIG_FIELD.name),
+            protocol_version,
+        ) else {
+            return Ok(None);
+        };
         // The `epochs` row already holds the version, so the `protocol_configs_v2` row is read
         // only for the settings it stores.
         let needs_settings = [
@@ -167,21 +174,34 @@ pub async fn get_epoch(
             };
             Some(protocol_config)
         };
-        message.protocol_config = protocol_config
-            .map(|protocol_config| RpcProtocolConfig::merge_from(protocol_config, &submask));
-    }
+        Ok::<_, RpcError>(
+            protocol_config
+                .map(|protocol_config| RpcProtocolConfig::merge_from(protocol_config, &submask)),
+        )
+    };
+    // Epoch 0's last checkpoint is never the genesis checkpoint.
+    let live_state_checkpoint = reads_state_at_served_height.then(|| {
+        if epoch_info.end_checkpoint == Some(served_height.checkpoint) {
+            served_height.checkpoint - 1
+        } else {
+            served_height.checkpoint
+        }
+    });
+    let live_system_state_future = async {
+        match live_state_checkpoint {
+            Some(checkpoint) => live_system_state(&client, checkpoint).await.map(Some),
+            None => Ok(None),
+        }
+    };
+    let (protocol_config, live_state) =
+        tokio::join!(protocol_config_future, live_system_state_future);
+    message.protocol_config = protocol_config?;
     if epoch_info.end_checkpoint.is_some() {
         set_epoch_end_fields(&mut message, &read_mask, &epoch_end(&epoch_info)?);
     }
     message.transaction_start_inclusive = transaction_start_inclusive;
     let system_state = if reads_state_at_served_height {
-        // Epoch 0's last checkpoint is never the genesis checkpoint.
-        let checkpoint = if epoch_info.end_checkpoint == Some(served_height.checkpoint) {
-            served_height.checkpoint - 1
-        } else {
-            served_height.checkpoint
-        };
-        Some(live_system_state(&client, checkpoint).await?)
+        live_state?
     } else {
         epoch_info.system_state.take()
     };
@@ -948,5 +968,123 @@ mod tests {
             Some(RpcProtocolConfig::default().with_protocol_version(1))
         );
         assert_eq!(mock.read_rows_calls().await.len(), 1);
+    }
+
+    /// With both `protocol_config` from the table and the running epoch's `system_state` asked
+    /// for, the two reads share the request's limited client: at a request concurrency of 1 both
+    /// are served, each with its own value.
+    #[tokio::test]
+    async fn protocol_config_and_running_system_state_share_one_permit() {
+        use crate::v2::test_utils::insert_protocol_configs_v2_row;
+        use sui_protocol_config::ProtocolVersion;
+
+        let mock = MockBigtableServer::new();
+        let (addr, _server) = mock.start().await.expect("start mock BigTable");
+        let client = KvStoreClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .expect("connect to mock BigTable");
+        let version = ProtocolVersion::MAX.as_u64();
+        mock.insert_row(
+            epochs::NAME,
+            epochs::encode_key(0),
+            [
+                u64_cell(col::EPOCH, 0),
+                u64_cell(col::START_CHECKPOINT, 0),
+                u64_cell(col::PROTOCOL_VERSION, version),
+            ],
+        )
+        .await;
+        insert_protocol_configs_v2_row(&mock, version).await;
+        insert_system_state(&mock, v1(100), 3).await;
+
+        let mut request = GetEpochRequest::default();
+        request.read_mask = Some(FieldMask::from_paths(["protocol_config", "system_state"]));
+        let one_permit = BigTableClient::new(
+            client.clone(),
+            1,
+            crate::bigtable_client::Metrics::for_testing().0,
+            "GetEpoch",
+        );
+        let epoch = tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            get_epoch(
+                one_permit,
+                AlphaFeatures {
+                    object_at_checkpoint: true,
+                    protocol_configs_v2: true,
+                },
+                Chain::Unknown,
+                ServedHeight {
+                    checkpoint: 10,
+                    epoch: 0,
+                },
+                request,
+            ),
+        )
+        .await
+        .expect("get_epoch does not hang at a request concurrency of 1")
+        .expect("get_epoch succeeds")
+        .epoch
+        .unwrap_or_default();
+
+        let from_binary = get_protocol_config(&client, 0, AlphaFeatures::default())
+            .await
+            .unwrap()
+            .expect("binary supports the version");
+        assert_eq!(epoch.protocol_config, Some(from_binary));
+        assert_eq!(
+            epoch
+                .system_state
+                .expect("system_state")
+                .reference_gas_price,
+            Some(100),
+        );
+    }
+
+    /// With both `protocol_config` from the table and the running epoch's `system_state` failing,
+    /// the protocol config's error is returned, even though the system state's fails first: rows
+    /// arrive slowly, so the malformed `protocol_configs_v2` row is decoded long after the empty
+    /// read of `0x5`'s version index.
+    #[tokio::test]
+    async fn protocol_config_error_takes_precedence_over_system_state_error() {
+        use sui_kvstore::tables::protocol_configs_v2;
+
+        let mock = MockBigtableServer::new();
+        let (addr, _server) = mock.start().await.expect("start mock BigTable");
+        let client = KvStoreClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .expect("connect to mock BigTable");
+        // Epoch 0 runs protocol version 1, whose `protocol_configs_v2` row lacks its feature flags
+        // column; the system state has no version index rows at all.
+        crate::v2::test_utils::insert_epoch_protocol_version(&mock, 0, 1).await;
+        let [attributes, _feature_flags] =
+            protocol_configs_v2::encode(Default::default(), Default::default());
+        mock.insert_row(
+            protocol_configs_v2::NAME,
+            protocol_configs_v2::encode_key(1),
+            [attributes],
+        )
+        .await;
+        mock.set_read_rows_latency(std::time::Duration::from_millis(500))
+            .await;
+
+        let error = try_get(
+            &client,
+            AlphaFeatures {
+                object_at_checkpoint: true,
+                protocol_configs_v2: true,
+            },
+            ServedHeight {
+                checkpoint: 10,
+                epoch: 0,
+            },
+            None,
+            &["protocol_config", "system_state"],
+        )
+        .await
+        .expect_err("both the protocol config and the system state fail");
+        let status = tonic::Status::from(error);
+        assert_eq!(status.code(), tonic::Code::Internal);
+        assert_eq!(status.message(), "missing feature flags column");
     }
 }

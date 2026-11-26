@@ -291,7 +291,7 @@ fn split_burst<I>(
 /// the number of drainer slots free at that moment, and then opens the planned
 /// reads in order: per read it waits for a drainer slot, then calls `open`
 /// synchronously and spawns the drainer of the stream it returns (see
-/// [`open_items_frame`]). A read that finds no free slot waits for one with
+/// [`spawn_drainer`]). A read that finds no free slot waits for one with
 /// its planned size; the burst is deliberately not re-planned as slots free
 /// up. Watermark and error frames pass through in order; an error ends the
 /// stream.
@@ -357,7 +357,15 @@ where
                             let Ok(slot) = drainer_slots.clone().acquire_owned().await else {
                                 return;
                             };
-                            let frame = open_items_frame(&open, read, slot);
+                            // `open` runs here, synchronously and in read
+                            // order, so its synchronous side effects stay
+                            // ordered; the drainer awaits the read it returns.
+                            let (rx, drain) = spawn_drainer(open(read));
+                            let frame = FrameHandle::Items {
+                                rx,
+                                drain,
+                                _slot: slot,
+                            };
                             // On send failure the consumer is gone: returning
                             // drops `frame` (its drainer handle and slot),
                             // aborting the drainer and releasing the slot.
@@ -411,34 +419,33 @@ where
     .boxed()
 }
 
-/// Open one item frame: invoke `open` synchronously, in read order, so its
-/// synchronous side effects stay ordered, and spawn the drainer that awaits
-/// the returned future and forwards its rows. `slot` is held until the
-/// consumer finishes the frame.
-fn open_items_frame<R, O, P, E, Open, Fut>(
-    open: &Open,
-    read: R,
-    slot: OwnedSemaphorePermit,
-) -> FrameHandle<O, P, E>
+/// Spawn the drainer of one read: a task that awaits `read`, then forwards
+/// each row of the stream it opens into the returned receiver, in order. An
+/// `Err` row is terminal (prefix-then-error): the drainer sends it and stops.
+/// A failed open is forwarded as the single row. The drainer also stops when
+/// the receiver is gone. Dropping the returned guard aborts the drainer,
+/// dropping the read's stream.
+///
+/// The drainer owns the read's stream, so a scarce resource that stream holds
+/// (for example, a request-scoped BigTable permit) is released when the read
+/// ends, whether or not anyone is taking its rows.
+fn spawn_drainer<O, E, Fut>(read: Fut) -> (mpsc::UnboundedReceiver<Result<O, E>>, TaskGuard<()>)
 where
-    Open: Fn(R) -> Fut,
     Fut: Future<Output = Result<BoxStream<'static, Result<O, E>>, E>> + Send + 'static,
     O: Send + 'static,
     E: Send + 'static,
 {
-    let fut = open(read);
     // Unbounded so the drainer's sends are non-blocking: the drainer holds the
-    // BigTable permit while draining and must NEVER block on the consumer — a
-    // bounded channel would let a stalled consumer wedge the drainer and hold
-    // the permit across downstream backpressure, the exact deadlock class this
-    // design removes. Unbounded in type only: the drainer sends one message per
-    // row of its read (at most the read's item count under the ~1:1 call-site
-    // contract) plus an optional terminal error, so memory is O(read items) per
-    // in-flight frame.
-    #[allow(clippy::disallowed_methods)] // non-blocking; bounded by the read's item count
+    // read's BigTable permit while draining and must NEVER block on the
+    // consumer — a bounded channel would let a stalled consumer wedge the
+    // drainer and hold the permit across downstream backpressure, the exact
+    // deadlock class this design removes. Unbounded in type only: the drainer
+    // sends one message per row of its read plus an optional terminal error,
+    // so memory is O(read rows), bounded by each caller's read size.
+    #[allow(clippy::disallowed_methods)] // non-blocking; bounded by the read's row count
     let (row_tx, row_rx) = mpsc::unbounded_channel();
     let drain = tokio::spawn(async move {
-        match fut.await {
+        match read.await {
             Ok(mut stream) => {
                 while let Some(row) = stream.next().await {
                     // The inner stream's item is exactly the channel's item
@@ -460,11 +467,74 @@ where
             }
         }
     });
-    FrameHandle::Items {
-        rx: row_rx,
-        drain: TaskGuard::new(drain),
-        _slot: slot,
+    (row_rx, TaskGuard::new(drain))
+}
+
+/// Drain `rows` in a spawned task (see [`spawn_drainer`]) and return a stream
+/// of the same rows, in order, ending after a terminal `Err`.
+///
+/// For a gated read whose consumer can be backpressured by a later stage that
+/// itself needs permits, such as a dense scan feeding [`pipelined_chunks`]:
+/// the spawned task reads the response to its end and releases the read's
+/// permit at RPC completion, regardless of whether the consumer is polling, so
+/// the permit never waits on a downstream stage. Rows the consumer has not
+/// taken yet are buffered, so the read must be bounded (for example, by a
+/// BigTable `rows_limit`). Dropping the returned stream aborts the task,
+/// dropping the read. A drainer panic surfaces to the consumer once the rows
+/// before it are taken, instead of silently truncating the stream.
+pub(crate) fn drain_in_task<O, E>(
+    rows: BoxStream<'static, Result<O, E>>,
+) -> BoxStream<'static, Result<O, E>>
+where
+    O: Send + 'static,
+    E: Send + 'static,
+{
+    let (rows, drain) = spawn_drainer(future::ready(Ok(rows)));
+    async_stream::stream! {
+        // Moved in so dropping the returned stream (even unpolled) drops the
+        // guard and aborts the drainer.
+        let drain = drain;
+        let mut rows = rows;
+        while let Some(row) = rows.recv().await {
+            yield row;
+        }
+        // Row channel closed: the drainer finished (or panicked). Await it so
+        // a hidden panic surfaces instead of a silently truncated read.
+        surface_panic(drain.await);
     }
+    .boxed()
+}
+
+/// [`drain_in_task`] for a consumer that needs only a prefix of `rows`: the
+/// drainer forwards the first row for which `stop_after` returns true, then
+/// drops the read without taking another row from it, and the returned stream
+/// ends after that row. `stop_after` runs in the drainer, on each `Ok` row in
+/// order, before the row is forwarded.
+///
+/// The stream ends there just as it would at the read's end, so the consumer
+/// cannot tell the two apart: `stop_after` must return true only once the
+/// consumer holds every row it will take.
+pub(crate) fn drain_in_task_until<O, E, S>(
+    rows: BoxStream<'static, Result<O, E>>,
+    mut stop_after: S,
+) -> BoxStream<'static, Result<O, E>>
+where
+    O: Send + 'static,
+    E: Send + 'static,
+    S: FnMut(&O) -> bool + Send + 'static,
+{
+    let rows = async_stream::stream! {
+        let mut rows = rows;
+        while let Some(row) = rows.next().await {
+            let stop = row.as_ref().is_ok_and(&mut stop_after);
+            yield row;
+            if stop {
+                break;
+            }
+        }
+    }
+    .boxed();
+    drain_in_task(rows)
 }
 
 /// One frame for [`pipelined_reads`]: a burst of items or a watermark.
@@ -1974,6 +2044,139 @@ mod tests {
         assert!(
             outcome.is_err(),
             "drainer panic must surface, not silently truncate the stream"
+        );
+    }
+
+    /// A permit-holding row stream for the `drain_in_task` tests: takes the
+    /// only permit of `limiter` up front and holds it until the stream is
+    /// dropped (at its end, or when the drainer is aborted).
+    fn permit_holding_rows(
+        limiter: &Arc<Semaphore>,
+        rows: Vec<u64>,
+        then_pending: bool,
+    ) -> BoxStream<'static, Result<u64, &'static str>> {
+        let permit = limiter
+            .clone()
+            .try_acquire_owned()
+            .expect("test limiter has a free permit");
+        async_stream::stream! {
+            let _permit = permit;
+            for row in rows {
+                yield Ok(row);
+            }
+            if then_pending {
+                std::future::pending::<()>().await;
+            }
+        }
+        .boxed()
+    }
+
+    #[tokio::test]
+    async fn drain_in_task_releases_permit_without_consumer() {
+        // The drained read must end (and drop its permit) while the consumer
+        // sits on the first row; a lazily-polled drain would hold the permit
+        // until the consumer reads every row. The remaining rows stay
+        // buffered, in order.
+        let limiter = Arc::new(Semaphore::new(1));
+        let mut rows = drain_in_task(permit_holding_rows(&limiter, vec![0, 1, 2], false));
+
+        let first = timeout(Duration::from_secs(5), rows.next()).await.unwrap();
+        assert_eq!(first, Some(Ok(0)));
+        let _released = timeout(Duration::from_secs(5), limiter.acquire())
+            .await
+            .expect("drain must release the permit without the consumer polling")
+            .unwrap();
+
+        let rest = timeout(Duration::from_secs(5), rows.collect::<Vec<_>>())
+            .await
+            .unwrap();
+        assert_eq!(rest, vec![Ok(1), Ok(2)]);
+    }
+
+    #[tokio::test]
+    async fn dropping_drain_in_task_stream_aborts_drain() {
+        // The read never ends on its own, so only aborting the drainer can
+        // drop it and release its permit.
+        let limiter = Arc::new(Semaphore::new(1));
+        let mut rows = drain_in_task(permit_holding_rows(&limiter, vec![0], true));
+
+        let first = timeout(Duration::from_secs(5), rows.next()).await.unwrap();
+        assert_eq!(first, Some(Ok(0)));
+        assert_eq!(limiter.available_permits(), 0);
+
+        drop(rows);
+        let _released = timeout(Duration::from_secs(5), limiter.acquire())
+            .await
+            .expect("dropping the stream must abort the drain and drop the read")
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn drain_in_task_ends_after_err_row() {
+        // Prefix-then-error: rows before the error are yielded in order, the
+        // error is yielded, and nothing after it.
+        let rows: BoxStream<'static, Result<u64, &'static str>> =
+            stream::iter([Ok(0), Ok(1), Err("boom"), Ok(2)]).boxed();
+
+        let drained = timeout(
+            Duration::from_secs(5),
+            drain_in_task(rows).collect::<Vec<_>>(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(drained, vec![Ok(0), Ok(1), Err("boom")]);
+    }
+
+    #[tokio::test]
+    async fn drain_in_task_until_drops_the_read_after_its_stop_row() {
+        // The read would go on to rows 2 and 3 and then never end, so only
+        // stopping at row 1 drops it (and its permit) while the consumer
+        // sits on the first row. The stream ends after the stop row.
+        let limiter = Arc::new(Semaphore::new(1));
+        let mut rows = drain_in_task_until(
+            permit_holding_rows(&limiter, vec![0, 1, 2, 3], true),
+            |row| *row == 1,
+        );
+
+        let first = timeout(Duration::from_secs(5), rows.next()).await.unwrap();
+        assert_eq!(first, Some(Ok(0)));
+        let _released = timeout(Duration::from_secs(5), limiter.acquire())
+            .await
+            .expect("the drainer must drop the read after its stop row")
+            .unwrap();
+
+        let rest = timeout(Duration::from_secs(5), rows.collect::<Vec<_>>())
+            .await
+            .unwrap();
+        assert_eq!(rest, vec![Ok(1)]);
+    }
+
+    #[tokio::test]
+    async fn drain_in_task_panic_surfaces_rather_than_truncating() {
+        // A panic in the drained read must reach the consumer after the rows
+        // before it, not end the stream as if the read completed. The
+        // `black_box` keeps the trailing `yield` statically reachable.
+        let rows: BoxStream<'static, Result<u64, &'static str>> = async_stream::stream! {
+            yield Ok(0);
+            if std::hint::black_box(true) {
+                panic!("drained read boom");
+            }
+            yield Ok(1);
+        }
+        .boxed();
+        let mut rows = drain_in_task(rows);
+
+        let first = timeout(Duration::from_secs(5), rows.next()).await.unwrap();
+        assert_eq!(first, Some(Ok(0)));
+        let outcome = timeout(
+            Duration::from_secs(5),
+            std::panic::AssertUnwindSafe(rows.next()).catch_unwind(),
+        )
+        .await
+        .unwrap();
+        assert!(
+            outcome.is_err(),
+            "drained read panic must surface, not silently truncate the stream"
         );
     }
 
