@@ -115,12 +115,39 @@ pub(crate) struct RandomDagEquivocationConfig {
     pub equivocations_per_authority: usize,
 }
 
+/// Controls the transactions and reject votes carried by blocks of a randomized DAG.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct RandomDagTransactionConfig {
+    /// Number of transactions in every block.
+    pub num_transactions: u32,
+    /// Chance, in percent, that a block votes to reject each transaction of each of its ancestors.
+    pub rejected_transactions_pct: u8,
+}
+
 pub(crate) fn create_random_dag(
     seed: u64,
     include_leader_percentage: u64,
     num_rounds: Round,
     context: Arc<Context>,
     equivocation_config: RandomDagEquivocationConfig,
+) -> DagBuilder {
+    create_random_dag_with_transactions(
+        seed,
+        include_leader_percentage,
+        num_rounds,
+        context,
+        equivocation_config,
+        RandomDagTransactionConfig::default(),
+    )
+}
+
+pub(crate) fn create_random_dag_with_transactions(
+    seed: u64,
+    include_leader_percentage: u64,
+    num_rounds: Round,
+    context: Arc<Context>,
+    equivocation_config: RandomDagEquivocationConfig,
+    transaction_config: RandomDagTransactionConfig,
 ) -> DagBuilder {
     assert!(
         (0..=100).contains(&include_leader_percentage),
@@ -166,10 +193,14 @@ pub(crate) fn create_random_dag(
                 .layer(r)
                 .authorities(authorities.into_iter().take(num_equivocators).collect())
                 .equivocate(equivocation_config.equivocations_per_authority)
+                .num_transactions(transaction_config.num_transactions)
+                .rejected_transactions_pct(transaction_config.rejected_transactions_pct, Some(seed))
                 .min_ancestor_links(include_leader, Some(min_ancestor_links_seed));
         } else {
             dag_builder
                 .layer(r)
+                .num_transactions(transaction_config.num_transactions)
+                .rejected_transactions_pct(transaction_config.rejected_transactions_pct, Some(seed))
                 .min_ancestor_links(include_leader, Some(min_ancestor_links_seed));
         }
     }
