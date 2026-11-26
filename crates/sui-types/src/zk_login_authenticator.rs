@@ -13,7 +13,7 @@ use crate::{
 use fastcrypto::{error::FastCryptoError, traits::ToFromBytes};
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::{JWK, OIDCProvider};
-use fastcrypto_zkp::bn254::zk_login_api::{ZkLoginCircuitMode, ZkLoginEnv};
+use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use fastcrypto_zkp::bn254::{zk_login::ZkLoginInputs, zk_login_api::verify_zk_login};
 use once_cell::sync::OnceCell;
 use schemars::JsonSchema;
@@ -57,14 +57,15 @@ impl ZkLoginCachingParams {
     }
 }
 
-/// Map the protocol config circuit mode flag to the fastcrypto circuit mode:
+/// Whether the protocol config circuit mode flag accepts proofs for the v1 circuit:
 /// 0 = v1 circuit only, 1 = v2 circuit with fallback to v1 (migration mode), 2 = v2 circuit only.
+/// [ZkLoginInputs] only holds v1 proofs, since v2 proofs come with inputs of a different format
+/// that this authenticator does not carry. So mode 1 accepts v1 proofs, and mode 2 accepts none.
 /// The flag comes from protocol config, so any other value is a config bug.
-pub fn zklogin_circuit_mode_from_flag(flag: u64) -> ZkLoginCircuitMode {
+fn zklogin_circuit_mode_accepts_v1(flag: u64) -> bool {
     match flag {
-        0 => ZkLoginCircuitMode::V1Only,
-        1 => ZkLoginCircuitMode::Both,
-        2 => ZkLoginCircuitMode::V2Only,
+        0 | 1 => true,
+        2 => false,
         _ => panic!("invalid zklogin circuit mode flag: {flag}"),
     }
 }
@@ -264,13 +265,21 @@ fn verify_zklogin_inputs_wrapper(
     all_jwk: &imbl::HashMap<JwkId, JWK>,
     env: &ZkLoginEnv,
 ) -> SuiResult<()> {
+    if !zklogin_circuit_mode_accepts_v1(params.zklogin_circuit_mode) {
+        return Err(SuiErrorKind::InvalidSignature {
+            error: format!(
+                "zkLogin circuit mode {} does not accept v1 proofs",
+                params.zklogin_circuit_mode
+            ),
+        }
+        .into());
+    }
     verify_zk_login(
         &params.inputs,
         params.max_epoch,
         &params.extended_pk_bytes,
         all_jwk,
         env,
-        zklogin_circuit_mode_from_flag(params.zklogin_circuit_mode),
     )
     .map_err(|e| {
         SuiErrorKind::InvalidSignature {

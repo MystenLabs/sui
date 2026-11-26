@@ -358,13 +358,15 @@ async fn test_zklogin_circuit_mode_pinned_proofs() {
     let injected: Vec<(JwkId, JWK)> = jwks.into_iter().collect();
     sui_node::set_jwk_injector(Arc::new(move |_, _| Ok(injected.clone())));
 
+    // The authenticator only carries v1 proofs, so a pinned v2 proof never verifies, and mode 2
+    // (v2 circuit only) rejects every proof.
     for (mode, v1_accepted, v2_accepted) in [
-        // Mode 0 (v1 circuit only): v1 proofs verify, v2 proofs are rejected.
+        // Mode 0 (v1 circuit only).
         (0, true, false),
-        // Mode 1 (v2 circuit with v1 fallback): both proofs verify.
-        (1, true, true),
-        // Mode 2 (v2 circuit only): v2 proofs verify, v1 proofs are rejected.
-        (2, false, true),
+        // Mode 1 (v2 circuit with v1 fallback).
+        (1, true, false),
+        // Mode 2 (v2 circuit only).
+        (2, false, false),
     ] {
         let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
             config.set_zklogin_circuit_mode_for_testing(mode);
@@ -397,52 +399,14 @@ async fn test_zklogin_circuit_mode_pinned_proofs() {
 }
 
 #[sim_test]
-async fn zklogin_v1_to_v2_migration_scenario_test() {
+async fn zklogin_circuit_mode_test() {
     const MAX_EPOCH: u64 = 10;
-    const V2_FALLBACK_LOG: &str = "falling back to V1";
 
     let eph_kp = SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([0; 32])));
     let jwks = pinned_jwks();
 
-    /// Log capture util to assert logs.
-    #[derive(Clone, Default)]
-    struct Logs(Arc<std::sync::Mutex<Vec<u8>>>);
-
-    impl std::io::Write for Logs {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.0.lock().unwrap().extend_from_slice(buf);
-            Ok(buf.len())
-        }
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-
-    impl Logs {
-        fn text(&self) -> String {
-            String::from_utf8_lossy(&self.0.lock().unwrap()).into_owned()
-        }
-
-        fn assert_fallback(&self) {
-            let logs = self.text();
-            assert!(
-                logs.contains(V2_FALLBACK_LOG),
-                "expected v2->v1 fallback, captured logs:\n{logs}"
-            );
-        }
-
-        fn assert_no_fallback(&self) {
-            let logs = self.text();
-            assert!(
-                !logs.contains(V2_FALLBACK_LOG),
-                "unexpected v2->v1 fallback, captured logs:\n{logs}"
-            );
-        }
-    }
-
-    // Verify a zklogin txn signature under the given circuit mode, returning the
-    // result and the captured logs.
-    let verify = |proof_json: &str, zklogin_circuit_mode: u64| -> (SuiResult, Logs) {
+    // Verify a zklogin txn signature under the given circuit mode, returning the result.
+    let verify = |proof_json: &str, zklogin_circuit_mode: u64| -> SuiResult {
         let inputs = ZkLoginInputs::from_json(proof_json, PINNED_PROOF_ADDRESS_SEED).unwrap();
 
         let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
@@ -474,60 +438,20 @@ async fn zklogin_v1_to_v2_migration_scenario_test() {
         .with_mldsa65_in_multisig(config.mldsa65_auth())
         .with_secp256r1_strict_public_keys(config.secp256r1_strict_public_keys());
 
-        // Capture debug logs for assert fallback or not.
-        let logs = Logs::default();
-        let writer = logs.clone();
-        let subscriber = tracing_subscriber::fmt()
-            .with_writer(move || writer.clone())
-            .with_max_level(tracing::Level::DEBUG)
-            .with_ansi(false)
-            .finish();
-        let res = tracing::subscriber::with_default(subscriber, || {
-            authenticator.verify_authenticator(
-                &intent_msg,
-                author,
-                0,
-                &params,
-                Arc::new(VerifiedDigestCache::new_empty()),
-            )
-        });
-        (res, logs)
+        authenticator.verify_authenticator(
+            &intent_msg,
+            author,
+            0,
+            &params,
+            Arc::new(VerifiedDigestCache::new_empty()),
+        )
     };
 
-    // ==== Use v2 proof ====
-
-    // Mode 0 (v1 only): only v1 key is tried and rejects; v2 key is never attempted,
-    // so nothing to fall back from.
-    let (res, logs) = verify(PINNED_V2_PROOF_JSON, 0);
-    assert!(res.is_err());
-    logs.assert_no_fallback();
-
-    // Mode 1 (v2 with v1 fallback): verifies on the v2 key directly, no fallback.
-    let (res, logs) = verify(PINNED_V2_PROOF_JSON, 1);
-    assert!(res.is_ok());
-    logs.assert_no_fallback();
-
-    // Mode 2 (v2 only): verifies on the v2 key directly, no fallback.
-    let (res, logs) = verify(PINNED_V2_PROOF_JSON, 2);
-    assert!(res.is_ok());
-    logs.assert_no_fallback();
-
-    // ==== Use v1 proof ====
-
-    // Mode 0 (v1 only): verifies on the v1 key directly, no v2 attempt no fallback.
-    let (res, logs) = verify(PINNED_V1_PROOF_JSON, 0);
-    assert!(res.is_ok());
-    logs.assert_no_fallback();
-
-    // Mode 1 (v2 with v1 fallback): v2 key is attempted first and fails, then falls
-    // back to v1 (the 2x-cost path), fallback log is present.
-    let (res, logs) = verify(PINNED_V1_PROOF_JSON, 1);
-    assert!(res.is_ok());
-    logs.assert_fallback();
-
-    // Mode 2 (v2 only): only the v2 key is tried, which rejects the v1 proof; there
-    // is no fallback to v1.
-    let (res, logs) = verify(PINNED_V1_PROOF_JSON, 2);
-    assert!(res.is_err());
-    logs.assert_no_fallback();
+    // The authenticator only carries v1 proofs, which the v1 verifying key checks in modes 0
+    // and 1. Mode 2 (v2 circuit only) rejects every proof, and the pinned v2 proof, made for an
+    // earlier v2 circuit, never verifies.
+    for mode in [0, 1, 2] {
+        assert_eq!(verify(PINNED_V1_PROOF_JSON, mode).is_ok(), mode != 2);
+        assert!(verify(PINNED_V2_PROOF_JSON, mode).is_err());
+    }
 }

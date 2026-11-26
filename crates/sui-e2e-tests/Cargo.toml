@@ -42,7 +42,6 @@ test-cluster.workspace = true
 rand.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-tracing-subscriber.workspace = true
 serde.workspace = true
 bcs.workspace = true
 anyhow.workspace = true

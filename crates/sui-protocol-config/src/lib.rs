@@ -614,6 +614,8 @@ struct FeatureFlags {
     zklogin_auth: bool,
     // zkLogin circuit verify mode: 0 = accept v1 circuit proofs only, 1 = try the v2
     // circuit first and fall back to v1 (migration phase), 2 = accept v2 circuit proofs only.
+    // The zkLogin authenticator only carries v1 proofs, so mode 1 accepts v1 proofs and mode 2
+    // accepts no proofs.
     #[serde(skip_serializing_if = "is_zero")]
     zklogin_circuit_mode: u64,
     // How we order transactions coming out of consensus before sending to execution.
