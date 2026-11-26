@@ -65,6 +65,7 @@ pub use crate::iter::RevIter;
 pub use crate::map::DbMap;
 pub use crate::options::CfOptionsResolver;
 pub use crate::options::CfTuning;
+pub use crate::options::CompactOnDeletionConfig;
 pub use crate::options::Compression;
 pub use crate::options::DbWideConfig;
 pub use crate::options::RocksDbConfig;

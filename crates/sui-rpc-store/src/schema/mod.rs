@@ -48,6 +48,7 @@ use std::sync::atomic::Ordering;
 use sui_consistent_store::CfDescriptor;
 use sui_consistent_store::CfOptionsResolver;
 use sui_consistent_store::CfTuning;
+use sui_consistent_store::CompactOnDeletionConfig;
 use sui_consistent_store::Compression;
 use sui_consistent_store::Db;
 use sui_consistent_store::DbMap;
@@ -345,6 +346,7 @@ pub fn default_rocksdb_config() -> RocksDbConfig {
         target_file_size_mb: Some(128),
         periodic_compaction_seconds: None,
         write_stall,
+        compact_on_deletion: CompactOnDeletionConfig::default(),
     };
 
     let mut column_family = BTreeMap::new();
@@ -370,6 +372,21 @@ pub fn default_rocksdb_config() -> RocksDbConfig {
     for name in [transaction_bitmap::NAME, event_bitmap::NAME] {
         column_family.insert(name.to_string(), bitmap.clone());
     }
+
+    // Coin balance updates change `object_by_owner` keys and leave point
+    // tombstones in upper levels until bottommost compaction. Smaller
+    // SSTs narrow compaction overlap, and the deletion collector pushes
+    // tombstone-dense files down without rewriting cold key ranges.
+    let object_by_owner_tuning = CfTuning {
+        target_file_size_mb: Some(32),
+        compact_on_deletion: CompactOnDeletionConfig {
+            window_size: Some(10_000),
+            deletion_trigger: Some(8_000),
+            deletion_ratio: Some(0.0),
+        },
+        ..Default::default()
+    };
+    column_family.insert(object_by_owner::NAME.to_string(), object_by_owner_tuning);
 
     RocksDbConfig {
         db: DbWideConfig {
@@ -492,5 +509,21 @@ mod tests {
                 );
             }
         }
+        assert_eq!(
+            cfg.column_family[object_by_owner::NAME].target_file_size_mb,
+            Some(32)
+        );
+        assert_eq!(
+            cfg.column_family[object_by_owner::NAME]
+                .compact_on_deletion
+                .window_size,
+            Some(10_000)
+        );
+        assert_eq!(
+            cfg.column_family[object_by_owner::NAME]
+                .compact_on_deletion
+                .deletion_trigger,
+            Some(8_000)
+        );
     }
 }
