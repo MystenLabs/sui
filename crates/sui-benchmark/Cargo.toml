@@ -63,3 +63,6 @@ sui-rpc.workspace = true
 sui-simulator.workspace = true
 typed-store.workspace = true
 zstd.workspace = true
+
+[target.'cfg(msim)'.dev-dependencies]
+sui-node = { workspace = true, features = ["testing"] }
