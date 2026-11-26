@@ -18,6 +18,7 @@ use sui_rpc::proto::sui::rpc::v2::transaction_literal::Predicate;
 use sui_types::balance::Balance;
 use sui_types::effects::AccumulatorValue;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::object::Owner;
 use sui_types::transaction::TransactionDataAPI;
 
 use crate::api::scalars::fq_name_filter::FqNameFilter;
@@ -210,11 +211,19 @@ impl TransactionFilter {
         // An address is affected if it sent or sponsored the transaction, owns one of its
         // changed objects, or had its address balance changed by it.
         if let Some(affected_address) = &self.affected_address {
-            let in_changed_objects = effects.all_changed_objects().iter().any(|(_, owner, _)| {
-                owner
-                    .get_address_owner_address()
-                    .is_ok_and(|addr| SuiAddress::from(addr) == *affected_address)
-            });
+            // Matches the indexed path, which counts both `AddressOwner` and
+            // `ConsensusAddressOwner` (party) owners as affected.
+            let in_changed_objects =
+                effects
+                    .all_changed_objects()
+                    .iter()
+                    .any(|(_, owner, _)| match owner {
+                        Owner::AddressOwner(addr)
+                        | Owner::ConsensusAddressOwner { owner: addr, .. } => {
+                            SuiAddress::from(*addr) == *affected_address
+                        }
+                        _ => false,
+                    });
             let in_balance_changes = effects.accumulator_events().iter().any(|event| {
                 Balance::is_balance_type(&event.write.address.ty)
                     && matches!(&event.write.value, AccumulatorValue::Integer(_))
@@ -575,5 +584,59 @@ mod tests {
         // The recipient owns no changed object; only its address balance changes.
         assert!(affects(recipient));
         assert!(!affects(TestCheckpointBuilder::derive_address(3)));
+    }
+
+    #[test]
+    fn affected_address_matches_consensus_address_owner() {
+        use sui_types::base_types::ObjectID;
+        use sui_types::base_types::SequenceNumber;
+
+        let owned_recipient = TestCheckpointBuilder::derive_address(2);
+        let party_recipient = TestCheckpointBuilder::derive_address(3);
+        let checkpoint = TestCheckpointBuilder::new(0)
+            .start_transaction(1)
+            .finish_transaction()
+            .build_checkpoint();
+        let tx = &checkpoint.transactions[0];
+        let signed = SenderSignedData::new(tx.transaction.clone(), tx.signatures.clone());
+        let effects = TestEffectsBuilder::new(&signed)
+            .with_created_objects([
+                (ObjectID::random(), Owner::AddressOwner(owned_recipient)),
+                (
+                    ObjectID::random(),
+                    Owner::ConsensusAddressOwner {
+                        start_version: SequenceNumber::from_u64(1),
+                        owner: party_recipient,
+                    },
+                ),
+            ])
+            .build();
+        let contents = TransactionContents::ExecutedTransaction(ExecutedTransactionData {
+            effects: Box::new(effects),
+            events: vec![],
+            transaction_data: Box::new(tx.transaction.clone()),
+            signatures: vec![],
+            balance_changes: vec![],
+            proto_effects: None,
+            proto_transaction: None,
+            timestamp_ms: None,
+            cp_sequence_number: None,
+        });
+
+        let affects = |address: NativeSuiAddress| {
+            TransactionFilter {
+                affected_address: Some(address.into()),
+                ..Default::default()
+            }
+            .matches(&contents)
+        };
+
+        // Both recipients own a changed object and neither sent nor paid for the
+        // transaction. The indexed path (`affected_addresses`,
+        // `owner_as_affected_address`) counts the consensus (party) owner as
+        // affected, so the live path must too.
+        assert!(affects(owned_recipient));
+        assert!(affects(party_recipient));
+        assert!(!affects(TestCheckpointBuilder::derive_address(4)));
     }
 }
