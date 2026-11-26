@@ -364,6 +364,156 @@ mod tests {
         test_dag_parser::parse_dag,
     };
 
+    #[tokio::test]
+    async fn test_handle_commit_preserves_causal_equivocations() {
+        use std::collections::BTreeSet;
+
+        let context = Context::new_for_test(4).0;
+        let genesis = crate::block::genesis_blocks(&context)
+            .iter()
+            .map(|block| block.reference())
+            .collect::<Vec<_>>();
+        let make_block = |round, author, timestamp, ancestors| {
+            VerifiedBlock::new_for_test(
+                TestBlock::new(round, author)
+                    .set_timestamp_ms(timestamp)
+                    .set_ancestors(ancestors)
+                    .build(),
+            )
+        };
+        let mut first_round = (0..3)
+            .map(|author| make_block(1, author, 1000, genesis.clone()))
+            .collect::<Vec<_>>();
+        let forks = (0..3)
+            .map(|fork| make_block(1, 3, 1001 + fork, genesis.clone()))
+            .collect::<Vec<_>>();
+        first_round.extend(forks.clone());
+        let refs = first_round
+            .iter()
+            .map(|b| b.reference())
+            .collect::<Vec<_>>();
+        let second_round = vec![
+            make_block(2, 0, 2000, vec![refs[0], refs[1], forks[0].reference()]),
+            make_block(2, 1, 2000, vec![refs[1], refs[2], forks[1].reference()]),
+            make_block(2, 2, 2000, vec![refs[2], refs[0], refs[1]]),
+        ];
+        let leader = make_block(
+            3,
+            0,
+            3000,
+            second_round.iter().map(|b| b.reference()).collect(),
+        );
+
+        for block in first_round.iter().chain(&second_round).chain([&leader]) {
+            let parents = block.ancestors();
+            assert_eq!(parents[0].author, block.author());
+            let authors = parents.iter().map(|p| p.author).collect::<BTreeSet<_>>();
+            assert_eq!(authors.len(), parents.len());
+            assert!(parents.iter().all(|p| p.round < block.round()));
+            let parent_stake = parents
+                .iter()
+                .filter(|p| p.round == block.round() - 1)
+                .map(|p| context.committee.stake(p.author))
+                .sum::<u64>();
+            assert!(parent_stake >= context.committee.quorum_threshold());
+        }
+
+        // The first two forks are causal ancestors of the leader; the third is unrelated.
+        let unrelated = forks[2].reference();
+        let expected = first_round
+            .iter()
+            .chain(&second_round)
+            .chain([&leader])
+            .map(|b| b.reference())
+            .filter(|reference| *reference != unrelated)
+            .collect::<BTreeSet<_>>();
+        assert_eq!(expected.len(), 9);
+
+        for shuffle in [false, true] {
+            let mut configured = context.clone();
+            configured
+                .protocol_config
+                .set_shuffle_commit_blocks_for_testing(shuffle);
+            configured.protocol_config.set_gc_depth_for_testing(3);
+            let configured = Arc::new(configured);
+            for separate_commits in [false, true] {
+                let mut outputs = Vec::new();
+                // Acceptance order must not affect output for this fixed DAG and commit schedule.
+                for reverse in [false, true] {
+                    let dag_state = Arc::new(RwLock::new(DagState::new(
+                        configured.clone(),
+                        Arc::new(MemStore::new()),
+                    )));
+                    for layer in [&first_round, &second_round] {
+                        let mut blocks = layer.to_vec();
+                        if reverse {
+                            blocks.reverse();
+                        }
+                        dag_state.write().accept_blocks(blocks);
+                    }
+                    dag_state.write().accept_block(leader.clone());
+                    let mut linearizer = Linearizer::new(configured.clone(), dag_state);
+                    let mut committed_before = BTreeSet::new();
+                    if separate_commits {
+                        // Commit fork 0 through A2 first; fork 1 must still be included by the later leader.
+                        let earlier = linearizer.handle_commit(vec![second_round[0].clone()]);
+                        assert_eq!(earlier.len(), 1);
+                        let earlier_refs = earlier[0]
+                            .blocks
+                            .iter()
+                            .map(|b| b.reference())
+                            .collect::<Vec<_>>();
+                        committed_before = earlier_refs.iter().copied().collect();
+                        assert_eq!(
+                            committed_before,
+                            [
+                                refs[0],
+                                refs[1],
+                                forks[0].reference(),
+                                second_round[0].reference()
+                            ]
+                            .into_iter()
+                            .collect()
+                        );
+                        assert_eq!(earlier_refs.len(), committed_before.len());
+                        assert!(earlier_refs.is_sorted_by_key(|b| b.round));
+                        if !shuffle {
+                            assert!(earlier_refs.is_sorted_by_key(|b| (b.round, b.author)));
+                        }
+                        assert_eq!(earlier_refs.last(), Some(&second_round[0].reference()));
+                    }
+                    let commits = linearizer.handle_commit(vec![leader.clone()]);
+                    assert_eq!(commits.len(), 1);
+                    let committed = commits[0]
+                        .blocks
+                        .iter()
+                        .map(|b| b.reference())
+                        .collect::<Vec<_>>();
+                    let expected_remaining = expected
+                        .difference(&committed_before)
+                        .copied()
+                        .collect::<BTreeSet<_>>();
+                    assert_eq!(committed.len(), expected_remaining.len());
+                    assert_eq!(
+                        committed.iter().copied().collect::<BTreeSet<_>>(),
+                        expected_remaining
+                    );
+                    assert!(!committed.contains(&unrelated));
+                    assert!(committed.is_sorted_by_key(|b| b.round));
+                    if !shuffle {
+                        assert!(committed.is_sorted_by_key(|b| (b.round, b.author)));
+                    }
+                    assert_eq!(committed.last(), Some(&leader.reference()));
+                    outputs.push((committed, commits[0].commit_ref));
+                }
+                assert_eq!(
+                    outputs[0], outputs[1],
+                    "shuffle={shuffle}, separate_commits={separate_commits}"
+                );
+            }
+        }
+    }
+
     #[rstest]
     #[tokio::test]
     async fn test_handle_commit() {
