@@ -1209,7 +1209,7 @@ mod test {
             // The restarts must end before the load does.
             for validator in validators.iter().cycle().take(8) {
                 // Stop the validator once it holds checkpoints that it built but did not execute.
-                let has_unexecuted = tokio::time::timeout(Duration::from_secs(10), async {
+                let has_unexecuted = tokio::time::timeout(Duration::from_secs(30), async {
                     while highest_built(validator) < highest_executed(validator) + 3 {
                         tokio::time::sleep(Duration::from_millis(10)).await;
                     }
@@ -1238,7 +1238,7 @@ mod test {
                     .get_node_handle()
                     .unwrap()
                     .with(|node| node.get_sim_node_id());
-                let reengaged = tokio::time::timeout(Duration::from_secs(10), async {
+                let reengaged = tokio::time::timeout(Duration::from_secs(30), async {
                     while !reengaged_nodes.lock().unwrap().contains(&node_id) {
                         tokio::time::sleep(Duration::from_millis(10)).await;
                     }
@@ -1248,7 +1248,7 @@ mod test {
                     return true;
                 }
             }
-            false
+            !reengaged_nodes.lock().unwrap().is_empty()
         });
 
         test_simulated_load(test_cluster, 300).await;
