@@ -121,7 +121,13 @@ fn integration_reads_objects_and_checkpoint_via_trait_surface() {
     // RpcIndexes through the rollup's `indexes()`.
     let indexes = reader.indexes().expect("indexes present");
     let owned: Vec<_> = indexes
-        .owned_objects_iter(SuiAddress::ZERO, None, None)
+        .owned_objects_iter(
+            sui_types::storage::OwnedObjectOwner::Address(SuiAddress::ZERO),
+            None,
+            std::ops::Bound::Unbounded,
+            std::ops::Bound::Unbounded,
+            false,
+        )
         .unwrap()
         .collect::<Result<Vec<_>, _>>()
         .unwrap();

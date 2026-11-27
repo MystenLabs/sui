@@ -791,6 +791,24 @@ pub trait RpcStateReader: ReadStore + super::RuntimeObjectResolver + Send + Sync
     // Get a handle to an instance of the RpcIndexes
     fn indexes(&self) -> Option<&dyn RpcIndexes>;
 
+    /// Acquire an [`RpcIndexes`] handle pinned to the end of `checkpoint` (or the highest
+    /// checkpoint snapshot currently retained when `checkpoint` is `None`), or report why none was
+    /// acquired using the snapshot window state observed atomically with the lookup.
+    fn indexes_at_checkpoint(
+        &self,
+        _checkpoint: Option<CheckpointSequenceNumber>,
+    ) -> CheckpointIndexes {
+        CheckpointIndexes::Disabled
+    }
+
+    /// Configured retained checkpoint range (`lo..=hi`) for checkpoint-pinned state reads, or
+    /// `None` if snapshotting is disabled or no snapshot has been taken yet.
+    fn retained_checkpoint_indexes_range(
+        &self,
+    ) -> Option<RangeInclusive<CheckpointSequenceNumber>> {
+        None
+    }
+
     /// The object's newest version at or below `version`, like the execution cache's
     /// `find_object_lt_or_eq_version`. `None` if the object has no version at or below
     /// `version`, or if it was deleted or wrapped at that newest version. On a store whose object
@@ -887,7 +905,25 @@ pub trait RpcStateReader: ReadStore + super::RuntimeObjectResolver + Send + Sync
     }
 }
 
-pub type DynamicFieldIteratorItem = Result<DynamicFieldKey, TypedStoreError>;
+/// Result of acquiring a checkpoint-pinned [`RpcIndexes`] reader from an [`RpcStateReader`].
+pub enum CheckpointIndexes {
+    /// A handle pinned to `checkpoint`.
+    Available {
+        checkpoint: CheckpointSequenceNumber,
+        indexes: Arc<dyn RpcIndexes>,
+    },
+    /// Checkpoint-pinned state reads are disabled by configuration (snapshot window is 0).
+    Disabled,
+    /// Checkpoint-pinned state reads are enabled, but no checkpoint snapshot is ready yet.
+    Empty,
+    /// No snapshot for the requested checkpoint is held on this node. `retained_range` is the
+    /// configured retained checkpoint window (`lo..=hi`).
+    Unavailable {
+        retained_range: RangeInclusive<CheckpointSequenceNumber>,
+    },
+}
+
+pub type DynamicFieldIteratorItem = Result<DynamicFieldEntry, TypedStoreError>;
 pub type LedgerTxSeqDigestIterator<'a> =
     Box<dyn Iterator<Item = Result<LedgerTxSeqDigest, TypedStoreError>> + 'a>;
 pub type ObjectVersionsIterator<'a> = Box<dyn Iterator<Item = Result<ObjectOrTombstone>> + 'a>;
@@ -922,29 +958,47 @@ pub struct LedgerBitmapBucket {
 pub trait RpcIndexes: Send + Sync {
     fn get_epoch_info(&self, epoch: EpochId) -> Result<Option<EpochInfo>>;
 
-    /// Iterate the live objects `owner` owns that `filter` matches (every
-    /// object when `filter` is `None`), in the order of the owned-object index:
-    /// by type, then by descending balance for coins, then by object id.
-    /// `cursor` resumes the scan at that entry, inclusive.
+    /// Iterate the live objects owned by `owner` that `filter` matches (every object when
+    /// `filter` is `None`), in the order of the `object_by_owner` index (by type, then by
+    /// descending balance for coins, then by object id), or in reverse when `descending` is set.
+    /// `lower` and `upper` bound the scan in canonical ascending key order.
+    ///
+    /// `OwnedObjectInfo.owner` holds the queried address for `OwnedObjectOwner::Address`, the
+    /// parent object ID converted to `SuiAddress` for `OwnedObjectOwner::Object`, and
+    /// `SuiAddress::ZERO` for `OwnedObjectOwner::Shared` and `OwnedObjectOwner::Immutable`.
     fn owned_objects_iter(
         &self,
-        owner: SuiAddress,
+        owner: OwnedObjectOwner,
         filter: Option<&OwnedObjectFilter>,
-        cursor: Option<OwnedObjectInfo>,
+        lower: Bound<OwnedObjectKey>,
+        upper: Bound<OwnedObjectKey>,
+        descending: bool,
     ) -> Result<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>>;
 
-    /// Iterate the dynamic fields owned by `parent` that `filter` matches
-    /// (every field when `filter` is `None`). Dynamic-field objects live in
-    /// the same owned-object index as address-owned objects (under the
-    /// object-owner key, sorted by `(type, object id)`), so the
-    /// [`DynamicFieldKey`] cursor carries the field's type alongside its id --
-    /// the full sort position -- letting the scan seek straight to it, as in
-    /// [`owned_objects_iter`](Self::owned_objects_iter).
+    /// Iterate live Move struct objects matching `filter` (all live Move struct objects when
+    /// `filter` is `None`), in the order of the `object_by_type` index (by type, then by object
+    /// id), or in reverse when `descending` is set. `lower` and `upper` bound the scan in
+    /// canonical ascending key order.
+    fn objects_by_type_iter(
+        &self,
+        filter: Option<&OwnedObjectFilter>,
+        lower: Bound<ObjectByTypeKey>,
+        upper: Bound<ObjectByTypeKey>,
+        descending: bool,
+    ) -> Result<Box<dyn Iterator<Item = Result<ObjectByTypeInfo, TypedStoreError>> + '_>>;
+
+    /// Iterate the dynamic fields owned by `parent` that `filter` matches (every field when
+    /// `filter` is `None`), in canonical `(type, descending balance for coins, field_id)` order,
+    /// or in reverse when `descending` is set. `lower` and `upper` bound the scan in canonical
+    /// ascending key order. Each entry carries the field object's live version from the
+    /// `object_by_owner` row.
     fn dynamic_field_iter(
         &self,
         parent: ObjectID,
         filter: Option<&DynamicFieldFilter>,
-        cursor: Option<DynamicFieldKey>,
+        lower: Bound<DynamicFieldKey>,
+        upper: Bound<DynamicFieldKey>,
+        descending: bool,
     ) -> Result<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>>;
 
     fn get_coin_info(&self, coin_type: &StructTag) -> Result<Option<CoinInfo>>;
@@ -952,10 +1006,15 @@ pub trait RpcIndexes: Send + Sync {
     fn get_balance(&self, owner: &SuiAddress, coin_type: &StructTag)
     -> Result<Option<BalanceInfo>>;
 
+    /// Iterate balances owned by `owner`, in canonical ascending BCS `TypeTag` order, or in
+    /// reverse when `descending` is set. `lower` and `upper` bound the scan in canonical ascending
+    /// order.
     fn balance_iter(
         &self,
         owner: &SuiAddress,
-        cursor: Option<(SuiAddress, StructTag)>,
+        lower: Bound<StructTag>,
+        upper: Bound<StructTag>,
+        descending: bool,
     ) -> Result<BalanceIterator<'_>>;
 
     /// Iterate the versions of the package originally published at
@@ -1153,14 +1212,83 @@ pub struct OwnedObjectInfo {
     pub version: SequenceNumber,
 }
 
+/// Ownership category and optional owner address for querying the `object_by_owner` index.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OwnedObjectOwner {
+    Address(SuiAddress),
+    Object(ObjectID),
+    Shared,
+    Immutable,
+}
+
+/// Sort position of an entry in an `object_by_owner` listing for a fixed [`OwnedObjectOwner`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OwnedObjectKey {
+    pub object_type: StructTag,
+    pub balance: Option<u64>,
+    pub object_id: ObjectID,
+}
+
+/// Sort position of an entry in an `object_by_type` listing.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ObjectByTypeKey {
+    pub object_type: StructTag,
+    pub object_id: ObjectID,
+}
+
+/// Entry yielded by [`RpcIndexes::objects_by_type_iter`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ObjectByTypeInfo {
+    pub object_type: StructTag,
+    pub object_id: ObjectID,
+    pub version: SequenceNumber,
+}
+
+/// Entry yielded by [`RpcIndexes::dynamic_field_iter`], carrying both the sort key and the field
+/// object's version from the `object_by_owner` index.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DynamicFieldEntry {
+    pub parent: ObjectID,
+    pub field_id: ObjectID,
+    pub object_type: StructTag,
+    /// Coin balance when the owned child is a `Coin<T>` (e.g. a dynamic object field's value
+    /// object or a coin transferred directly to `parent`), `None` for non-coin objects including
+    /// `Field<K, V>`.
+    pub balance: Option<u64>,
+    pub version: SequenceNumber,
+}
+
+impl DynamicFieldEntry {
+    pub fn key(&self) -> DynamicFieldKey {
+        DynamicFieldKey {
+            parent: self.parent,
+            field_id: self.field_id,
+            object_type: self.object_type.clone(),
+            balance: self.balance,
+        }
+    }
+
+    pub fn into_key(self) -> DynamicFieldKey {
+        DynamicFieldKey {
+            parent: self.parent,
+            field_id: self.field_id,
+            object_type: self.object_type,
+            balance: self.balance,
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct DynamicFieldKey {
     pub parent: ObjectID,
     pub field_id: ObjectID,
-    /// The dynamic field object's Move type. The owned-object index sorts by
-    /// `(type, object id)`, so this is needed -- together with `field_id` -- to
-    /// resume a paginated scan at this entry.
+    /// The object's Move type. The owned-object index sorts by `(type, balance?, object id)`, so
+    /// this is needed -- together with `balance` and `field_id` -- to resume a paginated scan at
+    /// this entry.
     pub object_type: StructTag,
+    /// Coin balance when the entry is a `Coin<T>` indexed under `ObjectOwner(parent)`, `None`
+    /// otherwise.
+    pub balance: Option<u64>,
 }
 
 impl DynamicFieldKey {
@@ -1169,6 +1297,7 @@ impl DynamicFieldKey {
             parent: parent.into(),
             field_id,
             object_type,
+            balance: None,
         }
     }
 }

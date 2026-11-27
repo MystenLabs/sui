@@ -15,8 +15,8 @@ enum CursorKind {
     CURSOR_KIND_BOUNDARY = 2;
 }
 
-// Pagination cursor for ledger-history endpoints. The cursor scope is encoded
-// by which `position` member is set.
+// Pagination cursor for ledger-history and state-service endpoints. The cursor
+// scope is encoded by which `position` member is set.
 message CursorToken {
     // Tags 1-4 belonged to an earlier version of this schema; reserved so
     // those bytes are never misread.
@@ -31,6 +31,7 @@ message CursorToken {
         CheckpointsPosition checkpoints = 6;
         TransactionsPosition transactions = 7;
         EventsPosition events = 8;
+        StatePosition state = 10;
     }
 
     // The boundary immediately before the item at this cursor's coordinate
@@ -85,4 +86,45 @@ message PublicPosition {
     uint64 transaction_index = 2;
     // Zero-based index of an event within its transaction.
     uint32 event_index = 3;
+}
+
+// Which `StateService` listing minted a `StatePosition` cursor.
+enum StateListing {
+    STATE_LISTING_UNSPECIFIED = 0;
+    STATE_LISTING_BALANCES = 1;
+    STATE_LISTING_OWNED_OBJECTS = 2;
+    STATE_LISTING_DYNAMIC_FIELDS = 3;
+    STATE_LISTING_OBJECTS = 4;
+}
+
+// Ownership category for `STATE_LISTING_OWNED_OBJECTS`.
+enum StateOwnerKind {
+    STATE_OWNER_KIND_UNSPECIFIED = 0;
+    STATE_OWNER_KIND_ADDRESS = 1;
+    STATE_OWNER_KIND_OBJECT = 2;
+    STATE_OWNER_KIND_SHARED = 3;
+    STATE_OWNER_KIND_IMMUTABLE = 4;
+}
+
+// Position in a checkpoint-pinned `StateService` listing.
+message StatePosition {
+    // Checkpoint the listing is pinned to. Required.
+    optional uint64 checkpoint = 1;
+    // Which `StateService` listing minted this cursor. Required.
+    StateListing listing = 2;
+    // Ownership category for `STATE_LISTING_OWNED_OBJECTS`; unset otherwise.
+    StateOwnerKind owner_kind = 3;
+    // 32-byte owner address (`BALANCES`, `OWNED_OBJECTS` with `ADDRESS`/`OBJECT`)
+    // or parent `ObjectID` (`DYNAMIC_FIELDS`); unset for `SHARED`, `IMMUTABLE`,
+    // and `OBJECTS`.
+    optional bytes owner = 4;
+    // BCS-encoded Move `StructTag`: coin type (`BALANCES`) or object type
+    // (`OWNED_OBJECTS`, `DYNAMIC_FIELDS`, `OBJECTS`). Required.
+    optional bytes move_type = 5;
+    // Coin balance for coin objects in `OWNED_OBJECTS` and `DYNAMIC_FIELDS`;
+    // unset for non-coins and all other listings.
+    optional uint64 balance = 6;
+    // 32-byte object ID (`OWNED_OBJECTS`, `DYNAMIC_FIELDS`, `OBJECTS`); unset
+    // for `BALANCES`.
+    optional bytes object_id = 7;
 }

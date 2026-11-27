@@ -526,6 +526,11 @@ pub enum NotReadyCause {
     RestoreBackfill,
     /// The rpc indexes have not yet reached data this node's live state already holds.
     HistoryCatchingUp,
+    /// The requested checkpoint is within the configured retained range for state reads, but this
+    /// replica does not hold it yet (for example while refilling after a restart).
+    CheckpointUnavailable,
+    /// An indexed object version could not be loaded during a checkpoint-pinned state read.
+    PruningRace,
 }
 
 impl NotReadyCause {
@@ -535,6 +540,8 @@ impl NotReadyCause {
             Self::IndexEmpty => "index_empty",
             Self::RestoreBackfill => "restore_backfill",
             Self::HistoryCatchingUp => "history_catching_up",
+            Self::CheckpointUnavailable => "checkpoint_unavailable",
+            Self::PruningRace => "pruning_race",
         }
     }
 }

@@ -52,6 +52,7 @@ pub use crate::db::Db;
 pub use crate::db::DbOptions;
 pub use crate::db::DbRef;
 pub use crate::db::RocksMetrics;
+pub use crate::db::SnapshotLookup;
 pub use crate::encode::Decode;
 pub use crate::encode::Encode;
 pub use crate::framework::ChainId;

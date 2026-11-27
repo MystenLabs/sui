@@ -1189,6 +1189,19 @@ impl RpcStateReader for RpcStoreReadStore {
         Some(self)
     }
 
+    fn indexes_at_checkpoint(
+        &self,
+        checkpoint: Option<CheckpointSequenceNumber>,
+    ) -> sui_types::storage::CheckpointIndexes {
+        self.reader.indexes_at_checkpoint(checkpoint)
+    }
+
+    fn retained_checkpoint_indexes_range(
+        &self,
+    ) -> Option<RangeInclusive<CheckpointSequenceNumber>> {
+        self.reader.retained_checkpoint_indexes_range()
+    }
+
     fn get_object_lt_or_eq_version(
         &self,
         object_id: &ObjectID,
@@ -1242,20 +1255,41 @@ impl RpcIndexes for RpcStoreReadStore {
 
     fn owned_objects_iter(
         &self,
-        owner: SuiAddress,
+        owner: sui_types::storage::OwnedObjectOwner,
         filter: Option<&OwnedObjectFilter>,
-        cursor: Option<OwnedObjectInfo>,
+        lower: std::ops::Bound<sui_types::storage::OwnedObjectKey>,
+        upper: std::ops::Bound<sui_types::storage::OwnedObjectKey>,
+        descending: bool,
     ) -> Result<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>> {
-        self.reader.owned_objects_iter(owner, filter, cursor)
+        self.reader
+            .owned_objects_iter(owner, filter, lower, upper, descending)
+    }
+
+    fn objects_by_type_iter(
+        &self,
+        filter: Option<&OwnedObjectFilter>,
+        lower: std::ops::Bound<sui_types::storage::ObjectByTypeKey>,
+        upper: std::ops::Bound<sui_types::storage::ObjectByTypeKey>,
+        descending: bool,
+    ) -> Result<
+        Box<
+            dyn Iterator<Item = Result<sui_types::storage::ObjectByTypeInfo, TypedStoreError>> + '_,
+        >,
+    > {
+        self.reader
+            .objects_by_type_iter(filter, lower, upper, descending)
     }
 
     fn dynamic_field_iter(
         &self,
         parent: ObjectID,
         filter: Option<&DynamicFieldFilter>,
-        cursor: Option<DynamicFieldKey>,
-    ) -> Result<Box<dyn Iterator<Item = Result<DynamicFieldKey, TypedStoreError>> + '_>> {
-        self.reader.dynamic_field_iter(parent, filter, cursor)
+        lower: std::ops::Bound<DynamicFieldKey>,
+        upper: std::ops::Bound<DynamicFieldKey>,
+        descending: bool,
+    ) -> Result<Box<dyn Iterator<Item = sui_types::storage::DynamicFieldIteratorItem> + '_>> {
+        self.reader
+            .dynamic_field_iter(parent, filter, lower, upper, descending)
     }
 
     fn get_coin_info(&self, coin_type: &StructTag) -> Result<Option<CoinInfo>> {
@@ -1273,9 +1307,11 @@ impl RpcIndexes for RpcStoreReadStore {
     fn balance_iter(
         &self,
         owner: &SuiAddress,
-        cursor: Option<(SuiAddress, StructTag)>,
+        lower: std::ops::Bound<StructTag>,
+        upper: std::ops::Bound<StructTag>,
+        descending: bool,
     ) -> Result<BalanceIterator<'_>> {
-        self.reader.balance_iter(owner, cursor)
+        self.reader.balance_iter(owner, lower, upper, descending)
     }
 
     fn package_versions_iter(

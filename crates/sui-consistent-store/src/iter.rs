@@ -226,14 +226,14 @@ where
     }
 }
 
-/// Compute the lexicographic successor of `prefix`, treating it as a
-/// variable-length byte string.
+/// Compute the exclusive upper bound for all byte strings that start
+/// with `prefix` in lexicographic order (not the immediate successor of
+/// `prefix` itself, which is `prefix || 0x00`).
 ///
-/// Returns `Some(succ)` such that `succ` is the smallest byte string
-/// strictly greater than `prefix` in lexicographic order. Returns
-/// `None` if `prefix` is composed entirely of `0xFF` bytes (and so
-/// has no successor in this ordering), in which case the prefix
-/// extends to the end of the key space.
+/// Returns `Some(bound)` such that `bound` is the smallest byte string
+/// strictly greater than every key beginning with `prefix`, or `None` if
+/// `prefix` is empty or composed entirely of `0xFF` bytes (in which case
+/// the prefix range extends to the end of the key space).
 pub fn next_prefix(prefix: &[u8]) -> Option<Vec<u8>> {
     let mut next = prefix.to_vec();
     while let Some(last) = next.last_mut() {

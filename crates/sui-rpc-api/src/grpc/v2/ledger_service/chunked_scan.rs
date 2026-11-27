@@ -53,7 +53,7 @@ pub(crate) struct ChunkArgs {
     pub(crate) cancel: CancellationToken,
 }
 
-pub(super) fn cancelled() -> RpcError {
+pub(crate) fn cancelled() -> RpcError {
     RpcError::new(tonic::Code::Cancelled, "request cancelled")
 }
 pub(crate) fn spawn_list_chunk<T, F>(

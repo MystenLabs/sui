@@ -22,6 +22,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::storage::BalanceInfo;
 use sui_types::storage::BalanceIterator;
 use sui_types::storage::CoinInfo;
+use sui_types::storage::DynamicFieldEntry;
 use sui_types::storage::DynamicFieldFilter;
 use sui_types::storage::DynamicFieldIteratorItem;
 use sui_types::storage::DynamicFieldKey;
@@ -32,9 +33,13 @@ use sui_types::storage::LedgerBitmapBucketIter;
 use sui_types::storage::LedgerBitmapBucketIterator;
 use sui_types::storage::LedgerTxSeqDigest;
 use sui_types::storage::LedgerTxSeqDigestIterator;
+use sui_types::storage::ObjectByTypeInfo;
+use sui_types::storage::ObjectByTypeKey;
 use sui_types::storage::ObjectVersionsIterator;
 use sui_types::storage::OwnedObjectFilter;
 use sui_types::storage::OwnedObjectInfo;
+use sui_types::storage::OwnedObjectKey;
+use sui_types::storage::OwnedObjectOwner;
 use sui_types::storage::PackagePublishKey;
 use sui_types::storage::PackageVersionsIterator;
 use sui_types::storage::PackagesByCheckpointIterator;
@@ -44,7 +49,9 @@ use typed_store_error::TypedStoreError;
 
 use crate::reader::RpcStoreReader;
 use crate::reader::key_ranges::FilteredScan;
+use crate::reader::key_ranges::KeyRanges;
 use crate::reader::key_ranges::dynamic_field_ranges;
+use crate::reader::key_ranges::object_by_type_ranges;
 use crate::reader::key_ranges::owned_object_ranges;
 use crate::schema::type_filter::TypeFilter;
 
@@ -163,36 +170,87 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
 
     fn owned_objects_iter(
         &self,
-        owner: SuiAddress,
+        owner: OwnedObjectOwner,
         filter: Option<&OwnedObjectFilter>,
-        cursor: Option<OwnedObjectInfo>,
+        lower: Bound<OwnedObjectKey>,
+        upper: Bound<OwnedObjectKey>,
+        descending: bool,
     ) -> StorageResult<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>>
     {
         use crate::schema::object_by_owner::{Key, OwnerKind};
         let map = &self.schema().object_by_owner;
-        let kind = OwnerKind::AddressOwner(owner);
+        let (kind, owner_address) = match owner {
+            OwnedObjectOwner::Address(addr) => (OwnerKind::AddressOwner(addr), addr),
+            OwnedObjectOwner::Object(id) => (OwnerKind::ObjectOwner(id.into()), id.into()),
+            OwnedObjectOwner::Shared => (OwnerKind::Shared, SuiAddress::ZERO),
+            OwnedObjectOwner::Immutable => (OwnerKind::Immutable, SuiAddress::ZERO),
+        };
         let ranges =
             owned_object_ranges(kind, filter).map_err(sui_types::storage::error::Error::custom)?;
-        // When resuming, the page token carries the cursor object's full sort
-        // position -- type, balance, and id -- so the scan seeks straight to it
-        // (inclusive).
-        let from = cursor.map(|c| Key {
+        let to_key = |c: OwnedObjectKey| Key {
             kind,
             type_: c.object_type,
             inverted_balance: c.balance.map(|b| !b),
             object_id: c.object_id,
-        });
-        let rows = FilteredScan::open(map, ranges, from.as_ref())
-            .map_err(sui_types::storage::error::Error::custom)?;
+        };
+        let lower_key = lower.map(to_key);
+        let upper_key = upper.map(to_key);
+        let rows = FilteredScan::open(
+            map,
+            ranges,
+            lower_key.as_ref(),
+            upper_key.as_ref(),
+            descending,
+        )
+        .map_err(sui_types::storage::error::Error::custom)?;
 
         let mapped = rows.map(move |row| {
             let (key, value) = row.map_err(to_typed_store_err)?;
             Ok(OwnedObjectInfo {
-                owner,
+                owner: owner_address,
                 object_type: key.type_,
                 balance: key.inverted_balance.map(|b| !b),
                 object_id: key.object_id,
-                version: sui_types::base_types::SequenceNumber::from_u64(value.0),
+                version: SequenceNumber::from_u64(value.0),
+            })
+        });
+
+        Ok(Box::new(mapped))
+    }
+
+    fn objects_by_type_iter(
+        &self,
+        filter: Option<&OwnedObjectFilter>,
+        lower: Bound<ObjectByTypeKey>,
+        upper: Bound<ObjectByTypeKey>,
+        descending: bool,
+    ) -> StorageResult<Box<dyn Iterator<Item = Result<ObjectByTypeInfo, TypedStoreError>> + '_>>
+    {
+        use crate::schema::object_by_type::Key;
+        let map = &self.schema().object_by_type;
+        let ranges =
+            object_by_type_ranges(filter).map_err(sui_types::storage::error::Error::custom)?;
+        let to_key = |c: ObjectByTypeKey| Key {
+            type_: c.object_type,
+            object_id: c.object_id,
+        };
+        let lower_key = lower.map(to_key);
+        let upper_key = upper.map(to_key);
+        let rows = FilteredScan::open(
+            map,
+            ranges,
+            lower_key.as_ref(),
+            upper_key.as_ref(),
+            descending,
+        )
+        .map_err(sui_types::storage::error::Error::custom)?;
+
+        let mapped = rows.map(move |row| {
+            let (key, value) = row.map_err(to_typed_store_err)?;
+            Ok(ObjectByTypeInfo {
+                object_type: key.type_,
+                object_id: key.object_id,
+                version: SequenceNumber::from_u64(value.0),
             })
         });
 
@@ -203,34 +261,44 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
         &self,
         parent: ObjectID,
         filter: Option<&DynamicFieldFilter>,
-        cursor: Option<DynamicFieldKey>,
+        lower: Bound<DynamicFieldKey>,
+        upper: Bound<DynamicFieldKey>,
+        descending: bool,
     ) -> StorageResult<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>> {
         use crate::schema::object_by_owner::{Key, OwnerKind};
-        // Dynamic fields are `Field<Name, Value>` objects owned (in the
-        // object-owner sense) by `parent`, so they share the `object_by_owner`
-        // index with address-owned objects. The cursor carries the field's
-        // type and id -- its full sort position -- so the scan seeks straight
-        // to it. Field objects are never coins, so the balance component is
-        // always absent.
+        // Dynamic fields are `Field<Name, Value>` objects owned (in the object-owner sense) by
+        // `parent`, so they share the `object_by_owner` index with address-owned objects. An
+        // unfiltered scan also returns non-`Field` objects owned by `parent`, including `Coin<T>`
+        // values whose index key carries an inverted balance.
         let map = &self.schema().object_by_owner;
         let kind = OwnerKind::ObjectOwner(parent.into());
         let ranges =
             dynamic_field_ranges(kind, filter).map_err(sui_types::storage::error::Error::custom)?;
-        let from = cursor.map(|c| Key {
+        let to_key = |c: DynamicFieldKey| Key {
             kind,
             type_: c.object_type,
-            inverted_balance: None,
+            inverted_balance: c.balance.map(|b| !b),
             object_id: c.field_id,
-        });
-        let rows = FilteredScan::open(map, ranges, from.as_ref())
-            .map_err(sui_types::storage::error::Error::custom)?;
+        };
+        let lower_key = lower.map(to_key);
+        let upper_key = upper.map(to_key);
+        let rows = FilteredScan::open(
+            map,
+            ranges,
+            lower_key.as_ref(),
+            upper_key.as_ref(),
+            descending,
+        )
+        .map_err(sui_types::storage::error::Error::custom)?;
 
         let mapped = rows.map(move |row| {
-            let (key, _value) = row.map_err(to_typed_store_err)?;
-            Ok(DynamicFieldKey {
+            let (key, value) = row.map_err(to_typed_store_err)?;
+            Ok(DynamicFieldEntry {
                 parent,
                 field_id: key.object_id,
                 object_type: key.type_,
+                balance: key.inverted_balance.map(|b| !b),
+                version: SequenceNumber::from_u64(value.0),
             })
         });
 
@@ -290,23 +358,30 @@ impl<R: Reader + Send + Sync> RpcIndexes for RpcStoreReader<R> {
     fn balance_iter(
         &self,
         owner: &SuiAddress,
-        cursor: Option<(SuiAddress, StructTag)>,
+        lower: Bound<StructTag>,
+        upper: Bound<StructTag>,
+        descending: bool,
     ) -> StorageResult<BalanceIterator<'_>> {
         use crate::schema::balance::{Key, OwnerPrefix};
         let map = &self.schema().balance;
-        // When resuming, the page token carries the cursor's coin type -- the
-        // index's sort key after the owner -- so the scan seeks straight to it
-        // (inclusive) and stops at the end of the owner's balances.
-        let from = cursor.map(|(_, tag)| Key {
+        let owner_prefix = OwnerPrefix(*owner)
+            .encode()
+            .map_err(sui_types::storage::error::Error::custom)?;
+        let ranges = KeyRanges::prefix(owner_prefix);
+        let to_key = |tag: StructTag| Key {
             owner: *owner,
             coin_type: move_core_types::language_storage::TypeTag::Struct(Box::new(tag)),
-        });
-        let iter = match &from {
-            Some(from) => map.iter_prefix_from(&OwnerPrefix(*owner), from),
-            None => map.iter_prefix(&OwnerPrefix(*owner)),
-        }
+        };
+        let lower_key = lower.map(to_key);
+        let upper_key = upper.map(to_key);
+        let iter = FilteredScan::open(
+            map,
+            ranges,
+            lower_key.as_ref(),
+            upper_key.as_ref(),
+            descending,
+        )
         .map_err(sui_types::storage::error::Error::custom)?;
-
         let mapped = iter.filter_map(move |row| {
             let (key, value) = match row {
                 Ok(pair) => pair,
@@ -694,13 +769,21 @@ fn project_event_bitmap_row(
 
 #[cfg(test)]
 mod tests {
+    use std::ops::Bound;
     use std::sync::Arc;
 
     use sui_consistent_store::Db;
     use sui_consistent_store::DbOptions;
     use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
     use sui_types::base_types::ObjectID;
+    use sui_types::base_types::SequenceNumber;
+    use sui_types::base_types::SuiAddress;
+    use sui_types::storage::DynamicFieldEntry;
     use sui_types::storage::IndexedPackageVersion;
+    use sui_types::storage::OwnedObjectFilter;
+    use sui_types::storage::OwnedObjectInfo;
+    use sui_types::storage::OwnedObjectKey;
+    use sui_types::storage::OwnedObjectOwner;
     use sui_types::storage::PackagePublishKey;
     use sui_types::storage::RpcIndexes;
 
@@ -1171,8 +1254,23 @@ mod tests {
         // Bounded so a non-advancing cursor surfaces as a failed assertion
         // rather than an infinite loop.
         for _ in 0..ids.len() + 2 {
+            let lower = cursor
+                .take()
+                .map_or(Bound::Unbounded, |c: OwnedObjectInfo| {
+                    Bound::Included(OwnedObjectKey {
+                        object_type: c.object_type,
+                        balance: c.balance,
+                        object_id: c.object_id,
+                    })
+                });
             let mut iter = reader
-                .owned_objects_iter(owner, None, cursor.take())
+                .owned_objects_iter(
+                    OwnedObjectOwner::Address(owner),
+                    None,
+                    lower,
+                    Bound::Unbounded,
+                    false,
+                )
                 .unwrap();
             for _ in 0..2 {
                 match iter.next() {
@@ -1222,8 +1320,13 @@ mod tests {
         let mut seen = Vec::new();
         let mut cursor = None;
         for _ in 0..fields.len() + 2 {
+            let lower = cursor
+                .take()
+                .map_or(Bound::Unbounded, |c: DynamicFieldEntry| {
+                    Bound::Included(c.key())
+                });
             let mut iter = reader
-                .dynamic_field_iter(parent, None, cursor.take())
+                .dynamic_field_iter(parent, None, lower, Bound::Unbounded, false)
                 .unwrap();
             for _ in 0..2 {
                 match iter.next() {
@@ -1255,8 +1358,23 @@ mod tests {
         let mut seen = Vec::new();
         let mut cursor = None;
         for _ in 0..100 {
+            let lower = cursor
+                .take()
+                .map_or(Bound::Unbounded, |c: OwnedObjectInfo| {
+                    Bound::Included(OwnedObjectKey {
+                        object_type: c.object_type,
+                        balance: c.balance,
+                        object_id: c.object_id,
+                    })
+                });
             let mut iter = reader
-                .owned_objects_iter(owner, Some(filter), cursor.take())
+                .owned_objects_iter(
+                    OwnedObjectOwner::Address(owner),
+                    Some(filter),
+                    lower,
+                    Bound::Unbounded,
+                    false,
+                )
                 .unwrap();
             seen.extend(
                 iter.by_ref()
@@ -1357,7 +1475,13 @@ mod tests {
         // A cursor past the filter's last range, e.g. a token from an
         // unfiltered listing resumed under a narrower filter, yields nothing.
         let last_object = reader
-            .owned_objects_iter(owner, None, None)
+            .owned_objects_iter(
+                OwnedObjectOwner::Address(owner),
+                None,
+                Bound::Unbounded,
+                Bound::Unbounded,
+                false,
+            )
             .unwrap()
             .last()
             .unwrap()
@@ -1366,7 +1490,17 @@ mod tests {
         let only_a = OwnedObjectFilter::object_type(tag("0x1::a::A"));
         assert_eq!(
             reader
-                .owned_objects_iter(owner, Some(&only_a), Some(last_object))
+                .owned_objects_iter(
+                    OwnedObjectOwner::Address(owner),
+                    Some(&only_a),
+                    Bound::Included(OwnedObjectKey {
+                        object_type: last_object.object_type,
+                        balance: last_object.balance,
+                        object_id: last_object.object_id,
+                    }),
+                    Bound::Unbounded,
+                    false,
+                )
                 .unwrap()
                 .count(),
             0
@@ -1427,10 +1561,13 @@ mod tests {
 
         let page = |filter: &DynamicFieldFilter| {
             let mut seen = Vec::new();
-            let mut cursor = None;
+            let mut cursor: Option<DynamicFieldEntry> = None;
             for _ in 0..100 {
+                let lower = cursor
+                    .take()
+                    .map_or(Bound::Unbounded, |c| Bound::Included(c.key()));
                 let mut iter = reader
-                    .dynamic_field_iter(parent, Some(filter), cursor.take())
+                    .dynamic_field_iter(parent, Some(filter), lower, Bound::Unbounded, false)
                     .unwrap();
                 seen.extend(iter.next().map(|res| res.unwrap().field_id));
                 cursor = iter.next().transpose().unwrap();
@@ -1491,20 +1628,19 @@ mod tests {
         batch.commit().unwrap();
 
         let mut seen: Vec<StructTag> = Vec::new();
-        let mut cursor: Option<(SuiAddress, StructTag)> = None;
+        let mut cursor: Option<StructTag> = None;
         for _ in 0..names.len() + 2 {
-            let mut iter = reader.balance_iter(&owner, cursor.take()).unwrap();
+            let lower = cursor.take().map_or(Bound::Unbounded, Bound::Included);
+            let mut iter = reader
+                .balance_iter(&owner, lower, Bound::Unbounded, false)
+                .unwrap();
             for _ in 0..2 {
                 match iter.next() {
                     Some(res) => seen.push(res.unwrap().0),
                     None => break,
                 }
             }
-            cursor = iter
-                .next()
-                .transpose()
-                .unwrap()
-                .map(|(tag, _)| (owner, tag));
+            cursor = iter.next().transpose().unwrap().map(|(tag, _)| tag);
             if cursor.is_none() {
                 break;
             }
@@ -1565,36 +1701,37 @@ mod tests {
         }
         cancel.commit().unwrap();
 
-        let all: Vec<_> = reader
-            .balance_iter(&owner, None)
+        let asc: Vec<_> = reader
+            .balance_iter(&owner, Bound::Unbounded, Bound::Unbounded, false)
             .unwrap()
             .map(|r| r.unwrap())
             .collect();
-        assert_eq!(all.len(), 2);
-        assert_eq!(all[0].0, a);
-        assert_eq!(all[0].1.coin_balance, 100);
-        assert_eq!(all[1].0, d);
-        assert_eq!(all[1].1.coin_balance, 200);
+        assert_eq!(asc.len(), 2);
+        assert_eq!(asc[0].0, a);
+        assert_eq!(asc[0].1.coin_balance, 100);
+        assert_eq!(asc[1].0, d);
+        assert_eq!(asc[1].1.coin_balance, 200);
 
-        // Resuming from a cursor pointing at a zero-sum row skips directly to D, and
-        // lookahead after D stops without surfacing trailing E.
-        let resumed: Vec<_> = reader
-            .balance_iter(&owner, Some((owner, b)))
+        let desc: Vec<_> = reader
+            .balance_iter(&owner, Bound::Unbounded, Bound::Unbounded, true)
             .unwrap()
             .map(|r| r.unwrap().0)
             .collect();
-        assert_eq!(resumed, vec![d.clone()]);
+        assert_eq!(desc, vec![d.clone(), a.clone()]);
 
-        let mut page1 = reader.balance_iter(&owner, None).unwrap();
-        assert_eq!(page1.next().unwrap().unwrap().0, a);
-        let next_cursor = page1.next().unwrap().unwrap().0;
-        assert_eq!(next_cursor, d);
+        let resumed_excl: Vec<_> = reader
+            .balance_iter(&owner, Bound::Excluded(a), Bound::Unbounded, false)
+            .unwrap()
+            .map(|r| r.unwrap().0)
+            .collect();
+        assert_eq!(resumed_excl, vec![d.clone()]);
 
-        let mut page2 = reader
-            .balance_iter(&owner, Some((owner, next_cursor)))
-            .unwrap();
-        assert_eq!(page2.next().unwrap().unwrap().0, d);
-        assert!(page2.next().is_none());
+        let resumed_zero: Vec<_> = reader
+            .balance_iter(&owner, Bound::Included(b), Bound::Unbounded, false)
+            .unwrap()
+            .map(|r| r.unwrap().0)
+            .collect();
+        assert_eq!(resumed_zero, vec![d]);
     }
 
     #[test]
@@ -1861,5 +1998,339 @@ mod tests {
                 .unwrap(),
             Some((2, s2)),
         );
+    }
+
+    #[test]
+    fn owned_objects_iter_supports_all_owner_kinds_and_reverse_exclusive_bounds() {
+        use crate::schema::object_by_owner::{Key, OwnerKind};
+        use crate::schema::primitives::U64Varint;
+
+        let (_dir, db, reader) = setup();
+        let addr = SuiAddress::from(ObjectID::from_single_byte(0x10));
+        let parent = ObjectID::from_single_byte(0x20);
+        let tag = |s: &str| sui_types::parse_sui_struct_tag(s).unwrap();
+
+        let mut batch = db.batch();
+        let mut put = |kind: OwnerKind, type_: &str, balance: Option<u64>, id: u8, ver: u64| {
+            batch
+                .put(
+                    &reader.schema().object_by_owner,
+                    &Key {
+                        kind,
+                        type_: tag(type_),
+                        inverted_balance: balance.map(|b| !b),
+                        object_id: ObjectID::from_single_byte(id),
+                    },
+                    &U64Varint(ver),
+                )
+                .unwrap();
+        };
+        // Address-owned across gaps for reverse FilteredScan.
+        put(OwnerKind::AddressOwner(addr), "0x1::a::A", None, 1, 10);
+        put(OwnerKind::AddressOwner(addr), "0x2::b::B", None, 2, 11);
+        put(OwnerKind::AddressOwner(addr), "0x3::c::C", None, 3, 12);
+        put(OwnerKind::AddressOwner(addr), "0x4::d::D", None, 4, 13);
+        // Object-owned, shared, immutable.
+        put(
+            OwnerKind::ObjectOwner(parent.into()),
+            "0x1::a::A",
+            None,
+            5,
+            20,
+        );
+        put(OwnerKind::Shared, "0x1::a::A", None, 6, 30);
+        put(OwnerKind::Shared, "0x2::b::B", None, 7, 31);
+        put(OwnerKind::Immutable, "0x1::a::A", None, 8, 40);
+        batch.commit().unwrap();
+
+        // Check each owner kind returns only its own entries.
+        let obj_rows: Vec<_> = reader
+            .owned_objects_iter(
+                OwnedObjectOwner::Object(parent),
+                None,
+                Bound::Unbounded,
+                Bound::Unbounded,
+                false,
+            )
+            .unwrap()
+            .map(|r| r.unwrap().object_id)
+            .collect();
+        assert_eq!(obj_rows, vec![ObjectID::from_single_byte(5)]);
+
+        let shared_rev: Vec<_> = reader
+            .owned_objects_iter(
+                OwnedObjectOwner::Shared,
+                None,
+                Bound::Unbounded,
+                Bound::Unbounded,
+                true,
+            )
+            .unwrap()
+            .map(|r| r.unwrap().object_id)
+            .collect();
+        assert_eq!(
+            shared_rev,
+            vec![ObjectID::from_single_byte(7), ObjectID::from_single_byte(6)]
+        );
+
+        let imm_rows: Vec<_> = reader
+            .owned_objects_iter(
+                OwnedObjectOwner::Immutable,
+                None,
+                Bound::Unbounded,
+                Bound::Unbounded,
+                false,
+            )
+            .unwrap()
+            .map(|r| r.unwrap().object_id)
+            .collect();
+        assert_eq!(imm_rows, vec![ObjectID::from_single_byte(8)]);
+
+        // Reverse filtered scan skipping gaps (`0x1::a` OR `0x4::d` skips `0x2`, `0x3`).
+        let filter = OwnedObjectFilter {
+            terms: vec![
+                vec![sui_types::storage::FilterLiteral {
+                    negated: false,
+                    predicate: "0x1::a".parse().unwrap(),
+                }],
+                vec![sui_types::storage::FilterLiteral {
+                    negated: false,
+                    predicate: "0x4::d".parse().unwrap(),
+                }],
+            ],
+        };
+        let rev_filtered: Vec<_> = reader
+            .owned_objects_iter(
+                OwnedObjectOwner::Address(addr),
+                Some(&filter),
+                Bound::Unbounded,
+                Bound::Unbounded,
+                true,
+            )
+            .unwrap()
+            .map(|r| r.unwrap().object_id)
+            .collect();
+        assert_eq!(
+            rev_filtered,
+            vec![ObjectID::from_single_byte(4), ObjectID::from_single_byte(1)]
+        );
+
+        // Exclusive (after, before) bounds in both ascending and descending order.
+        let k1 = OwnedObjectKey {
+            object_type: tag("0x1::a::A"),
+            balance: None,
+            object_id: ObjectID::from_single_byte(1),
+        };
+        let k4 = OwnedObjectKey {
+            object_type: tag("0x4::d::D"),
+            balance: None,
+            object_id: ObjectID::from_single_byte(4),
+        };
+        let asc_bounded: Vec<_> = reader
+            .owned_objects_iter(
+                OwnedObjectOwner::Address(addr),
+                None,
+                Bound::Excluded(k1.clone()),
+                Bound::Excluded(k4.clone()),
+                false,
+            )
+            .unwrap()
+            .map(|r| r.unwrap().object_id)
+            .collect();
+        assert_eq!(
+            asc_bounded,
+            vec![ObjectID::from_single_byte(2), ObjectID::from_single_byte(3)]
+        );
+        let desc_bounded: Vec<_> = reader
+            .owned_objects_iter(
+                OwnedObjectOwner::Address(addr),
+                None,
+                Bound::Excluded(k1.clone()),
+                Bound::Excluded(k4.clone()),
+                true,
+            )
+            .unwrap()
+            .map(|r| r.unwrap().object_id)
+            .collect();
+        assert_eq!(
+            desc_bounded,
+            vec![ObjectID::from_single_byte(3), ObjectID::from_single_byte(2)]
+        );
+
+        // Inverted bounds (after >= before) yield nothing.
+        assert_eq!(
+            reader
+                .owned_objects_iter(
+                    OwnedObjectOwner::Address(addr),
+                    None,
+                    Bound::Excluded(k4),
+                    Bound::Excluded(k1),
+                    false,
+                )
+                .unwrap()
+                .count(),
+            0
+        );
+    }
+
+    #[test]
+    fn objects_by_type_iter_filters_and_reverses() {
+        use crate::schema::object_by_type::Key;
+        use crate::schema::primitives::U64Varint;
+
+        let (_dir, db, reader) = setup();
+        let tag = |s: &str| sui_types::parse_sui_struct_tag(s).unwrap();
+        let mut batch = db.batch();
+        for (type_, id, ver) in [
+            ("0x1::a::A", 1u8, 10u64),
+            ("0x2::b::B", 2, 20),
+            ("0x3::c::C", 3, 30),
+        ] {
+            batch
+                .put(
+                    &reader.schema().object_by_type,
+                    &Key {
+                        type_: tag(type_),
+                        object_id: ObjectID::from_single_byte(id),
+                    },
+                    &U64Varint(ver),
+                )
+                .unwrap();
+        }
+        batch.commit().unwrap();
+
+        // Unfiltered ascending and descending.
+        let all_asc: Vec<_> = reader
+            .objects_by_type_iter(None, Bound::Unbounded, Bound::Unbounded, false)
+            .unwrap()
+            .map(|r| {
+                let info = r.unwrap();
+                (info.object_id, info.version.value())
+            })
+            .collect();
+        assert_eq!(
+            all_asc,
+            vec![
+                (ObjectID::from_single_byte(1), 10),
+                (ObjectID::from_single_byte(2), 20),
+                (ObjectID::from_single_byte(3), 30),
+            ]
+        );
+
+        // Negated filter skipping 0x2::b::B in reverse.
+        let not_b = OwnedObjectFilter {
+            terms: vec![vec![sui_types::storage::FilterLiteral {
+                negated: true,
+                predicate: "0x2::b::B".parse().unwrap(),
+            }]],
+        };
+        let rev: Vec<_> = reader
+            .objects_by_type_iter(Some(&not_b), Bound::Unbounded, Bound::Unbounded, true)
+            .unwrap()
+            .map(|r| r.unwrap().object_id)
+            .collect();
+        assert_eq!(
+            rev,
+            vec![ObjectID::from_single_byte(3), ObjectID::from_single_byte(1)]
+        );
+    }
+
+    #[test]
+    fn dynamic_field_iter_returns_field_version() {
+        use crate::schema::object_by_owner::{Key, OwnerKind};
+        use crate::schema::primitives::U64Varint;
+
+        let (_dir, db, reader) = setup();
+        let parent = ObjectID::from_single_byte(0xAA);
+        let field_id = ObjectID::from_single_byte(0x01);
+        let mut batch = db.batch();
+        batch
+            .put(
+                &reader.schema().object_by_owner,
+                &Key {
+                    kind: OwnerKind::ObjectOwner(parent.into()),
+                    type_: a_type(),
+                    inverted_balance: None,
+                    object_id: field_id,
+                },
+                &U64Varint(42),
+            )
+            .unwrap();
+        batch.commit().unwrap();
+
+        let entries: Vec<_> = reader
+            .dynamic_field_iter(parent, None, Bound::Unbounded, Bound::Unbounded, false)
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].field_id, field_id);
+        assert_eq!(entries[0].version, SequenceNumber::from_u64(42));
+    }
+
+    #[test]
+    fn dynamic_field_iter_pages_coin_child_exclusively_in_both_directions() {
+        use crate::schema::object_by_owner::{Key, OwnerKind};
+        use crate::schema::primitives::U64Varint;
+
+        let (_dir, db, reader) = setup();
+        let parent = ObjectID::from_single_byte(0xAA);
+        let coin_type: move_core_types::language_storage::StructTag =
+            "0x2::coin::Coin<0x2::sui::SUI>".parse().unwrap();
+        let rich = ObjectID::from_single_byte(0x01);
+        let poor = ObjectID::from_single_byte(0x02);
+
+        let mut batch = db.batch();
+        for (id, balance) in [(rich, 500u64), (poor, 100u64)] {
+            batch
+                .put(
+                    &reader.schema().object_by_owner,
+                    &Key {
+                        kind: OwnerKind::ObjectOwner(parent.into()),
+                        type_: coin_type.clone(),
+                        inverted_balance: Some(!balance),
+                        object_id: id,
+                    },
+                    &U64Varint(7),
+                )
+                .unwrap();
+        }
+        batch.commit().unwrap();
+
+        // Forward exclusive pagination with limit 1 must advance past the coin without looping.
+        let mut seen_asc = Vec::new();
+        let mut after = Bound::Unbounded;
+        for _ in 0..5 {
+            let next = reader
+                .dynamic_field_iter(parent, None, after, Bound::Unbounded, false)
+                .unwrap()
+                .next()
+                .transpose()
+                .unwrap();
+            let Some(entry) = next else {
+                break;
+            };
+            seen_asc.push((entry.field_id, entry.balance));
+            after = Bound::Excluded(entry.into_key());
+        }
+        assert_eq!(seen_asc, vec![(rich, Some(500)), (poor, Some(100))]);
+
+        // Reverse exclusive pagination must visit both coins in reverse balance order.
+        let mut seen_desc = Vec::new();
+        let mut before = Bound::Unbounded;
+        for _ in 0..5 {
+            let next = reader
+                .dynamic_field_iter(parent, None, Bound::Unbounded, before, true)
+                .unwrap()
+                .next()
+                .transpose()
+                .unwrap();
+            let Some(entry) = next else {
+                break;
+            };
+            seen_desc.push((entry.field_id, entry.balance));
+            before = Bound::Excluded(entry.into_key());
+        }
+        assert_eq!(seen_desc, vec![(poor, Some(100)), (rich, Some(500))]);
     }
 }

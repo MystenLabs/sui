@@ -158,6 +158,22 @@ impl fmt::Debug for DbRef {
     }
 }
 
+/// Result of an atomic snapshot lookup on [`Db`].
+#[derive(Debug, Clone)]
+pub enum SnapshotLookup {
+    /// Snapshotting is disabled (`snapshot_capacity == 0`).
+    Disabled,
+    /// Snapshotting is enabled, but no snapshot has been taken yet.
+    Empty,
+    /// The snapshot handle was acquired.
+    Found(Snapshot),
+    /// The requested checkpoint is not held in the snapshot buffer. `retained_range` is the
+    /// configured retained checkpoint range (`lo..=hi`, where `hi` is the highest retained
+    /// snapshot and `lo = hi.saturating_sub(snapshot_capacity - 1)`), observed under the same
+    /// lock as the lookup.
+    NotFound { retained_range: RangeInclusive<u64> },
+}
+
 /// The shared storage backing a [`Db`].
 ///
 /// Held inside an [`Arc`] inside [`Db`] so every clone of the
@@ -436,6 +452,9 @@ impl Db {
     /// capacity is `0`, snapshotting is disabled and this call is a
     /// no-op.
     pub fn take_snapshot(&self, watermark: Watermark) {
+        if self.inner.snapshot_capacity == 0 {
+            return;
+        }
         // The rocksdb snapshot is captured *inside* the lock so that
         // two concurrent `take_snapshot(N)` calls cannot land in
         // checkpoint-N → older-state order: with the capture outside
@@ -494,6 +513,48 @@ impl Db {
         let lo = *snaps.keys().next()?;
         let hi = *snaps.keys().next_back()?;
         Some(lo..=hi)
+    }
+
+    /// Configured retained checkpoint range (`lo..=hi`), where `hi` is the highest snapshot in the
+    /// buffer and `lo = hi.saturating_sub(snapshot_capacity - 1)`. Returns `None` if snapshotting
+    /// is disabled or no snapshots have been taken yet.
+    pub fn retained_snapshot_range(&self) -> Option<RangeInclusive<u64>> {
+        let snaps = self.inner.snapshots.read();
+        let hi = *snaps.keys().next_back()?;
+        let lo = hi.saturating_sub((self.inner.snapshot_capacity - 1) as u64);
+        Some(lo..=hi)
+    }
+
+    /// Atomically acquire the snapshot at `checkpoint`, or report why none was acquired together
+    /// with the configured retained checkpoint range observed under the same lock.
+    pub fn lookup_snapshot(&self, checkpoint: u64) -> SnapshotLookup {
+        if self.inner.snapshot_capacity == 0 {
+            return SnapshotLookup::Disabled;
+        }
+        let snaps = self.inner.snapshots.read();
+        let Some(&hi) = snaps.keys().next_back() else {
+            return SnapshotLookup::Empty;
+        };
+        if let Some(entry) = snaps.get(&checkpoint) {
+            return SnapshotLookup::Found(Snapshot::new(self.clone(), entry.clone()));
+        }
+        let lo = hi.saturating_sub((self.inner.snapshot_capacity - 1) as u64);
+        SnapshotLookup::NotFound {
+            retained_range: lo..=hi,
+        }
+    }
+
+    /// Atomically acquire the snapshot with the highest checkpoint in the buffer, or report
+    /// whether snapshotting is disabled or empty.
+    pub fn lookup_latest_snapshot(&self) -> SnapshotLookup {
+        if self.inner.snapshot_capacity == 0 {
+            return SnapshotLookup::Disabled;
+        }
+        let snaps = self.inner.snapshots.read();
+        let Some((_, entry)) = snaps.iter().next_back() else {
+            return SnapshotLookup::Empty;
+        };
+        SnapshotLookup::Found(Snapshot::new(self.clone(), entry.clone()))
     }
 
     /// Apply caller-supplied runtime-mutable options to `cf_name`.

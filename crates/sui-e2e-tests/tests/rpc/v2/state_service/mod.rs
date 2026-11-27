@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod balance;
+mod checkpoint_reads;
 mod get_coin_info;
 mod list_dynamic_fields;
 mod list_owned_objects;

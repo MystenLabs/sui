@@ -679,7 +679,14 @@ impl ForkStore {
         owner: SuiAddress,
     ) -> StorageResult<Vec<OwnedObjectInfo>> {
         let local_store = self.local_store();
-        let iter = RpcIndexes::owned_objects_iter(local_store.reader(), owner, None, None)?;
+        let iter = RpcIndexes::owned_objects_iter(
+            local_store.reader(),
+            sui_types::storage::OwnedObjectOwner::Address(owner),
+            None,
+            std::ops::Bound::Unbounded,
+            std::ops::Bound::Unbounded,
+            false,
+        )?;
         iter.collect::<Result<Vec<_>, _>>()
             .map_err(|e| StorageError::custom(e.to_string()))
     }
@@ -1248,6 +1255,43 @@ impl RpcStateReader for ForkStore {
         Some(self)
     }
 
+    fn indexes_at_checkpoint(
+        &self,
+        checkpoint: Option<CheckpointSequenceNumber>,
+    ) -> sui_types::storage::CheckpointIndexes {
+        let floor = self.forked_at_checkpoint().saturating_add(1);
+        match self.stock_reader().indexes_at_checkpoint(checkpoint) {
+            sui_types::storage::CheckpointIndexes::Empty
+                if checkpoint.is_some_and(|k| k < floor) =>
+            {
+                sui_types::storage::CheckpointIndexes::Unavailable {
+                    retained_range: floor..=floor,
+                }
+            }
+            sui_types::storage::CheckpointIndexes::Unavailable { retained_range } => {
+                let hi = *retained_range.end();
+                let lo = (*retained_range.start()).max(floor).min(hi);
+                sui_types::storage::CheckpointIndexes::Unavailable {
+                    retained_range: lo..=hi,
+                }
+            }
+            other => other,
+        }
+    }
+
+    fn retained_checkpoint_indexes_range(
+        &self,
+    ) -> Option<std::ops::RangeInclusive<CheckpointSequenceNumber>> {
+        self.stock_reader()
+            .retained_checkpoint_indexes_range()
+            .map(|range| {
+                let hi = *range.end();
+                let floor = self.forked_at_checkpoint().saturating_add(1);
+                let lo = (*range.start()).max(floor).min(hi);
+                lo..=hi
+            })
+    }
+
     /// Resolve layouts using packages from committed `sui-rpc-store` data.
     fn layout_package_store(&self) -> Box<dyn BackingPackageStore + Send + Sync + '_> {
         self.stock_reader().layout_package_store()
@@ -1297,23 +1341,42 @@ impl RpcIndexes for ForkStore {
 
     fn owned_objects_iter(
         &self,
-        owner: SuiAddress,
+        owner: sui_types::storage::OwnedObjectOwner,
         filter: Option<&OwnedObjectFilter>,
-        cursor: Option<OwnedObjectInfo>,
+        lower: std::ops::Bound<sui_types::storage::OwnedObjectKey>,
+        upper: std::ops::Bound<sui_types::storage::OwnedObjectKey>,
+        descending: bool,
     ) -> StorageResult<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>>
     {
         self.stock_reader()
-            .owned_objects_iter(owner, filter, cursor)
+            .owned_objects_iter(owner, filter, lower, upper, descending)
+    }
+
+    fn objects_by_type_iter(
+        &self,
+        filter: Option<&OwnedObjectFilter>,
+        lower: std::ops::Bound<sui_types::storage::ObjectByTypeKey>,
+        upper: std::ops::Bound<sui_types::storage::ObjectByTypeKey>,
+        descending: bool,
+    ) -> StorageResult<
+        Box<
+            dyn Iterator<Item = Result<sui_types::storage::ObjectByTypeInfo, TypedStoreError>> + '_,
+        >,
+    > {
+        self.stock_reader()
+            .objects_by_type_iter(filter, lower, upper, descending)
     }
 
     fn dynamic_field_iter(
         &self,
         parent: ObjectID,
         filter: Option<&DynamicFieldFilter>,
-        cursor: Option<DynamicFieldKey>,
+        lower: std::ops::Bound<DynamicFieldKey>,
+        upper: std::ops::Bound<DynamicFieldKey>,
+        descending: bool,
     ) -> StorageResult<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>> {
         self.stock_reader()
-            .dynamic_field_iter(parent, filter, cursor)
+            .dynamic_field_iter(parent, filter, lower, upper, descending)
     }
 
     fn get_coin_info(&self, coin_type: &StructTag) -> StorageResult<Option<CoinInfo>> {
@@ -1331,9 +1394,12 @@ impl RpcIndexes for ForkStore {
     fn balance_iter(
         &self,
         owner: &SuiAddress,
-        cursor: Option<(SuiAddress, StructTag)>,
+        lower: std::ops::Bound<StructTag>,
+        upper: std::ops::Bound<StructTag>,
+        descending: bool,
     ) -> StorageResult<BalanceIterator<'_>> {
-        self.stock_reader().balance_iter(owner, cursor)
+        self.stock_reader()
+            .balance_iter(owner, lower, upper, descending)
     }
 
     fn package_versions_iter(

@@ -286,7 +286,7 @@ impl Schema for RpcStoreSchema {
     }
 }
 
-impl SchemaAtSnapshot for RpcStoreSchema {
+impl<R: Reader> SchemaAtSnapshot for RpcStoreSchema<R> {
     type At = RpcStoreSchema<Snapshot>;
     fn at(&self, snap: &Snapshot) -> Self::At {
         RpcStoreSchema {

@@ -447,10 +447,7 @@ async fn test_indexer_populates_derived_indexes_for_local_execution() {
     let reader = harness.context.services().reader();
 
     // Recipient: the transferred coin appears in the owner index...
-    let recipient_infos: Vec<_> = RpcIndexes::owned_objects_iter(&reader, recipient, None, None)
-        .expect("owned-object iterator should build")
-        .map(|result| result.expect("owned-object entry should decode"))
-        .collect();
+    let recipient_infos = crate::test_support::owned_object_infos(&reader, recipient, None);
     assert_eq!(recipient_infos.len(), 1);
     assert_eq!(recipient_infos[0].owner, recipient);
     assert_eq!(recipient_infos[0].balance, Some(transfer_amount));
@@ -462,10 +459,7 @@ async fn test_indexer_populates_derived_indexes_for_local_execution() {
     assert_eq!(balance.coin_balance, transfer_amount);
 
     // Sender: the mutated gas coin is re-indexed at its post-execution version.
-    let sender_infos: Vec<_> = RpcIndexes::owned_objects_iter(&reader, harness.sender, None, None)
-        .expect("owned-object iterator should build")
-        .map(|result| result.expect("owned-object entry should decode"))
-        .collect();
+    let sender_infos = crate::test_support::owned_object_infos(&reader, harness.sender, None);
     let gas_info = sender_infos
         .iter()
         .find(|info| info.object_id == harness.gas_object.id())
