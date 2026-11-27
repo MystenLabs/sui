@@ -275,6 +275,51 @@ async fn test_passkey_authenticator() {
 }
 
 #[tokio::test]
+async fn test_passkey_in_multisig_gated_by_verify_params() {
+    let origin = Url::parse("https://www.sui.io").unwrap();
+    let request = make_credential_creation_option(&origin);
+    let response = create_credential_and_sign_test_tx(&origin, request).await;
+
+    let passkey = PasskeyAuthenticator::new_for_testing(
+        response.authenticator_data,
+        response.client_data_json,
+        Signature::from_bytes(&response.user_sig_bytes).unwrap(),
+    )
+    .unwrap();
+    let multisig_pk = MultiSigPublicKey::new(vec![passkey.get_pk().unwrap()], vec![1], 1).unwrap();
+    let multisig_address = SuiAddress::from(&multisig_pk);
+    let sig = GenericSignature::MultiSig(
+        MultiSig::combine(
+            vec![GenericSignature::PasskeyAuthenticator(passkey)],
+            multisig_pk,
+        )
+        .unwrap(),
+    );
+    let verify = |params: &VerifyParams| {
+        sig.verify_authenticator(
+            &response.intent_msg,
+            multisig_address,
+            0,
+            params,
+            Arc::new(VerifiedDigestCache::new_empty()),
+        )
+    };
+
+    // The default accepts a passkey member. With the flag off it is rejected.
+    assert!(verify(&VerifyParams::default()).is_ok());
+    let off = VerifyParams {
+        accept_passkey_in_multisig: false,
+        ..Default::default()
+    };
+    let err = verify(&off).unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("Passkey sig not supported inside multisig"),
+        "{err}"
+    );
+}
+
+#[tokio::test]
 async fn test_passkey_fails_invalid_json() {
     let origin = Url::parse("https://www.sui.io").unwrap();
     let request = make_credential_creation_option(&origin);

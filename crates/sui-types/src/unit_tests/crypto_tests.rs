@@ -241,14 +241,14 @@ fn mldsa65_standalone_gated_by_verify_params() {
         )
     };
 
-    // Default params match a network without the flag: rejected before the verifier runs.
-    let err = verify(&VerifyParams::default()).unwrap_err();
+    // Flag off, as on a network without `mldsa65_auth`: rejected before the verifier runs.
+    let err = verify(&VerifyParams::default().with_mldsa65_in_multisig(false)).unwrap_err();
     assert!(
         err.to_string()
             .contains("ML-DSA-65 signatures not supported"),
         "{err}"
     );
-    assert!(verify(&VerifyParams::default().with_mldsa65_in_multisig(true)).is_ok());
+    assert!(verify(&VerifyParams::default()).is_ok());
 
     // Classical schemes are untouched by the gate.
     let ed = SuiKeyPair::Ed25519(get_key_pair().1);
