@@ -1665,6 +1665,31 @@ impl SuiTransactionBlock {
     }
 }
 
+// A base64 ML-DSA-65 signature is 4,412 chars, against 88 for Ed25519. The table is as wide as
+// its widest cell, so for that scheme the table shows only the ends. `--json` prints all of it.
+const ABBREVIATED_SIGNATURE_EDGE: usize = 16;
+
+fn signature_for_table(tx_sig: &GenericSignature) -> String {
+    let encoded = match tx_sig {
+        Signature(sig) => Base64::from_bytes(sig.signature_bytes()).encoded(),
+        _ => Base64::from_bytes(tx_sig.as_ref()).encoded(),
+    };
+    let uses_mldsa65 = match tx_sig {
+        GenericSignature::MultiSig(multisig) => multisig.uses_mldsa65(),
+        GenericSignature::MultiSigLegacy(multisig) => multisig.uses_mldsa65(),
+        _ => tx_sig.is_mldsa65(),
+    };
+    if !uses_mldsa65 {
+        return encoded;
+    }
+    format!(
+        "{}...{} ({} chars, add --json for the full signature)",
+        &encoded[..ABBREVIATED_SIGNATURE_EDGE],
+        &encoded[encoded.len() - ABBREVIATED_SIGNATURE_EDGE..],
+        encoded.len()
+    )
+}
+
 impl Display for SuiTransactionBlock {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut builder = TableBuilder::default();
@@ -1672,13 +1697,7 @@ impl Display for SuiTransactionBlock {
         builder.push_record(vec![format!("{}", self.data)]);
         builder.push_record(vec!["Signatures:".to_string()]);
         for tx_sig in &self.tx_signatures {
-            builder.push_record(vec![format!(
-                "   {}\n",
-                match tx_sig {
-                    Signature(sig) => Base64::from_bytes(sig.signature_bytes()).encoded(),
-                    _ => Base64::from_bytes(tx_sig.as_ref()).encoded(), // the signatures for multisig and zklogin are not suited to be parsed out. they should be interpreted as a whole
-                }
-            )]);
+            builder.push_record(vec![format!("   {}\n", signature_for_table(tx_sig))]);
         }
 
         let mut table = builder.build();
@@ -2671,10 +2690,12 @@ mod tests {
     use std::sync::Arc;
 
     use async_trait::async_trait;
+    use fastcrypto::traits::Signer;
     use move_core_types::account_address::AccountAddress;
     use move_core_types::ident_str;
     use sui_package_resolver::Package;
     use sui_package_resolver::error::Error as PackageResolverError;
+    use sui_types::crypto::{SignatureScheme, SuiKeyPair};
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
     use super::*;
@@ -2721,6 +2742,32 @@ mod tests {
         assert_eq!(
             input.value().to_json_value(),
             serde_json::json!(vec![0u8; 32]),
+        );
+    }
+
+    #[test]
+    fn table_abbreviates_only_mldsa65_signatures() {
+        let sign = |scheme: SignatureScheme| -> sui_types::crypto::Signature {
+            let mut key = vec![scheme.flag()];
+            key.extend([7; 32]);
+            SuiKeyPair::from_bytes(&key).unwrap().sign(b"msg")
+        };
+
+        let ed25519 = sign(SignatureScheme::ED25519);
+        assert_eq!(
+            signature_for_table(&Signature(ed25519.clone())),
+            Base64::from_bytes(ed25519.signature_bytes()).encoded()
+        );
+
+        let mldsa65 = sign(SignatureScheme::MLDSA65);
+        let encoded = Base64::from_bytes(mldsa65.signature_bytes()).encoded();
+        assert_eq!(
+            signature_for_table(&Signature(mldsa65.clone())),
+            format!(
+                "{}...{} (4412 chars, add --json for the full signature)",
+                &encoded[..16],
+                &encoded[4396..]
+            )
         );
     }
 }
