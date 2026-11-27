@@ -403,6 +403,10 @@ impl From<SuiPublicKey> for PublicKey {
                 hex_bytes: Hex::from_bytes(&k.0),
                 curve_type: CurveType::ZkLogin, // inaccurate but added for completeness.
             },
+            SuiPublicKey::ZkLoginV2(k) => PublicKey {
+                hex_bytes: Hex::from_bytes(&k.0),
+                curve_type: CurveType::ZkLoginV2,
+            },
             SuiPublicKey::Passkey(k) => PublicKey {
                 hex_bytes: Hex::from_bytes(&k.0),
                 curve_type: CurveType::Secp256r1,
@@ -433,6 +437,7 @@ pub enum CurveType {
     Secp256r1,
     ZkLogin,
     MLDSA65,
+    ZkLoginV2,
 }
 
 impl From<CurveType> for SignatureScheme {
@@ -442,6 +447,7 @@ impl From<CurveType> for SignatureScheme {
             CurveType::Edwards25519 => SignatureScheme::ED25519,
             CurveType::Secp256r1 => SignatureScheme::Secp256r1,
             CurveType::ZkLogin => SignatureScheme::ZkLoginAuthenticator,
+            CurveType::ZkLoginV2 => SignatureScheme::ZkLoginAuthenticatorV2,
             CurveType::MLDSA65 => SignatureScheme::MLDSA65,
         }
     }

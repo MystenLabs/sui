@@ -20,8 +20,8 @@ use crate::coin_reservation::{
 use crate::committee::{Committee, EpochId, ProtocolVersion};
 use crate::crypto::{
     AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature, AuthorityStrongQuorumSignInfo,
-    DefaultHash, Ed25519SuiSignature, EmptySignInfo, RandomnessRound, Signature, Signer,
-    SuiSignatureInner, ToFromBytes, default_hash,
+    CompressedSignature, DefaultHash, Ed25519SuiSignature, EmptySignInfo, PublicKey,
+    RandomnessRound, Signature, Signer, SuiSignatureInner, ToFromBytes, default_hash,
 };
 use crate::digests::{AdditionalConsensusStateDigest, SenderSignedDataDigest};
 use crate::digests::{ChainIdentifier, ConsensusCommitDigest};
@@ -36,6 +36,7 @@ use crate::messages_consensus::{
     ConsensusCommitPrologue, ConsensusCommitPrologueV2, ConsensusCommitPrologueV3,
     ConsensusCommitPrologueV4, ConsensusDeterminedVersionAssignments,
 };
+use crate::multisig::WeightUnit;
 use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{GenericSignature, VerifyParams};
@@ -43,6 +44,7 @@ use crate::signature_verification::{
     VerifiedDigestCache, verify_sender_signed_data_message_signatures,
 };
 use crate::type_input::TypeInput;
+use crate::zk_login_authenticator::{zklogin_mode_allows_v1, zklogin_mode_allows_v2};
 use crate::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
     SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
@@ -4240,6 +4242,45 @@ fn mldsa65_multisig_unsupported() -> SuiError {
     .into()
 }
 
+fn zklogin_multisig_unsupported(version: &str) -> SuiError {
+    SuiErrorKind::UserInputError {
+        error: UserInputError::Unsupported(format!(
+            "zkLogin {version} multisig is not enabled on this network"
+        )),
+    }
+    .into()
+}
+
+/// Rejects multisigs that contain a zkLogin signature or committee key for a
+/// version disabled by the circuit mode, even if that committee member did not sign.
+fn check_multisig_zklogin_mode(
+    mode: u64,
+    keys: &[(PublicKey, WeightUnit)],
+    signatures: &[CompressedSignature],
+) -> SuiResult {
+    if !zklogin_mode_allows_v1(mode)
+        && (keys
+            .iter()
+            .any(|(key, _)| matches!(key, PublicKey::ZkLogin(_)))
+            || signatures
+                .iter()
+                .any(|sig| matches!(sig, CompressedSignature::ZkLogin(_))))
+    {
+        return Err(zklogin_multisig_unsupported("v1"));
+    }
+    if !zklogin_mode_allows_v2(mode)
+        && (keys
+            .iter()
+            .any(|(key, _)| matches!(key, PublicKey::ZkLoginV2(_)))
+            || signatures
+                .iter()
+                .any(|sig| matches!(sig, CompressedSignature::ZkLoginV2(_))))
+    {
+        return Err(zklogin_multisig_unsupported("v2"));
+    }
+    Ok(())
+}
+
 impl SenderSignedData {
     pub fn new(tx_data: TransactionData, tx_signatures: Vec<GenericSignature>) -> Self {
         Self(SizeOneVec::new(SenderSignedTransaction {
@@ -4349,12 +4390,35 @@ impl SenderSignedData {
                     if multisig.uses_mldsa65() && !config.mldsa65_auth() {
                         return Err(mldsa65_multisig_unsupported());
                     }
+                    check_multisig_zklogin_mode(
+                        config.zklogin_circuit_mode(),
+                        multisig.get_pk().pubkeys(),
+                        multisig.get_sigs(),
+                    )?;
                 }
                 GenericSignature::ZkLoginAuthenticator(_) => {
+                    if !zklogin_mode_allows_v1(config.zklogin_circuit_mode()) {
+                        return Err(SuiErrorKind::UserInputError {
+                            error: UserInputError::Unsupported(
+                                "zkLogin v1 is not enabled on this network".to_string(),
+                            ),
+                        }
+                        .into());
+                    }
                     if !config.zklogin_auth() {
                         return Err(SuiErrorKind::UserInputError {
                             error: UserInputError::Unsupported(
                                 "zklogin is not enabled on this network".to_string(),
+                            ),
+                        }
+                        .into());
+                    }
+                }
+                GenericSignature::ZkLoginAuthenticatorV2(_) => {
+                    if !zklogin_mode_allows_v2(config.zklogin_circuit_mode()) {
+                        return Err(SuiErrorKind::UserInputError {
+                            error: UserInputError::Unsupported(
+                                "zkLogin v2 is not enabled on this network".to_string(),
                             ),
                         }
                         .into());
@@ -4385,6 +4449,11 @@ impl SenderSignedData {
                     if multisig.uses_mldsa65() && !config.mldsa65_auth() {
                         return Err(mldsa65_multisig_unsupported());
                     }
+                    check_multisig_zklogin_mode(
+                        config.zklogin_circuit_mode(),
+                        multisig.get_pk().pubkeys(),
+                        multisig.get_sigs(),
+                    )?;
                 }
             }
         }

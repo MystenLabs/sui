@@ -78,11 +78,11 @@ pub(crate) async fn verify_signature(
         .map_err(upcast)?
         .context("Failed to fetch current Epoch")?;
 
-    let sig @ GenericSignature::ZkLoginAuthenticator(_) = GenericSignature::from_bytes(&signature)
-        .map_err(|_| bad_user_input(Error::BadSignature))?
-    else {
+    let sig = GenericSignature::from_bytes(&signature)
+        .map_err(|_| bad_user_input(Error::BadSignature))?;
+    if !sig.is_zklogin() {
         return Err(bad_user_input(Error::NotZkLogin));
-    };
+    }
 
     let jwks = fetch_jwks(ctx, scope).await.map_err(upcast)?;
 

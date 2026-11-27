@@ -450,6 +450,7 @@ const MAINNET_USDB: &str =
 // Version 145: Reject secp256r1 public keys in the SEC1 compact encoding.
 //              Create the FreezeList system object.
 //              Enable coin regulation.
+//              Enable zkLogin v2 authenticator on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -612,8 +613,7 @@ struct FeatureFlags {
     // Enable zklogin auth
     #[serde(skip_serializing_if = "is_false")]
     zklogin_auth: bool,
-    // zkLogin circuit verify mode: 0 = accept v1 circuit proofs only, 1 = try the v2
-    // circuit first and fall back to v1 (migration phase), 2 = accept v2 circuit proofs only.
+    // Mode 0 enables zklogin v1 authenticator only. Mode 1 enables both v1 and v2.
     #[serde(skip_serializing_if = "is_zero")]
     zklogin_circuit_mode: u64,
     // How we order transactions coming out of consensus before sending to execution.
@@ -2526,8 +2526,6 @@ impl ProtocolConfig {
         &self.feature_flags.zklogin_supported_providers
     }
 
-    /// zkLogin circuit verify mode: 0 = v1 circuit only, 1 = v2 circuit with
-    /// fallback to v1, 2 = v2 circuit only.
     pub fn zklogin_circuit_mode(&self) -> u64 {
         self.feature_flags.zklogin_circuit_mode
     }
@@ -4936,7 +4934,6 @@ impl ProtocolConfig {
                     cfg.scratch_exists_with_type_type_cost = Some(1);
                     let max_commands = cfg.max_programmable_tx_commands() as u64;
                     cfg.max_scratch_pad_size = Some(16 * max_commands);
-                    // Verify with the v2 then v1 for devnet.
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.zklogin_circuit_mode = 1;
                     }

@@ -701,13 +701,13 @@ move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack"
 move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 move-trace-format = { path = "external-crates/move/crates/move-trace-format" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a7e5734c6078ec8cc8cfb57ace0364a591f42894" }
-fastcrypto-threshold = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a7e5734c6078ec8cc8cfb57ace0364a591f42894" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a7e5734c6078ec8cc8cfb57ace0364a591f42894", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a7e5734c6078ec8cc8cfb57ace0364a591f42894", features = [
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "fdc4ffed1683aee4d75e34799c9eafd5caba54df" }
+fastcrypto-threshold = { git = "https://github.com/MystenLabs/fastcrypto", rev = "fdc4ffed1683aee4d75e34799c9eafd5caba54df" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "fdc4ffed1683aee4d75e34799c9eafd5caba54df", package = "fastcrypto-zkp" }
+fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "fdc4ffed1683aee4d75e34799c9eafd5caba54df", features = [
   "experimental",
 ] }
-fastcrypto-pq = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a7e5734c6078ec8cc8cfb57ace0364a591f42894" }
+fastcrypto-pq = { git = "https://github.com/MystenLabs/fastcrypto", rev = "fdc4ffed1683aee4d75e34799c9eafd5caba54df" }
 passkey-types = { version = "0.4.0" }
 passkey-client = { version = "0.4.0" }
 passkey-authenticator = { version = "0.4.0" }
@@ -729,9 +729,9 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "845a9b5aab
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "845a9b5aab1f8b78fb67c0e8e1998cb2e6a4d72e" }
 
 # core-types from the new sdk for use in gRPC
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "93037228c400de175455e0611e35fc20ef6c3e27", features = [ "hash", "serde" ] }
-sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "93037228c400de175455e0611e35fc20ef6c3e27", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin", "mldsa65" ] }
-sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "93037228c400de175455e0611e35fc20ef6c3e27", features = [ "unstable" ] }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "db8623b8b03b510c48c488a7208964a0f71440d6", features = [ "hash", "serde" ] }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "db8623b8b03b510c48c488a7208964a0f71440d6", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin", "mldsa65" ] }
+sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "db8623b8b03b510c48c488a7208964a0f71440d6", features = [ "unstable" ] }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }

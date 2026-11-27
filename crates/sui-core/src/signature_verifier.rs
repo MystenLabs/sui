@@ -63,8 +63,8 @@ struct ZkLoginParams {
     pub supported_providers: Vec<OIDCProvider>,
     /// The environment (prod/test) the code runs in. It decides which verifying key to use in fastcrypto.
     pub env: ZkLoginEnv,
-    /// zkLogin circuit verify mode: 0 = v1 circuit only, 1 = v2 circuit with
-    /// fallback to v1, 2 = v2 circuit only.
+    /// Mode 0 enables only zklogin v1 authenticator (`0x05`).
+    /// Mode 1 enables both v1 and v2 authenticator (`0x08`).
     pub zklogin_circuit_mode: u64,
     /// Flag to determine whether legacy address (derived from padded address seed) should be verified.
     pub verify_legacy_zklogin_address: bool,

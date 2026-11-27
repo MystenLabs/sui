@@ -1721,6 +1721,7 @@ impl From<crate::crypto::SignatureScheme> for SignatureScheme {
             S::BLS12381 => Self::Bls12381,
             S::MultiSig => Self::Multisig,
             S::ZkLoginAuthenticator => Self::Zklogin,
+            S::ZkLoginAuthenticatorV2 => Self::ZkloginV2,
             S::PasskeyAuthenticator => Self::Passkey,
             S::MLDSA65 => Self::Mldsa65,
         }
@@ -1780,7 +1781,7 @@ impl From<&crate::crypto::PublicKey> for MultisigMemberPublicKey {
             | crate::crypto::PublicKey::MLDSA65(_) => {
                 message.public_key = Some(value.as_ref().to_vec().into());
             }
-            crate::crypto::PublicKey::ZkLogin(z) => {
+            crate::crypto::PublicKey::ZkLogin(z) | crate::crypto::PublicKey::ZkLoginV2(z) => {
                 message.zklogin = Some(z.into());
             }
         }
@@ -1841,33 +1842,37 @@ impl From<&crate::crypto::CompressedSignature> for MultisigMemberSignature {
         let scheme = match value {
             crate::crypto::CompressedSignature::Ed25519(b) => {
                 message.signature = Some(b.0.to_vec().into());
-                Some(SignatureScheme::Ed25519)
+                SignatureScheme::Ed25519
             }
             crate::crypto::CompressedSignature::Secp256k1(b) => {
                 message.signature = Some(b.0.to_vec().into());
-                Some(SignatureScheme::Secp256k1)
+                SignatureScheme::Secp256k1
             }
             crate::crypto::CompressedSignature::Secp256r1(b) => {
                 message.signature = Some(b.0.to_vec().into());
-                Some(SignatureScheme::Secp256r1)
+                SignatureScheme::Secp256r1
             }
             crate::crypto::CompressedSignature::ZkLogin(_z) => {
                 //TODO
-                Some(SignatureScheme::Zklogin)
+                SignatureScheme::Zklogin
+            }
+            crate::crypto::CompressedSignature::ZkLoginV2(z) => {
+                if let Ok(authenticator) = sui_sdk_types::ZkLoginAuthenticatorV2::from_bytes(&z.0) {
+                    message.zklogin_v2 = Some((&authenticator).into());
+                }
+                SignatureScheme::ZkloginV2
             }
             crate::crypto::CompressedSignature::Passkey(_p) => {
                 //TODO
-                Some(SignatureScheme::Passkey)
+                SignatureScheme::Passkey
             }
             crate::crypto::CompressedSignature::MLDSA65(b) => {
                 message.signature = Some(b.0.to_vec().into());
-                Some(SignatureScheme::Mldsa65)
+                SignatureScheme::Mldsa65
             }
         };
 
-        if let Some(scheme) = scheme {
-            message.set_scheme(scheme);
-        }
+        message.set_scheme(scheme);
         message
     }
 }
@@ -1946,6 +1951,14 @@ impl Merge<&crate::signature::GenericSignature> for UserSignature {
                     self.signature = Some(Signature::Zklogin(z.into()));
                 }
                 Some(SignatureScheme::Zklogin)
+            }
+            crate::signature::GenericSignature::ZkLoginAuthenticatorV2(z) => {
+                if mask.contains(Self::ZKLOGIN_V2_FIELD)
+                    && let Ok(authenticator) = sui_sdk_types::ZkLoginAuthenticatorV2::try_from(z)
+                {
+                    self.signature = Some(Signature::ZkloginV2((&authenticator).into()));
+                }
+                Some(SignatureScheme::ZkloginV2)
             }
             crate::signature::GenericSignature::PasskeyAuthenticator(p) => {
                 if mask.contains(Self::PASSKEY_FIELD) {
@@ -3728,6 +3741,51 @@ impl TryFrom<&ObjectSet> for crate::full_checkpoint_content::ObjectSet {
 
 #[cfg(test)]
 mod tests {
+    use super::{FieldMaskTree, Merge, UserSignature};
+    use crate::crypto::Signature;
+    use crate::multisig::{MultiSig, MultiSigPublicKey};
+    use crate::signature::GenericSignature;
+    use crate::utils::load_zklogin_v2_test_vector;
+    use crate::zk_login_authenticator::ZkLoginAuthenticatorV2;
+    use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
+
+    #[test]
+    fn zklogin_v2_structured_proto() {
+        use sui_rpc::proto::sui::rpc::v2::user_signature::Signature as ProtoSignature;
+
+        let (signer, public_key, inputs, _, max_epoch) = load_zklogin_v2_test_vector();
+        let intent = IntentMessage::new(
+            Intent::personal_message(),
+            PersonalMessage { message: vec![] },
+        );
+        let signature = Signature::new_secure(&intent, &signer);
+        let authenticator = ZkLoginAuthenticatorV2::new(inputs, max_epoch, signature).unwrap();
+        let standalone = GenericSignature::from(authenticator);
+        let committee = MultiSigPublicKey::new(vec![public_key], vec![1], 1).unwrap();
+        let multisig = MultiSig::combine(vec![standalone.clone()], committee).unwrap();
+
+        for (signature, field) in [
+            (standalone, UserSignature::ZKLOGIN_V2_FIELD.name),
+            (
+                GenericSignature::MultiSig(multisig),
+                UserSignature::MULTISIG_FIELD.name,
+            ),
+        ] {
+            let mut mask = FieldMaskTree::default();
+            mask.add_field_path("scheme");
+            mask.add_field_path(field);
+            let proto = UserSignature::merge_from(&signature, &mask);
+            assert!(proto.bcs.is_none());
+            if let Some(ProtoSignature::Multisig(multisig)) = &proto.signature {
+                assert!(multisig.signatures[0].zklogin_v2.is_some());
+                assert!(multisig.signatures[0].signature.is_none());
+            }
+            assert_eq!(
+                sui_sdk_types::UserSignature::try_from(&proto).unwrap(),
+                sui_sdk_types::UserSignature::from_bytes(signature.as_ref()).unwrap(),
+            );
+        }
+    }
 
     #[test]
     fn freeze_list_create_conversions() {

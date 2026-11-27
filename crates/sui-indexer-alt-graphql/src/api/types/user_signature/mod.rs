@@ -13,7 +13,7 @@ use sui_types::signature::GenericSignature;
 use crate::api::scalars::base64::Base64;
 use crate::api::types::user_signature::multisig::MultisigSignature;
 use crate::api::types::user_signature::passkey::PasskeySignature;
-use crate::api::types::user_signature::zklogin::ZkLoginSignature;
+use crate::api::types::user_signature::zklogin::{ZkLoginSignature, ZkLoginV2Signature};
 
 /// The structured details of a signature, varying by scheme.
 #[derive(Union, Clone)]
@@ -25,6 +25,7 @@ pub(crate) enum SignatureScheme {
     ZkLogin(ZkLoginSignature),
     Passkey(PasskeySignature),
     MlDsa65(MlDsa65Signature),
+    ZkLoginV2(ZkLoginV2Signature),
 }
 
 /// A user signature for a transaction.
@@ -52,6 +53,11 @@ impl UserSignature {
                 .map(|ms| SignatureScheme::Multisig((&ms).into())),
             GenericSignature::ZkLoginAuthenticator(z) => {
                 Some(SignatureScheme::ZkLogin(ZkLoginSignature {
+                    native: z.clone(),
+                }))
+            }
+            GenericSignature::ZkLoginAuthenticatorV2(z) => {
+                Some(SignatureScheme::ZkLoginV2(ZkLoginV2Signature {
                     native: z.clone(),
                 }))
             }

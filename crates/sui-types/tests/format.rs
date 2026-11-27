@@ -108,13 +108,26 @@ fn get_registry() -> Result<Registry> {
         SuiKeyPair::Secp256k1(get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1);
     let kp3: SuiKeyPair =
         SuiKeyPair::Secp256r1(get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1);
-    let pk_zklogin = PublicKey::ZkLogin(
-        ZkLoginPublicIdentifier::new(
-            &OIDCProvider::Twitch.get_config().iss,
-            &Bn254FrElement::from_str(DEFAULT_ADDRESS_SEED).unwrap(),
-        )
-        .unwrap(),
+    let zklogin_identifier = ZkLoginPublicIdentifier::new(
+        &OIDCProvider::Twitch.get_config().iss,
+        &Bn254FrElement::from_str(DEFAULT_ADDRESS_SEED).unwrap(),
+    )
+    .unwrap();
+    let pk_zklogin = PublicKey::ZkLogin(zklogin_identifier.clone());
+
+    let pk_v2 =
+        MultiSigPublicKey::new(vec![PublicKey::ZkLoginV2(zklogin_identifier)], vec![1], 1).unwrap();
+    let sig_v2 = sui_types::crypto::CompressedSignature::ZkLoginV2(
+        sui_types::crypto::ZkLoginAuthenticatorAsBytes(vec![
+            sui_types::zk_login_authenticator::ZkLoginAuthenticatorV2::FLAG,
+        ]),
     );
+    tracer
+        .trace_value(
+            &mut samples,
+            &MultiSig::insecure_new(vec![sig_v2], 1, pk_v2),
+        )
+        .unwrap();
 
     let multisig_pk = MultiSigPublicKey::new(
         vec![kp1.public(), kp2.public(), kp3.public(), pk_zklogin],

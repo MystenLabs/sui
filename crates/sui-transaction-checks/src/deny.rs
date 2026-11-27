@@ -139,23 +139,25 @@ fn check_disabled_features(
         "Gasless transactions are temporarily disabled"
     );
 
-    tx_signatures.iter().try_for_each(|s| {
-        if let GenericSignature::ZkLoginAuthenticator(z) = s {
-            deny_if_true!(
-                filter_config.zklogin_sig_disabled(),
-                "zkLogin authenticator is temporarily disabled"
-            );
-            deny_if_true!(
-                filter_config.zklogin_disabled_providers().contains(
-                    &OIDCProvider::from_iss(z.get_iss())
-                        .map_err(|_| SuiErrorKind::UnexpectedMessage(z.get_iss().to_string()))?
-                        .to_string()
-                ),
-                "zkLogin OAuth provider is temporarily disabled"
-            )
-        }
-        Ok(())
-    })?;
+    for signature in tx_signatures {
+        let iss = match signature {
+            GenericSignature::ZkLoginAuthenticator(z) => z.get_iss(),
+            GenericSignature::ZkLoginAuthenticatorV2(z) => z.get_iss(),
+            _ => continue,
+        };
+        deny_if_true!(
+            filter_config.zklogin_sig_disabled(),
+            "zkLogin authenticator is temporarily disabled"
+        );
+        deny_if_true!(
+            filter_config.zklogin_disabled_providers().contains(
+                &OIDCProvider::from_iss(iss)
+                    .map_err(|_| SuiErrorKind::UnexpectedMessage(iss.to_string()))?
+                    .to_string()
+            ),
+            "zkLogin OAuth provider is temporarily disabled"
+        );
+    }
 
     if !filter_config.package_publish_disabled() && !filter_config.package_upgrade_disabled() {
         return Ok(());
