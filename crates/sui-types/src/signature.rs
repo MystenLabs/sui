@@ -49,11 +49,11 @@ pub struct VerifyParams {
     pub secp256r1_strict_public_keys: bool,
 }
 
-/// For verifiers with no protocol config, like keytool. Every bool flag is
-/// on, as on mainnet, plus ML-DSA-65, so a pass means the signature is valid,
-/// not that a network accepts the scheme. A zkLogin proof still cannot verify
-/// with these alone, since the JWK map is empty. Validators take the flags
-/// from the protocol config.
+/// For verifiers with no protocol config, like keytool. Every bool flag but
+/// `secp256r1_strict_public_keys` is on, as on mainnet, plus ML-DSA-65, so a
+/// pass means the signature is valid, not that a network accepts the scheme.
+/// A zkLogin proof still cannot verify with these alone, since the JWK map is
+/// empty. Validators take the flags from the protocol config.
 impl Default for VerifyParams {
     fn default() -> Self {
         Self {
@@ -69,6 +69,8 @@ impl Default for VerifyParams {
             zklogin_max_epoch_upper_bound_delta: None,
             additional_multisig_checks: true,
             validate_zklogin_public_identifier: true,
+            // Off: keys accepted before the flag must still verify.
+            secp256r1_strict_public_keys: false,
         }
     }
 }

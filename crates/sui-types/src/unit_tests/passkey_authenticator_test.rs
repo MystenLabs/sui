@@ -13,9 +13,8 @@ use crate::{
     base_types::{ObjectID, SuiAddress, dbg_addr},
     crypto::{PublicKey, Signature, SignatureScheme},
     error::SuiError,
-    multisig::{MultiSig, MultiSigPublicKey},
     object::Object,
-    signature::{GenericSignature, VerifyParams},
+    signature::GenericSignature,
     signature_verification::VerifiedDigestCache,
     transaction::{TEST_ONLY_GAS_UNIT_FOR_TRANSFER, TransactionData},
 };

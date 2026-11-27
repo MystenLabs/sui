@@ -302,6 +302,7 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             zklogin_max_epoch_upper_bound_delta: config.zklogin_max_epoch_upper_bound_delta(),
             additional_multisig_checks: config.additional_multisig_checks(),
             validate_zklogin_public_identifier: config.validate_zklogin_public_identifier(),
+            secp256r1_strict_public_keys: config.secp256r1_strict_public_keys(),
             ..Default::default()
         }
     }
