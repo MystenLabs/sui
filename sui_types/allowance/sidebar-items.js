@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ALLOWANCE_MODULE_NAME","ALLOWANCE_STRUCT_NAME","ALLOWANCE_WITHDRAWAL_STRUCT_NAME","RESOLVED_ALLOWANCE_WITHDRAWAL_STRUCT"],"enum":["RateLimit","Window"],"fn":["parse_allowance_object"],"struct":["Allowance","ResolvedAllowance","Settings"]};

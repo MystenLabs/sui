@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PopAction"],"fn":["gas_dedup_keys","owned_object_conflict_error"],"struct":["AdmissionQueueContext","AdmissionQueueHandle","AdmissionQueueManager","AdmissionQueueMetrics","InsertOutcome","PriorityAdmissionQueue","QueueEntry"],"trait":["AdmissionQueueEntry"],"type":["DedupKey"]};

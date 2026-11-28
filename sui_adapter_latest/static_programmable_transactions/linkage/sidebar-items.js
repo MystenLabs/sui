@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["config","resolution","resolved_linkage","single_linkage"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["CHECKPOINT","DYNAMIC_FIELD","EPOCH","EVENT","EXECUTE_TRANSACTION","OBJECT","OBJECT_REMOVAL","OWNED_OBJECT","PROTOCOL_CONFIG","TRANSACTION"],"fn":["validate_field_mask","validate_read_mask"]};

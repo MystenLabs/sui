@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["stake_subsidy_v1","storage_fund_v1","sui_system_state_inner_v1","sui_system_state_inner_v2","system_parameters_v1","system_parameters_v2","system_state_output_objects","validator_set_v1"]};

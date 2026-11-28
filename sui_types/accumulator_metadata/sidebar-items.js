@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ACCUMULATOR_METADATA_MODULE","ACCUMULATOR_OBJECT_COUNT_KEY_STRUCT_NAME","RECORD_ACCUMULATOR_OBJECT_CHANGES_FUNC"],"fn":["get_accumulator_object_count"],"struct":["AccumulatorObjectCountKey"]};

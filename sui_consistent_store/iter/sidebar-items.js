@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["next_prefix"],"struct":["Iter","RevIter"]};

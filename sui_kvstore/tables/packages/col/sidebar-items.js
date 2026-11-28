@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["CP","IS_SYSTEM_PACKAGE","PACKAGE_ID"]};

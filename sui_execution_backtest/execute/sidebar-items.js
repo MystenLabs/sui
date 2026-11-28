@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["GasPlan"],"fn":["collect_struct_types","derive_on_chain_status","error_kind_name","execute_one_transaction","log_divergence","plan_gas","rewrite_coin_reservations","run_execution"],"struct":["CheckpointStats","OnChainStatus","PreparedTx","TriageCounts"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_layout_from_struct_tag","into_struct_layout"],"trait":["LayoutResolver"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["affected_address","affected_object","emit_module","event_stream_head","event_type","move_call","package_write","sender"]};

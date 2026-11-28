@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["NAME"],"enum":["ObjectRow","ObjectVersionRow"],"fn":["decode","decode_key","decode_tombstone","decode_version_row","encode","encode_key","encode_key_upper_bound","encode_tombstone","is_live"],"mod":["col"],"struct":["ObjectTombstone"]};
