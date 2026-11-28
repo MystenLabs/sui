@@ -97,13 +97,13 @@ pub fn proposers_metric_label(
     }
 }
 
-const DEFAULT_SIGNAL_WINDOW_COMMITS: usize = 300;
+const DEFAULT_SIGNAL_WINDOW_COMMITS: u64 = 300;
 const DEFAULT_SIGNAL_MIN_EXCESS_COPIES_PER_COMMIT: u64 = 2;
 /// Twenty windows, about 7 minutes on mainnet. Mainnet duplication is continuous, so
 /// each de-escalation lets a burst of copies through before the signal escalates again.
 /// A long dwell makes this rare. Its cost is that staggering stays on for the dwell
 /// after an attack stops.
-const DEFAULT_SIGNAL_EXIT_DWELL_COMMITS: usize = 20 * DEFAULT_SIGNAL_WINDOW_COMMITS;
+const DEFAULT_SIGNAL_EXIT_DWELL_COMMITS: u64 = 20 * DEFAULT_SIGNAL_WINDOW_COMMITS;
 
 /// Number of signal bands above "off".
 const NUM_SIGNAL_BANDS: usize = 2;
@@ -145,11 +145,43 @@ const DEFAULT_SIGNAL_BANDS: [SignalBand; NUM_SIGNAL_BANDS] = [
     },
 ];
 
+/// How the signal measures the length of its window and of its exit dwell.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SignalClock {
+    /// Each commit advances the clock by one, so lengths are counts of commits. Protocol
+    /// versions up to 144 use this clock.
+    Commits,
+    /// Each commit advances the clock by the milliseconds from the previous commit's
+    /// consensus timestamp to its own, so lengths are durations of consensus time.
+    /// Commit timestamps are the same on every validator, so validators agree on the
+    /// distance between any two commits' positions. The clock itself starts at zero when
+    /// a validator starts, so its value is not comparable across validators. Commit
+    /// timestamps do not decrease, and `record_commit` measures each gap from the largest
+    /// timestamp so far in case one does. A gap longer than `max_commit_gap_ms` advances
+    /// the clock by `max_commit_gap_ms` only. After a consensus stall the first commit
+    /// therefore adds at most `max_commit_gap_ms` to the window's span and to the exit
+    /// dwell. `assert_valid` requires the cap to be below the window and the dwell, so
+    /// that this commit cannot empty the window or run a whole dwell on its own.
+    CommitTimeMs { max_commit_gap_ms: u64 },
+}
+
+impl SignalClock {
+    /// How far a commit advances the clock, given the milliseconds from the previous
+    /// commit's timestamp to its own.
+    fn advance(&self, gap_ms: u64) -> u64 {
+        match self {
+            Self::Commits => 1,
+            Self::CommitTimeMs { max_commit_gap_ms } => gap_ms.min(*max_commit_gap_ms),
+        }
+    }
+}
+
 /// Thresholds of the duplication signal, which turns staggering on and off.
 ///
-/// The signal looks at the last `window_commits` commits. Its ratio is the number of
-/// excess duplicate copies divided by the number of unique user transactions in that
-/// window. The ratio exceeds 1.0 when copies outnumber unique transactions.
+/// The signal looks at the commits of the last `window` units of `clock`. Its ratio is
+/// the number of excess duplicate copies divided by the number of unique user
+/// transactions in that window. The ratio exceeds 1.0 when copies outnumber unique
+/// transactions.
 ///
 /// The signal has a level: 0 is off, and level `b > 0` is `bands[b - 1]`. It escalates
 /// to the highest band whose enter ratio the window meets. Leaving level 0 also
@@ -157,19 +189,20 @@ const DEFAULT_SIGNAL_BANDS: [SignalBand; NUM_SIGNAL_BANDS] = [
 /// has a small denominator, and this floor keeps that noise from turning staggering on.
 ///
 /// A window whose consensus commits hold fewer than `min_consensus_user_txns` user
-/// transactions, duplicates included, is a low-volume window. The signal does not escalate on a low-volume
-/// window, whatever its ratio, and it counts the window towards the exit dwell. This
-/// limits staggering to periods of high consensus load. Both floors are sums over the
-/// window, so one large commit passes them only if it carries a full window's worth of
-/// transactions.
+/// transactions, duplicates included, is a low-volume window. The signal does not
+/// escalate on a low-volume window, whatever its ratio, and it counts the window towards
+/// the exit dwell. This limits staggering to periods of high consensus load. Both floors
+/// are sums over the window, so one large commit passes them only if it carries a full
+/// window's worth of transactions. With the time clock the window has a fixed duration,
+/// so the floors are fixed rates per second whatever the commit rate is.
 ///
 /// Staggering suppresses the duplication that the window measures. The ratio therefore
 /// drops soon after activation even when the attack continues, and an exit ratio alone
-/// cannot keep the band active. The signal de-escalates only after
-/// `exit_dwell_commits` consecutive commits, each with a ratio below the active band's
-/// exit ratio or a low-volume window. This wait is the exit dwell. The signal
-/// then drops to the highest band whose exit ratio the ratio still meets, or to off. A
-/// dwell that ends on a low-volume window drops it to off.
+/// cannot keep the band active. The signal de-escalates only after `exit_dwell` units of
+/// `clock` in which every commit has a ratio below the active band's exit ratio or a
+/// low-volume window. This wait is the exit dwell. The signal then drops to the highest
+/// band whose exit ratio the ratio still meets, or to off. A dwell that ends on a
+/// low-volume window drops it to off.
 ///
 /// The inputs come from the commit history and the protocol config, so all validators
 /// compute the same level. A restarted validator starts at level 0. It catches up
@@ -177,12 +210,15 @@ const DEFAULT_SIGNAL_BANDS: [SignalBand; NUM_SIGNAL_BANDS] = [
 /// and enter ratios.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SignalConfig {
-    pub window_commits: usize,
+    pub clock: SignalClock,
+    /// The window length, in units of `clock`.
+    pub window: u64,
     pub min_excess_copies: u64,
     /// The window must hold this many user transactions, duplicates included. Like
     /// `min_excess_copies`, it is a total over the window. Zero disables the check.
     pub min_consensus_user_txns: u64,
-    pub exit_dwell_commits: usize,
+    /// The exit dwell, in units of `clock`.
+    pub exit_dwell: u64,
     /// The bands, weakest first. `assert_valid` checks the order.
     pub bands: [SignalBand; NUM_SIGNAL_BANDS],
 }
@@ -190,38 +226,25 @@ pub struct SignalConfig {
 impl Default for SignalConfig {
     fn default() -> Self {
         Self {
-            window_commits: DEFAULT_SIGNAL_WINDOW_COMMITS,
+            clock: SignalClock::Commits,
+            window: DEFAULT_SIGNAL_WINDOW_COMMITS,
             min_excess_copies: DEFAULT_SIGNAL_MIN_EXCESS_COPIES_PER_COMMIT
-                * DEFAULT_SIGNAL_WINDOW_COMMITS as u64,
+                * DEFAULT_SIGNAL_WINDOW_COMMITS,
             min_consensus_user_txns: 0,
-            exit_dwell_commits: DEFAULT_SIGNAL_EXIT_DWELL_COMMITS,
+            exit_dwell: DEFAULT_SIGNAL_EXIT_DWELL_COMMITS,
             bands: DEFAULT_SIGNAL_BANDS,
         }
     }
 }
 
 impl SignalConfig {
-    /// Reads the thresholds from the protocol config. A protocol version without a value
-    /// uses the default for that field.
+    /// Reads the thresholds from the protocol config. A version that sets
+    /// `staggered_submission_signal_window_ms` uses the time clock and must set the other
+    /// time thresholds. Otherwise the signal uses the commit clock. With
+    /// `staggered_submission_signal` on, a commit-clock version must set the window, the
+    /// excess-copy floor and the exit dwell. Any other missing value uses the default.
     pub fn from_protocol_config(config: &ProtocolConfig) -> Self {
         let defaults = Self::default();
-        let window_commits = config
-            .staggered_submission_signal_window_commits_as_option()
-            .map_or(defaults.window_commits, |commits| commits as usize)
-            .max(1);
-        let min_excess_copies = config
-            .staggered_submission_signal_min_excess_copies_per_commit_as_option()
-            .map_or(defaults.min_excess_copies, |per_commit| {
-                per_commit.saturating_mul(window_commits as u64)
-            });
-        let min_consensus_user_txns = config
-            .staggered_submission_signal_min_consensus_user_transactions_per_commit_as_option()
-            .map_or(defaults.min_consensus_user_txns, |per_commit| {
-                per_commit.saturating_mul(window_commits as u64)
-            });
-        let exit_dwell_commits = config
-            .staggered_submission_signal_exit_dwell_commits_as_option()
-            .map_or(defaults.exit_dwell_commits, |commits| commits as usize);
         let ratio =
             |bps: Option<u64>, default: f64| bps.map_or(default, |bps| bps as f64 / 10_000.0);
         let bands = [
@@ -248,15 +271,134 @@ impl SignalConfig {
                 max_delay: defaults.bands[1].max_delay,
             },
         ];
-        let signal_config = Self {
+        // A version that mixes the two sets would have one set ignored without notice.
+        let [
             window_commits,
-            min_excess_copies,
-            min_consensus_user_txns,
-            exit_dwell_commits,
-            bands,
+            min_excess_per_commit,
+            min_consensus_per_commit,
+            dwell_commits,
+        ] = [
+            config.staggered_submission_signal_window_commits_as_option(),
+            config.staggered_submission_signal_min_excess_copies_per_commit_as_option(),
+            config
+                .staggered_submission_signal_min_consensus_user_transactions_per_commit_as_option(),
+            config.staggered_submission_signal_exit_dwell_commits_as_option(),
+        ];
+        let commit_fields_set = [
+            window_commits,
+            min_excess_per_commit,
+            min_consensus_per_commit,
+            dwell_commits,
+        ]
+        .iter()
+        .any(Option::is_some);
+        let time_fields_set = [
+            config.staggered_submission_signal_min_excess_copies_per_second_as_option(),
+            config
+                .staggered_submission_signal_min_consensus_user_transactions_per_second_as_option(),
+            config.staggered_submission_signal_exit_dwell_ms_as_option(),
+            config.staggered_submission_signal_max_commit_gap_ms_as_option(),
+        ]
+        .iter()
+        .any(Option::is_some);
+        let signal_config = match config.staggered_submission_signal_window_ms_as_option() {
+            Some(window_ms) => {
+                assert!(
+                    !commit_fields_set,
+                    "the time clock needs the commit-based signal fields unset"
+                );
+                Self::with_time_clock(config, window_ms, bands)
+            }
+            None => {
+                assert!(
+                    !time_fields_set,
+                    "the time-based signal fields need staggered_submission_signal_window_ms"
+                );
+                // A version with the signal on must state its thresholds instead of
+                // running the compiled defaults.
+                assert!(
+                    !config.staggered_submission_signal()
+                        || [window_commits, min_excess_per_commit, dwell_commits]
+                            .iter()
+                            .all(Option::is_some),
+                    "the staggered_submission_signal flag needs \
+                     staggered_submission_signal_window_ms or the commit-based window, \
+                     excess-copy floor and exit dwell"
+                );
+                Self::with_commit_clock(config, bands)
+            }
         };
         signal_config.assert_valid();
         signal_config
+    }
+
+    /// Uses the commit clock. The protocol config gives the floors per commit, and the
+    /// signal compares the window's totals with these values times the window.
+    fn with_commit_clock(config: &ProtocolConfig, bands: [SignalBand; NUM_SIGNAL_BANDS]) -> Self {
+        let defaults = Self::default();
+        let window = config
+            .staggered_submission_signal_window_commits_as_option()
+            .unwrap_or(defaults.window);
+        let min_excess_copies = config
+            .staggered_submission_signal_min_excess_copies_per_commit_as_option()
+            .map_or(defaults.min_excess_copies, |per_commit| {
+                per_commit.saturating_mul(window)
+            });
+        let min_consensus_user_txns = config
+            .staggered_submission_signal_min_consensus_user_transactions_per_commit_as_option()
+            .map_or(defaults.min_consensus_user_txns, |per_commit| {
+                per_commit.saturating_mul(window)
+            });
+        let exit_dwell = config
+            .staggered_submission_signal_exit_dwell_commits_as_option()
+            .unwrap_or(defaults.exit_dwell);
+        Self {
+            clock: SignalClock::Commits,
+            window,
+            min_excess_copies,
+            min_consensus_user_txns,
+            exit_dwell,
+            bands,
+        }
+    }
+
+    /// Uses the time clock. The protocol config gives the floors per second, and the
+    /// signal compares the window's totals with these values times the window duration.
+    fn with_time_clock(
+        config: &ProtocolConfig,
+        window_ms: u64,
+        bands: [SignalBand; NUM_SIGNAL_BANDS],
+    ) -> Self {
+        let per_window = |per_second: u64| per_second.saturating_mul(window_ms) / 1_000;
+        let max_commit_gap_ms = config
+            .staggered_submission_signal_max_commit_gap_ms_as_option()
+            .expect("the time clock needs staggered_submission_signal_max_commit_gap_ms");
+        let min_excess_copies = per_window(
+            config
+                .staggered_submission_signal_min_excess_copies_per_second_as_option()
+                .expect(
+                    "the time clock needs staggered_submission_signal_min_excess_copies_per_second",
+                ),
+        );
+        let min_consensus_user_txns = per_window(
+            config
+                .staggered_submission_signal_min_consensus_user_transactions_per_second_as_option()
+                .expect(
+                    "the time clock needs \
+                     staggered_submission_signal_min_consensus_user_transactions_per_second",
+                ),
+        );
+        let exit_dwell = config
+            .staggered_submission_signal_exit_dwell_ms_as_option()
+            .expect("the time clock needs staggered_submission_signal_exit_dwell_ms");
+        Self {
+            clock: SignalClock::CommitTimeMs { max_commit_gap_ms },
+            window: window_ms,
+            min_excess_copies,
+            min_consensus_user_txns,
+            exit_dwell,
+            bands,
+        }
     }
 
     /// Panics unless the bands are ordered weakest first. `record_commit` relies on this
@@ -265,9 +407,24 @@ impl SignalConfig {
     fn assert_valid(&self) {
         // De-escalation from band 0 would underflow with a zero dwell.
         assert!(
-            self.exit_dwell_commits > 0,
-            "signal exit dwell must be at least one commit: {self:?}"
+            self.exit_dwell > 0,
+            "signal exit dwell must be positive: {self:?}"
         );
+        assert!(self.window > 0, "signal window must be positive: {self:?}");
+        if let SignalClock::CommitTimeMs { max_commit_gap_ms } = self.clock {
+            // With a zero cap the clock never advances, so commits leave the window only
+            // through its count limit and the dwell never ends.
+            assert!(
+                max_commit_gap_ms > 0,
+                "signal max commit gap must be positive: {self:?}"
+            );
+            // The cap exists so that one commit cannot empty the window or end the
+            // dwell.
+            assert!(
+                max_commit_gap_ms < self.window && max_commit_gap_ms < self.exit_dwell,
+                "signal max commit gap must be below the window and the exit dwell: {self:?}"
+            );
+        }
         for (i, band) in self.bands.iter().enumerate() {
             assert!(
                 band.exit_ratio > 0.0,
@@ -307,6 +464,10 @@ pub struct CommitSignal {
     pub previous_band: usize,
     /// Commits spent at `previous_band`, including this one.
     pub commits_in_previous_band: u64,
+    /// Milliseconds of consensus time spent at `previous_band`, up to this commit. The
+    /// gap cap does not apply, so this measures time even when the signal counts
+    /// commits.
+    pub ms_in_previous_band: u64,
     pub duplication_ratio: f64,
     /// User transactions in the window, duplicates included, compared against
     /// `min_consensus_user_txns`.
@@ -391,18 +552,25 @@ impl WindowCounts {
 /// State of the duplication signal. It is kept apart from `active` so that transitions
 /// are logged and counted even when the signal is not enabled.
 struct SignalState {
-    /// The counts of each commit in the window, newest last.
-    window: VecDeque<WindowCounts>,
+    /// The clock position and counts of each commit in the window, newest last.
+    window: VecDeque<(u64, WindowCounts)>,
     /// The sum of `window`. `record_commit` updates it as commits enter and leave the
     /// window.
     window_sum: WindowCounts,
     /// The signal level: 0 is off, and `b > 0` is `SignalConfig::bands[b - 1]`.
     band: usize,
-    /// Consecutive commits with the ratio below the active band's exit ratio or with a
-    /// low-volume window. Any other commit resets it, and so does every transition.
-    below_exit_commits: usize,
+    /// The position of the signal clock, which the newest commit set.
+    clock: u64,
+    /// The largest consensus timestamp of the commits recorded so far.
+    last_commit_timestamp_ms: Option<u64>,
+    /// How far the clock has advanced over consecutive commits with the ratio below the
+    /// active band's exit ratio or with a low-volume window. Any other commit resets it,
+    /// and so does every transition.
+    below_exit: u64,
     /// Commits since the last transition.
     commits_in_band: u64,
+    /// Milliseconds of consensus time since the last transition.
+    ms_in_band: u64,
 }
 
 impl StaggeredSubmission {
@@ -416,8 +584,11 @@ impl StaggeredSubmission {
                 window: VecDeque::new(),
                 window_sum: WindowCounts::default(),
                 band: 0,
-                below_exit_commits: 0,
+                clock: 0,
+                last_commit_timestamp_ms: None,
+                below_exit: 0,
                 commits_in_band: 0,
+                ms_in_band: 0,
             }),
         }
     }
@@ -442,11 +613,13 @@ impl StaggeredSubmission {
     }
 
     /// Adds one commit to the signal window and updates the signal level.
-    /// `excess_copies` counts the copies of unrestricted transactions beyond their paid
-    /// allowance, `unique_user_txns` counts the unique user transactions in the commit,
-    /// and `consensus_user_txns` counts every user transaction in the commit, unique
-    /// transactions and duplicates of any kind. When the signal is enabled, a transition also sets
-    /// staggering on or off and sets the hold cap to the new band's.
+    /// `commit_timestamp_ms` is the commit's consensus timestamp, which the time clock
+    /// and the band duration read. `excess_copies` counts the copies of unrestricted
+    /// transactions beyond their paid allowance, `unique_user_txns` counts the unique
+    /// user transactions in the commit, and `consensus_user_txns` counts every user
+    /// transaction in the commit, unique transactions and duplicates of any kind. When
+    /// the signal is enabled, a transition also sets staggering on or off and sets the
+    /// hold cap to the new band's.
     ///
     /// Under a sustained attack the signal still cycles, because staggering suppresses
     /// the duplication it measures. The ratio falls, the dwell runs out, and the signal
@@ -455,12 +628,13 @@ impl StaggeredSubmission {
     /// staggering keeps duplicates out of commits, so a peak made of duplicates turns
     /// into a low-volume window once staggering is on.
     ///
-    /// Without `min_consensus_user_txns` the signal escalates again within a few commits. With it,
-    /// the window total must first climb back over `min_consensus_user_txns`, which takes a share of
-    /// a window that depends on how far the attack exceeds the floor. The copies in
-    /// those commits are not staggered.
+    /// Without `min_consensus_user_txns` the signal escalates again within a few
+    /// commits. With it, the window total must first climb back over
+    /// `min_consensus_user_txns`, which takes a share of a window that depends on how
+    /// far the attack exceeds the floor. The copies in those commits are not staggered.
     pub fn record_commit(
         &self,
+        commit_timestamp_ms: u64,
         excess_copies: u64,
         unique_user_txns: u64,
         consensus_user_txns: u64,
@@ -469,15 +643,37 @@ impl StaggeredSubmission {
         let mut guard = self.signal.lock();
         let signal = &mut *guard;
         signal.commits_in_band += 1;
+        // The first commit of a signal has no gap.
+        let gap_ms = signal
+            .last_commit_timestamp_ms
+            .map_or(0, |previous| commit_timestamp_ms.saturating_sub(previous));
+        let advance = config.clock.advance(gap_ms);
+        signal.clock += advance;
+        signal.ms_in_band += gap_ms;
+        // Commit timestamps do not decrease. Keeping the maximum means that a timestamp
+        // that did decrease could not count the same time twice.
+        signal.last_commit_timestamp_ms = signal
+            .last_commit_timestamp_ms
+            .max(Some(commit_timestamp_ms));
         let commit = WindowCounts {
             excess: excess_copies,
             unique: unique_user_txns,
             consensus_user_txns,
         };
-        signal.window.push_back(commit);
+        signal.window.push_back((signal.clock, commit));
         signal.window_sum.add(&commit);
-        while signal.window.len() > config.window_commits {
-            let oldest = signal.window.pop_front().expect("window is not empty");
+        // `window > 0`, so the newest commit always stays. Commits with equal timestamps
+        // do not advance the time clock, so the window also keeps at most `window`
+        // commits. With the commit clock the two limits are the same. With the time
+        // clock the count limit is not a tuned threshold: it only bounds the window's
+        // memory while commit timestamps do not change, and it binds only at more than
+        // one commit per millisecond. `position` is
+        // at most `clock`, so the subtraction cannot underflow.
+        while let Some(&(position, oldest)) = signal.window.front()
+            && (signal.clock - position >= config.window
+                || signal.window.len() as u64 > config.window)
+        {
+            signal.window.pop_front();
             signal.window_sum.sub(&oldest);
         }
         let WindowCounts {
@@ -508,12 +704,12 @@ impl StaggeredSubmission {
         // not one band down. Dropping one band at a time would make a collapsed ratio
         // wait out a second dwell in a lower band.
         let below_exit = current_band > 0 && band_ratio < config.bands[current_band - 1].exit_ratio;
-        signal.below_exit_commits = if below_exit {
-            signal.below_exit_commits + 1
+        signal.below_exit = if below_exit {
+            signal.below_exit + advance
         } else {
             0
         };
-        let de_escalate = signal.below_exit_commits >= config.exit_dwell_commits;
+        let de_escalate = signal.below_exit >= config.exit_dwell;
         let new_band = if escalate {
             target_band
         } else if de_escalate {
@@ -534,10 +730,12 @@ impl StaggeredSubmission {
 
         let transition = (new_band != current_band).then_some(new_band);
         let commits_in_previous_band = signal.commits_in_band;
+        let ms_in_previous_band = signal.ms_in_band;
         if let Some(band) = transition {
             signal.band = band;
-            signal.below_exit_commits = 0;
+            signal.below_exit = 0;
             signal.commits_in_band = 0;
+            signal.ms_in_band = 0;
             if self.enabled {
                 if band > 0 {
                     // Set the cap before activating so that no submission uses the
@@ -555,10 +753,13 @@ impl StaggeredSubmission {
                 "Duplication signal moved to {} (from {}): window duplication ratio \
                  {duplication_ratio:.4} ({excess} excess copies over {total} unique user \
                  transactions), {window_consensus_user_txns} user transactions in the window \
-                 against a floor of {}{}",
+                 against a floor of {}, clock {:?}, window {}, exit dwell {}{}",
                 signal_band_label(band),
                 signal_band_label(current_band),
                 config.min_consensus_user_txns,
+                config.clock,
+                config.window,
+                config.exit_dwell,
                 if self.enabled {
                     ""
                 } else {
@@ -570,6 +771,7 @@ impl StaggeredSubmission {
             transition,
             previous_band: current_band,
             commits_in_previous_band,
+            ms_in_previous_band,
             duplication_ratio,
             window_consensus_user_txns,
         }
@@ -578,17 +780,6 @@ impl StaggeredSubmission {
     #[cfg(test)]
     pub fn set_params_for_testing(&self, params: StaggerParams) {
         *self.params.write() = params;
-    }
-
-    /// Calls `record_commit` for a commit whose only transactions are its unique
-    /// transactions and its excess copies.
-    #[cfg(test)]
-    fn record(&self, excess_copies: u64, unique_user_txns: u64) -> CommitSignal {
-        self.record_commit(
-            excess_copies,
-            unique_user_txns,
-            excess_copies + unique_user_txns,
-        )
     }
 
     /// What this validator does with a group of user transactions — a single transaction
@@ -1027,6 +1218,8 @@ pub(crate) fn stagger_proposer_slots(order: &[AuthorityName], committee: &Commit
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
 
     /// Fixed thresholds for the tests, so that protocol config changes do not change the
@@ -1047,12 +1240,85 @@ mod tests {
         },
     ];
 
-    fn test_signal_config() -> SignalConfig {
+    /// Milliseconds between the consensus timestamps of consecutive test commits.
+    const TEST_COMMIT_INTERVAL_MS: u64 = 100;
+    const TEST_MAX_COMMIT_GAP_MS: u64 = 10 * TEST_COMMIT_INTERVAL_MS;
+
+    impl StaggeredSubmission {
+        /// Calls `record_commit` for a commit whose only transactions are its unique
+        /// transactions and its excess copies.
+        fn record(&self, excess_copies: u64, unique_user_txns: u64) -> CommitSignal {
+            self.record_txns(
+                excess_copies,
+                unique_user_txns,
+                excess_copies + unique_user_txns,
+            )
+        }
+
+        /// Calls `record_commit` for a commit `TEST_COMMIT_INTERVAL_MS` after the
+        /// previous one.
+        fn record_txns(
+            &self,
+            excess_copies: u64,
+            unique_user_txns: u64,
+            consensus_user_txns: u64,
+        ) -> CommitSignal {
+            self.record_txns_after(
+                TEST_COMMIT_INTERVAL_MS,
+                excess_copies,
+                unique_user_txns,
+                consensus_user_txns,
+            )
+        }
+
+        /// Calls `record_commit` for a commit `interval_ms` after the largest timestamp
+        /// recorded so far. The first commit is at timestamp 0.
+        fn record_txns_after(
+            &self,
+            interval_ms: u64,
+            excess_copies: u64,
+            unique_user_txns: u64,
+            consensus_user_txns: u64,
+        ) -> CommitSignal {
+            let timestamp_ms = self
+                .signal
+                .lock()
+                .last_commit_timestamp_ms
+                .map_or(0, |previous| previous + interval_ms);
+            self.record_commit(
+                timestamp_ms,
+                excess_copies,
+                unique_user_txns,
+                consensus_user_txns,
+            )
+        }
+    }
+
+    /// The signal clock of a test config. The time clock's window and dwell span the
+    /// same number of test commits as the commit clock's, so a test that records
+    /// commits `TEST_COMMIT_INTERVAL_MS` apart sees the same transitions on both.
+    #[derive(Debug, Clone, Copy)]
+    enum TestClock {
+        Commits,
+        Time,
+    }
+
+    fn test_signal_config(clock: TestClock) -> SignalConfig {
+        let (clock, unit) = match clock {
+            TestClock::Commits => (SignalClock::Commits, 1),
+            TestClock::Time => (
+                SignalClock::CommitTimeMs {
+                    max_commit_gap_ms: TEST_MAX_COMMIT_GAP_MS,
+                },
+                TEST_COMMIT_INTERVAL_MS,
+            ),
+        };
         SignalConfig {
-            window_commits: TEST_SIGNAL_WINDOW_COMMITS,
+            clock,
+            window: TEST_SIGNAL_WINDOW_COMMITS as u64 * unit,
             min_excess_copies: TEST_SIGNAL_MIN_EXCESS_COPIES,
             min_consensus_user_txns: 0,
-            exit_dwell_commits: TEST_SIGNAL_EXIT_DWELL_COMMITS,
+            exit_dwell: TEST_SIGNAL_EXIT_DWELL_COMMITS as u64 * unit,
             bands: TEST_SIGNAL_BANDS,
         }
     }
@@ -1060,10 +1326,10 @@ mod tests {
     /// The volume floor is 100 user transactions per window commit.
     const TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS: u64 = 100 * TEST_SIGNAL_WINDOW_COMMITS as u64;
 
-    fn test_signal_config_with_volume_floor() -> SignalConfig {
+    fn test_signal_config_with_volume_floor(clock: TestClock) -> SignalConfig {
         SignalConfig {
             min_consensus_user_txns: TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS,
-            ..test_signal_config()
+            ..test_signal_config(clock)
         }
     }
 
@@ -1072,7 +1338,8 @@ mod tests {
         use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 
         SignalConfig::default().assert_valid();
-        test_signal_config().assert_valid();
+        test_signal_config(TestClock::Commits).assert_valid();
+        test_signal_config(TestClock::Time).assert_valid();
         for chain in [Chain::Mainnet, Chain::Testnet, Chain::Unknown] {
             for version in ProtocolVersion::MIN.as_u64()..=ProtocolVersion::MAX.as_u64() {
                 let protocol_config =
@@ -1085,7 +1352,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "enter ratio must exceed")]
     fn signal_config_rejects_misordered_bands() {
-        let mut config = test_signal_config();
+        let mut config = test_signal_config(TestClock::Commits);
         config.bands.swap(0, 1);
         config.assert_valid();
     }
@@ -1093,7 +1360,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "exit ratio must be below")]
     fn signal_config_rejects_exit_ratio_above_enter_ratio() {
-        let mut config = test_signal_config();
+        let mut config = test_signal_config(TestClock::Commits);
         config.bands[0].exit_ratio = config.bands[0].enter_ratio;
         config.assert_valid();
     }
@@ -1101,17 +1368,310 @@ mod tests {
     #[test]
     #[should_panic(expected = "max delay must not be below")]
     fn signal_config_rejects_decreasing_max_delay() {
-        let mut config = test_signal_config();
+        let mut config = test_signal_config(TestClock::Commits);
         config.bands[1].max_delay = config.bands[0].max_delay / 2;
         config.assert_valid();
     }
 
     #[test]
-    #[should_panic(expected = "exit dwell must be at least one commit")]
+    #[should_panic(expected = "exit dwell must be positive")]
     fn signal_config_rejects_zero_exit_dwell() {
-        let mut config = test_signal_config();
-        config.exit_dwell_commits = 0;
+        let mut config = test_signal_config(TestClock::Commits);
+        config.exit_dwell = 0;
         config.assert_valid();
+    }
+
+    #[test]
+    #[should_panic(expected = "max commit gap must be positive")]
+    fn signal_config_rejects_zero_max_commit_gap() {
+        let mut config = test_signal_config(TestClock::Time);
+        config.clock = SignalClock::CommitTimeMs {
+            max_commit_gap_ms: 0,
+        };
+        config.assert_valid();
+    }
+
+    /// Runs `from_protocol_config` and returns its panic message, if it panicked.
+    fn from_protocol_config_panic(config: &sui_protocol_config::ProtocolConfig) -> Option<String> {
+        let panic =
+            std::panic::catch_unwind(|| SignalConfig::from_protocol_config(config)).err()?;
+        Some(
+            panic
+                .downcast_ref::<&str>()
+                .map(|message| message.to_string())
+                .or_else(|| panic.downcast_ref::<String>().cloned())
+                .unwrap_or_default(),
+        )
+    }
+
+    #[test]
+    fn signal_config_rejects_mixed_clock_fields() {
+        use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+
+        type Set = fn(&mut ProtocolConfig);
+        let commit_fields: [(&str, Set); 4] = [
+            ("window_commits", |config| {
+                config.set_staggered_submission_signal_window_commits_for_testing(600)
+            }),
+            ("min_excess_copies_per_commit", |config| {
+                config.set_staggered_submission_signal_min_excess_copies_per_commit_for_testing(2)
+            }),
+            ("min_consensus_user_transactions_per_commit", |config| {
+                config
+                    .set_staggered_submission_signal_min_consensus_user_transactions_per_commit_for_testing(
+                        1_000,
+                    )
+            }),
+            ("exit_dwell_commits", |config| {
+                config.set_staggered_submission_signal_exit_dwell_commits_for_testing(6_000)
+            }),
+        ];
+        let time_fields: [(&str, Set); 4] = [
+            ("min_excess_copies_per_second", |config| {
+                config.set_staggered_submission_signal_min_excess_copies_per_second_for_testing(30)
+            }),
+            ("min_consensus_user_transactions_per_second", |config| {
+                config
+                    .set_staggered_submission_signal_min_consensus_user_transactions_per_second_for_testing(
+                        12_000,
+                    )
+            }),
+            ("exit_dwell_ms", |config| {
+                config.set_staggered_submission_signal_exit_dwell_ms_for_testing(400_000)
+            }),
+            ("max_commit_gap_ms", |config| {
+                config.set_staggered_submission_signal_max_commit_gap_ms_for_testing(5_000)
+            }),
+        ];
+        for (field, set) in commit_fields {
+            let mut config = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Mainnet);
+            set(&mut config);
+            let message = from_protocol_config_panic(&config).expect(field);
+            assert!(
+                message.contains("needs the commit-based signal fields unset"),
+                "{field}: {message}"
+            );
+        }
+        for (field, set) in time_fields {
+            let mut config =
+                ProtocolConfig::get_for_version(ProtocolVersion::new(144), Chain::Mainnet);
+            set(&mut config);
+            let message = from_protocol_config_panic(&config).expect(field);
+            assert!(
+                message.contains("need staggered_submission_signal_window_ms"),
+                "{field}: {message}"
+            );
+        }
+    }
+
+    #[test]
+    fn signal_config_requires_thresholds_when_the_signal_is_on() {
+        use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+
+        let mut config = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Mainnet);
+        config.disable_staggered_submission_signal_window_ms_for_testing();
+        config.disable_staggered_submission_signal_min_excess_copies_per_second_for_testing();
+        config
+            .disable_staggered_submission_signal_min_consensus_user_transactions_per_second_for_testing();
+        config.disable_staggered_submission_signal_exit_dwell_ms_for_testing();
+        config.disable_staggered_submission_signal_max_commit_gap_ms_for_testing();
+        let message = from_protocol_config_panic(&config).expect("no thresholds accepted");
+        assert!(
+            message.contains("needs staggered_submission_signal_window_ms or the commit-based"),
+            "{message}"
+        );
+        // With the signal off the defaults stay acceptable.
+        config.set_staggered_submission_signal_for_testing(false);
+        assert_eq!(
+            SignalConfig::from_protocol_config(&config),
+            SignalConfig::default()
+        );
+
+        // Each of the commit-based window, excess-copy floor and dwell is required.
+        type Disable = fn(&mut ProtocolConfig);
+        let disables: [(&str, Disable); 3] = [
+            (
+                "window_commits",
+                ProtocolConfig::disable_staggered_submission_signal_window_commits_for_testing,
+            ),
+            (
+                "min_excess_copies_per_commit",
+                ProtocolConfig::disable_staggered_submission_signal_min_excess_copies_per_commit_for_testing,
+            ),
+            (
+                "exit_dwell_commits",
+                ProtocolConfig::disable_staggered_submission_signal_exit_dwell_commits_for_testing,
+            ),
+        ];
+        for (field, disable) in disables {
+            let mut config =
+                ProtocolConfig::get_for_version(ProtocolVersion::new(144), Chain::Mainnet);
+            disable(&mut config);
+            let message = from_protocol_config_panic(&config).expect(field);
+            assert!(
+                message.contains("needs staggered_submission_signal_window_ms or the commit-based"),
+                "{field}: {message}"
+            );
+        }
+    }
+
+    #[test]
+    fn signal_config_rejects_a_gap_cap_not_below_the_window_or_dwell() {
+        use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+
+        let latest = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Mainnet);
+        // (window, dwell, cap): a cap equal to the window, and a cap below the window
+        // but equal to a dwell shorter than the window.
+        for (window_ms, exit_dwell_ms, cap) in [(40_000, 400_000, 40_000), (40_000, 10_000, 10_000)]
+        {
+            let mut config = latest.clone();
+            config.set_staggered_submission_signal_window_ms_for_testing(window_ms);
+            config.set_staggered_submission_signal_exit_dwell_ms_for_testing(exit_dwell_ms);
+            config.set_staggered_submission_signal_max_commit_gap_ms_for_testing(cap);
+            let message = from_protocol_config_panic(&config).expect("cap accepted");
+            assert!(
+                message.contains("must be below the window and the exit dwell"),
+                "{cap}: {message}"
+            );
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "signal window must be positive")]
+    fn signal_config_rejects_zero_window_commits() {
+        use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+
+        let mut config = ProtocolConfig::get_for_version(ProtocolVersion::new(144), Chain::Mainnet);
+        config.set_staggered_submission_signal_window_commits_for_testing(0);
+        SignalConfig::from_protocol_config(&config);
+    }
+
+    #[test]
+    fn signal_config_requires_every_time_field() {
+        use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+
+        type Disable = fn(&mut ProtocolConfig);
+        let disables: [(&str, Disable); 4] = [
+            (
+                "staggered_submission_signal_max_commit_gap_ms",
+                ProtocolConfig::disable_staggered_submission_signal_max_commit_gap_ms_for_testing,
+            ),
+            (
+                "staggered_submission_signal_min_excess_copies_per_second",
+                ProtocolConfig::disable_staggered_submission_signal_min_excess_copies_per_second_for_testing,
+            ),
+            (
+                "staggered_submission_signal_min_consensus_user_transactions_per_second",
+                ProtocolConfig::disable_staggered_submission_signal_min_consensus_user_transactions_per_second_for_testing,
+            ),
+            (
+                "staggered_submission_signal_exit_dwell_ms",
+                ProtocolConfig::disable_staggered_submission_signal_exit_dwell_ms_for_testing,
+            ),
+        ];
+        for (field, disable) in disables {
+            let mut config = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Mainnet);
+            disable(&mut config);
+            let message = from_protocol_config_panic(&config).expect(field);
+            assert!(
+                message.contains(&format!("the time clock needs {field}")),
+                "{field}: {message}"
+            );
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "signal window must be positive")]
+    fn signal_config_rejects_zero_window_ms() {
+        use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+
+        let mut config = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Mainnet);
+        config.set_staggered_submission_signal_window_ms_for_testing(0);
+        SignalConfig::from_protocol_config(&config);
+    }
+
+    #[test]
+    fn time_thresholds_match_version_144_at_15_commits_per_second() {
+        use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+
+        const COMMITS_PER_SECOND: u64 = 15;
+        let v145 = SignalConfig::from_protocol_config(&ProtocolConfig::get_for_version(
+            ProtocolVersion::new(145),
+            Chain::Mainnet,
+        ));
+        let v144 = SignalConfig::from_protocol_config(&ProtocolConfig::get_for_version(
+            ProtocolVersion::new(144),
+            Chain::Mainnet,
+        ));
+        assert_eq!(v145.window * COMMITS_PER_SECOND / 1_000, v144.window);
+        assert_eq!(
+            v145.exit_dwell * COMMITS_PER_SECOND / 1_000,
+            v144.exit_dwell
+        );
+        assert_eq!(v145.min_excess_copies, v144.min_excess_copies);
+        assert_eq!(v145.bands, v144.bands);
+        // The v145 volume floor is 12,000 user transactions per second. At 15 commits
+        // per second v144's floor is 15,000 per second.
+        assert_eq!(
+            v145.min_consensus_user_txns * 15_000 / 12_000,
+            v144.min_consensus_user_txns
+        );
+        // Mainnet commits are about 65 ms apart, and about 500 ms apart with validators
+        // down. The cap must stay above that.
+        let SignalClock::CommitTimeMs { max_commit_gap_ms } = v145.clock else {
+            panic!("v145 uses the commit clock");
+        };
+        assert!(max_commit_gap_ms >= 500, "{max_commit_gap_ms}");
+
+        // On testnet the v145 volume floor equals v144's.
+        let testnet = |version| {
+            SignalConfig::from_protocol_config(&ProtocolConfig::get_for_version(
+                ProtocolVersion::new(version),
+                Chain::Testnet,
+            ))
+        };
+        assert_eq!(
+            testnet(145).min_consensus_user_txns,
+            testnet(144).min_consensus_user_txns
+        );
+        // Devnet and local networks use the mainnet values.
+        assert_eq!(
+            SignalConfig::from_protocol_config(&ProtocolConfig::get_for_version(
+                ProtocolVersion::new(145),
+                Chain::Unknown,
+            )),
+            v145
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "max commit gap must be positive")]
+    fn signal_config_rejects_zero_max_commit_gap_ms() {
+        use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+
+        let mut config = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Mainnet);
+        config.set_staggered_submission_signal_max_commit_gap_ms_for_testing(0);
+        SignalConfig::from_protocol_config(&config);
+    }
+
+    #[test]
+    fn time_clock_floors_round_down_after_multiplying() {
+        use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+
+        let mut config = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Mainnet);
+        config.set_staggered_submission_signal_window_ms_for_testing(2_500);
+        config.set_staggered_submission_signal_max_commit_gap_ms_for_testing(1_000);
+        config.set_staggered_submission_signal_min_excess_copies_per_second_for_testing(3);
+        config
+            .set_staggered_submission_signal_min_consensus_user_transactions_per_second_for_testing(
+                1,
+            );
+        let signal_config = SignalConfig::from_protocol_config(&config);
+        // 3 * 2,500 / 1,000 rounds 7.5 down to 7. Rounding the window to whole seconds
+        // first would give 6.
+        assert_eq!(signal_config.min_excess_copies, 7);
+        // 1 * 2,500 / 1,000 rounds 2.5 down to 2.
+        assert_eq!(signal_config.min_consensus_user_txns, 2);
     }
 
     #[test]
@@ -1125,25 +1685,35 @@ mod tests {
     fn signal_config_reads_protocol_config_with_defaults_for_older_versions() {
         use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 
+        // Version 145 moves the signal to the time clock.
         let latest = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Mainnet);
         let config = SignalConfig::from_protocol_config(&latest);
+        let window_ms = latest.staggered_submission_signal_window_ms();
         assert_eq!(
-            config.window_commits,
-            latest.staggered_submission_signal_window_commits() as usize
+            config.clock,
+            SignalClock::CommitTimeMs {
+                max_commit_gap_ms: latest.staggered_submission_signal_max_commit_gap_ms()
+            }
         );
+        assert_eq!(config.window, window_ms);
         assert_eq!(
             config.min_excess_copies,
-            latest.staggered_submission_signal_min_excess_copies_per_commit()
-                * latest.staggered_submission_signal_window_commits()
+            latest.staggered_submission_signal_min_excess_copies_per_second() * window_ms / 1_000
         );
         assert_eq!(
             config.min_consensus_user_txns,
-            latest.staggered_submission_signal_min_consensus_user_transactions_per_commit()
-                * latest.staggered_submission_signal_window_commits()
+            latest.staggered_submission_signal_min_consensus_user_transactions_per_second()
+                * window_ms
+                / 1_000
         );
         assert_eq!(
-            config.exit_dwell_commits,
-            latest.staggered_submission_signal_exit_dwell_commits() as usize
+            config.exit_dwell,
+            latest.staggered_submission_signal_exit_dwell_ms()
+        );
+        assert!(
+            latest
+                .staggered_submission_signal_window_commits_as_option()
+                .is_none()
         );
         use itertools::Itertools as _;
         for (band, (enter, exit)) in config.bands.iter().zip_eq([
@@ -1163,6 +1733,41 @@ mod tests {
         // The hold caps do not come from the protocol config.
         assert_eq!(config.bands[0].max_delay, DEFAULT_SIGNAL_BANDS[0].max_delay);
         assert_eq!(config.bands[1].max_delay, DEFAULT_SIGNAL_BANDS[1].max_delay);
+
+        // Testnet has its own volume floor and the mainnet values otherwise.
+        let testnet = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Testnet);
+        let testnet_rate =
+            testnet.staggered_submission_signal_min_consensus_user_transactions_per_second();
+        assert!(
+            testnet_rate
+                < latest.staggered_submission_signal_min_consensus_user_transactions_per_second()
+        );
+        assert_eq!(
+            SignalConfig::from_protocol_config(&testnet),
+            SignalConfig {
+                min_consensus_user_txns: testnet_rate * window_ms / 1_000,
+                ..config.clone()
+            }
+        );
+
+        // Version 144 uses the commit clock with per-commit floors.
+        let v144 = ProtocolConfig::get_for_version(ProtocolVersion::new(144), Chain::Mainnet);
+        let config = SignalConfig::from_protocol_config(&v144);
+        let window = v144.staggered_submission_signal_window_commits();
+        assert_eq!(config.clock, SignalClock::Commits);
+        assert_eq!(config.window, window);
+        assert_eq!(
+            config.min_excess_copies,
+            v144.staggered_submission_signal_min_excess_copies_per_commit() * window
+        );
+        assert_eq!(
+            config.min_consensus_user_txns,
+            v144.staggered_submission_signal_min_consensus_user_transactions_per_commit() * window
+        );
+        assert_eq!(
+            config.exit_dwell,
+            v144.staggered_submission_signal_exit_dwell_commits()
+        );
 
         // Version 143 has the thresholds of version 140, which equal the defaults, and
         // no volume floor.
@@ -1191,9 +1796,11 @@ mod tests {
         );
     }
 
-    #[test]
-    fn record_commit_reports_the_dwell_of_the_band_left() {
-        let staggered = StaggeredSubmission::new(test_signal_config(), true);
+    #[rstest]
+    fn record_commit_reports_the_dwell_of_the_band_left(
+        #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+    ) {
+        let staggered = StaggeredSubmission::new(test_signal_config(clock), true);
         let first = staggered.record(1000, 2000);
         assert_eq!(first.transition, Some(2));
         assert_eq!(first.previous_band, 0);
@@ -1217,6 +1824,12 @@ mod tests {
         // de-escalated.
         assert_eq!(left.commits_in_previous_band, recorded_in_band2);
         assert!(left.commits_in_previous_band > TEST_SIGNAL_EXIT_DWELL_COMMITS as u64);
+        // Each commit after the activation is `TEST_COMMIT_INTERVAL_MS` after the one
+        // before, whichever clock the signal uses.
+        assert_eq!(
+            left.ms_in_previous_band,
+            recorded_in_band2 * TEST_COMMIT_INTERVAL_MS
+        );
     }
 
     fn test_seed(byte: u8) -> [u8; 32] {
@@ -1474,9 +2087,11 @@ mod tests {
         // Band 2 enters at 20% and exits below 15%. Leaving off requires two excess
         // copies per window commit.
 
-        #[test]
-        fn duplication_ratio_tracks_the_window() {
-            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+        #[rstest]
+        fn duplication_ratio_tracks_the_window(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
+            let staggered = StaggeredSubmission::new(test_signal_config(clock), true);
             assert_eq!(staggered.record(10, 100).duplication_ratio, 0.1);
             assert_eq!(staggered.record(0, 100).duplication_ratio, 0.05);
             // A full window of quiet commits removes the spike.
@@ -1487,9 +2102,12 @@ mod tests {
             assert_eq!(ratio, 0.0);
         }
 
+        #[rstest]
         #[tokio::test]
-        async fn late_copies_activate_without_new_unique_transactions() {
-            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+        async fn late_copies_activate_without_new_unique_transactions(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
+            let staggered = StaggeredSubmission::new(test_signal_config(clock), true);
             staggered.record(0, 1);
             for _ in 0..TEST_SIGNAL_WINDOW_COMMITS {
                 assert_eq!(staggered.record(0, 0).pair(), (None, 0.0));
@@ -1514,30 +2132,36 @@ mod tests {
             );
         }
 
-        #[test]
-        fn burst_escalates_to_the_matching_band() {
+        #[rstest]
+        fn burst_escalates_to_the_matching_band(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
             // A 7% burst enters band 1.
-            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+            let staggered = StaggeredSubmission::new(test_signal_config(clock), true);
             assert_eq!(staggered.record(700, 10000).transition, Some(1));
             assert!(staggered.is_active());
             // A 50% burst enters band 2 directly.
-            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+            let staggered = StaggeredSubmission::new(test_signal_config(clock), true);
             assert_eq!(staggered.record(1000, 2000).transition, Some(2));
             assert!(staggered.is_active());
         }
 
-        #[test]
-        fn escalates_further_as_the_ratio_climbs() {
-            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+        #[rstest]
+        fn escalates_further_as_the_ratio_climbs(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
+            let staggered = StaggeredSubmission::new(test_signal_config(clock), true);
             assert_eq!(staggered.record(700, 10000).transition, Some(1));
             // More copies in band 1 push the ratio over band 2's enter ratio.
             assert_eq!(staggered.record(3000, 1000).transition, Some(2));
             assert!(staggered.is_active());
         }
 
-        #[test]
-        fn applied_transitions_retune_the_max_delay() {
-            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+        #[rstest]
+        fn applied_transitions_retune_the_max_delay(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
+            let staggered = StaggeredSubmission::new(test_signal_config(clock), true);
             assert_eq!(
                 staggered.params.read().max_delay,
                 TEST_SIGNAL_BANDS[0].max_delay
@@ -1564,9 +2188,11 @@ mod tests {
             );
         }
 
-        #[test]
-        fn transition_to_off_resets_the_max_delay_to_band_one() {
-            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+        #[rstest]
+        fn transition_to_off_resets_the_max_delay_to_band_one(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
+            let staggered = StaggeredSubmission::new(test_signal_config(clock), true);
             assert_eq!(staggered.record(1000, 2000).transition, Some(2));
             let mut transitions = Vec::new();
             for _ in 0..TEST_SIGNAL_WINDOW_COMMITS + TEST_SIGNAL_EXIT_DWELL_COMMITS {
@@ -1606,9 +2232,11 @@ mod tests {
             );
         }
 
-        #[test]
-        fn ratio_below_threshold_does_not_activate() {
-            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+        #[rstest]
+        fn ratio_below_threshold_does_not_activate(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
+            let staggered = StaggeredSubmission::new(test_signal_config(clock), true);
             // At 4% per commit the excess copies pass `min_excess_copies`, but the
             // ratio stays below band 1.
             for _ in 0..30 {
@@ -1617,9 +2245,11 @@ mod tests {
             assert!(!staggered.is_active());
         }
 
-        #[test]
-        fn floor_blocks_high_ratio_at_low_volume() {
-            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+        #[rstest]
+        fn floor_blocks_high_ratio_at_low_volume(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
+            let staggered = StaggeredSubmission::new(test_signal_config(clock), true);
             // The ratio is 20%, with two excess copies per commit. The signal waits
             // until a full window reaches `min_excess_copies` and then enters band 2.
             for _ in 0..TEST_SIGNAL_WINDOW_COMMITS - 1 {
@@ -1629,9 +2259,12 @@ mod tests {
             assert_eq!(staggered.record(2, 10).transition, Some(2));
         }
 
-        #[test]
-        fn low_volume_window_does_not_activate() {
-            let staggered = StaggeredSubmission::new(test_signal_config_with_volume_floor(), true);
+        #[rstest]
+        fn low_volume_window_does_not_activate(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
+            let staggered =
+                StaggeredSubmission::new(test_signal_config_with_volume_floor(clock), true);
             // Each commit has 60 excess copies over 30 unique transactions. That passes
             // `min_excess_copies` and band 2's ratio, with 90 user transactions per commit.
             for _ in 0..2 * TEST_SIGNAL_WINDOW_COMMITS {
@@ -1641,27 +2274,33 @@ mod tests {
             assert_eq!(staggered.signal_band(), 0);
         }
 
-        #[test]
-        fn volume_floor_counts_unique_transactions_and_every_duplicate() {
-            let staggered = StaggeredSubmission::new(test_signal_config_with_volume_floor(), true);
+        #[rstest]
+        fn volume_floor_counts_unique_transactions_and_every_duplicate(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
+            let staggered =
+                StaggeredSubmission::new(test_signal_config_with_volume_floor(clock), true);
             // 90 user transactions per commit are excess or unique. Another 10 are paid or
             // restricted duplicates, which reach the floor once the window is full.
             for _ in 0..TEST_SIGNAL_WINDOW_COMMITS - 1 {
-                assert_eq!(staggered.record_commit(60, 30, 100).transition, None);
+                assert_eq!(staggered.record_txns(60, 30, 100).transition, None);
             }
-            assert_eq!(staggered.record_commit(60, 30, 100).transition, Some(2));
+            assert_eq!(staggered.record_txns(60, 30, 100).transition, Some(2));
             assert!(staggered.is_active());
         }
 
-        #[test]
-        fn volume_floor_is_a_window_total() {
+        #[rstest]
+        fn volume_floor_is_a_window_total(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
             // One commit that carries a full window's worth of user transactions passes the
             // floor.
-            let staggered = StaggeredSubmission::new(test_signal_config_with_volume_floor(), true);
+            let staggered =
+                StaggeredSubmission::new(test_signal_config_with_volume_floor(clock), true);
             let unique = TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS / 3;
             assert_eq!(
                 staggered
-                    .record_commit(
+                    .record_txns(
                         TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS - unique,
                         unique,
                         TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS
@@ -1670,10 +2309,11 @@ mod tests {
                 Some(2)
             );
             // One transaction fewer does not.
-            let staggered = StaggeredSubmission::new(test_signal_config_with_volume_floor(), true);
+            let staggered =
+                StaggeredSubmission::new(test_signal_config_with_volume_floor(clock), true);
             assert_eq!(
                 staggered
-                    .record_commit(
+                    .record_txns(
                         TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS - unique - 1,
                         unique,
                         TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS - 1
@@ -1686,7 +2326,7 @@ mod tests {
         /// A commit that enters band 2 at a 200% ratio and carries three windows' worth
         /// of user transactions.
         fn enter_band2_with_burst(staggered: &StaggeredSubmission) {
-            let outcome = staggered.record_commit(
+            let outcome = staggered.record_txns(
                 2 * TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS,
                 TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS,
                 3 * TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS,
@@ -1700,9 +2340,12 @@ mod tests {
         const LOW_VOLUME_COMMITS_TO_OFF: usize =
             TEST_SIGNAL_WINDOW_COMMITS + TEST_SIGNAL_EXIT_DWELL_COMMITS - 1;
 
-        #[test]
-        fn low_volume_turns_the_signal_off_after_the_dwell() {
-            let staggered = StaggeredSubmission::new(test_signal_config_with_volume_floor(), true);
+        #[rstest]
+        fn low_volume_turns_the_signal_off_after_the_dwell(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
+            let staggered =
+                StaggeredSubmission::new(test_signal_config_with_volume_floor(clock), true);
             enter_band2_with_burst(&staggered);
             // The ratio stays at 200%, above every exit ratio. Only the volume is low.
             for _ in 0..LOW_VOLUME_COMMITS_TO_OFF - 1 {
@@ -1718,9 +2361,12 @@ mod tests {
             }
         }
 
-        #[test]
-        fn volume_dip_shorter_than_the_dwell_keeps_the_band() {
-            let staggered = StaggeredSubmission::new(test_signal_config_with_volume_floor(), true);
+        #[rstest]
+        fn volume_dip_shorter_than_the_dwell_keeps_the_band(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
+            let staggered =
+                StaggeredSubmission::new(test_signal_config_with_volume_floor(clock), true);
             enter_band2_with_burst(&staggered);
             for _ in 0..LOW_VOLUME_COMMITS_TO_OFF - 1 {
                 assert_eq!(staggered.record(60, 30).transition, None);
@@ -1729,7 +2375,7 @@ mod tests {
             // floor again. The dwell restarts.
             assert_eq!(
                 staggered
-                    .record_commit(
+                    .record_txns(
                         2 * TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS,
                         TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS,
                         3 * TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS
@@ -1744,9 +2390,12 @@ mod tests {
             assert_eq!(staggered.record(60, 30).transition, Some(0));
         }
 
-        #[test]
-        fn dwell_that_ends_above_the_floor_follows_the_exit_ratios() {
-            let staggered = StaggeredSubmission::new(test_signal_config_with_volume_floor(), true);
+        #[rstest]
+        fn dwell_that_ends_above_the_floor_follows_the_exit_ratios(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
+            let staggered =
+                StaggeredSubmission::new(test_signal_config_with_volume_floor(clock), true);
             enter_band2_with_burst(&staggered);
             for _ in 0..LOW_VOLUME_COMMITS_TO_OFF - 1 {
                 assert_eq!(staggered.record(60, 30).transition, None);
@@ -1757,19 +2406,22 @@ mod tests {
             // the ratio is 10%, below band 2's exit ratio and above band 1's. The signal
             // moves to band 1, not to off.
             assert_eq!(
-                staggered.record_commit(0, 170_430, 170_430).pair(),
+                staggered.record_txns(0, 170_430, 170_430).pair(),
                 (Some(1), 0.1)
             );
             assert!(staggered.is_active());
         }
 
-        #[test]
-        fn low_volume_window_does_not_escalate_an_active_band() {
-            let staggered = StaggeredSubmission::new(test_signal_config_with_volume_floor(), true);
+        #[rstest]
+        fn low_volume_window_does_not_escalate_an_active_band(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
+            let staggered =
+                StaggeredSubmission::new(test_signal_config_with_volume_floor(clock), true);
             // A 7% burst with enough volume enters band 1.
             assert_eq!(
                 staggered
-                    .record_commit(
+                    .record_txns(
                         7 * TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS / 100,
                         TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS,
                         2 * TEST_SIGNAL_MIN_CONSENSUS_USER_TXNS
@@ -1791,9 +2443,11 @@ mod tests {
             assert_eq!(transitions, vec![0]);
         }
 
-        #[test]
-        fn old_spikes_slide_out_of_window() {
-            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+        #[rstest]
+        fn old_spikes_slide_out_of_window(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
+            let staggered = StaggeredSubmission::new(test_signal_config(clock), true);
             // 500 excess copies at 50% stay below `min_excess_copies`.
             assert_eq!(staggered.record(500, 1000).transition, None);
             // After a full window of quiet commits, a second spike does not add to
@@ -1805,9 +2459,11 @@ mod tests {
             assert!(!staggered.is_active());
         }
 
-        #[test]
-        fn deescalates_straight_to_off_once_quiet_traffic_dilutes_the_spike() {
-            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+        #[rstest]
+        fn deescalates_straight_to_off_once_quiet_traffic_dilutes_the_spike(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
+            let staggered = StaggeredSubmission::new(test_signal_config(clock), true);
             assert_eq!(staggered.record(1000, 2000).transition, Some(2));
             // Quiet traffic brings the ratio to zero. After the dwell the signal drops
             // from band 2 straight to off, without visiting band 1.
@@ -1819,9 +2475,11 @@ mod tests {
             assert_eq!(transitions, vec![0]);
         }
 
-        #[test]
-        fn threshold_gaps_hold_the_band_between_exit_and_enter() {
-            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+        #[rstest]
+        fn threshold_gaps_hold_the_band_between_exit_and_enter(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
+            let staggered = StaggeredSubmission::new(test_signal_config(clock), true);
             assert_eq!(staggered.record(1000, 2000).transition, Some(2));
             // A steady 4% lies between band 1's exit and enter ratios. The signal
             // moves to band 1 and stays there.
@@ -1843,26 +2501,33 @@ mod tests {
             }
         }
 
-        #[test]
-        fn gap_holds_band2_between_exit_and_enter() {
+        #[rstest]
+        fn gap_holds_band2_between_exit_and_enter(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
             // A steady 17% lies between band 2's exit and enter ratios. It keeps
             // band 2 active.
-            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+            // The run outlasts a window and two dwells, so a dwell that counted these
+            // commits would end within it.
+            let commits = 2 * TEST_SIGNAL_WINDOW_COMMITS + 2 * TEST_SIGNAL_EXIT_DWELL_COMMITS;
+            let staggered = StaggeredSubmission::new(test_signal_config(clock), true);
             assert_eq!(staggered.record(1000, 2000).transition, Some(2));
-            for _ in 0..2 * TEST_SIGNAL_WINDOW_COMMITS {
+            for _ in 0..commits {
                 assert_eq!(staggered.record(17, 100).transition, None);
             }
             // It also does not move band 1 up to band 2.
-            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+            let staggered = StaggeredSubmission::new(test_signal_config(clock), true);
             assert_eq!(staggered.record(700, 10000).transition, Some(1));
-            for _ in 0..2 * TEST_SIGNAL_WINDOW_COMMITS {
+            for _ in 0..commits {
                 assert_eq!(staggered.record(17, 100).transition, None);
             }
         }
 
-        #[test]
-        fn dry_run_tracks_transitions_without_flipping_staggering() {
-            let staggered = StaggeredSubmission::new(test_signal_config(), false);
+        #[rstest]
+        fn dry_run_tracks_transitions_without_flipping_staggering(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
+            let staggered = StaggeredSubmission::new(test_signal_config(clock), false);
             // A disabled signal reports transitions.
             assert_eq!(staggered.record(1000, 2000).transition, Some(2));
             // Staggering and its hold cap do not change.
@@ -1884,9 +2549,11 @@ mod tests {
             );
         }
 
-        #[test]
-        fn exit_dwell_absorbs_transient_dips() {
-            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+        #[rstest]
+        fn exit_dwell_absorbs_transient_dips(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
+            let staggered = StaggeredSubmission::new(test_signal_config(clock), true);
             assert_eq!(staggered.record(1000, 2000).transition, Some(2));
             let exit_ratio = TEST_SIGNAL_BANDS[1].exit_ratio;
 
@@ -1924,9 +2591,298 @@ mod tests {
             assert_eq!(staggered.signal_band(), 0);
         }
 
+        /// Records `commits` commits `interval_ms` apart, each with `excess` excess copies
+        /// over `unique` unique transactions, and returns their transitions.
+        fn record_spaced(
+            staggered: &StaggeredSubmission,
+            interval_ms: u64,
+            commits: usize,
+            excess: u64,
+            unique: u64,
+        ) -> Vec<Option<usize>> {
+            (0..commits)
+                .map(|_| {
+                    staggered
+                        .record_txns_after(interval_ms, excess, unique, excess + unique)
+                        .transition
+                })
+                .collect()
+        }
+
         #[test]
-        fn signal_state_is_independent_of_manual_activation() {
-            let staggered = StaggeredSubmission::new(test_signal_config(), true);
+        fn time_clock_volume_floor_is_a_rate_per_second() {
+            // The floor is 30,000 user transactions per 30 s window, or 1,000 per
+            // second. Commits come every 200 ms, half the test rate, and carry a 200%
+            // ratio.
+            let below = |clock| {
+                let staggered =
+                    StaggeredSubmission::new(test_signal_config_with_volume_floor(clock), true);
+                // 150 user transactions per commit is 750 per second.
+                record_spaced(&staggered, 200, 2 * TEST_SIGNAL_WINDOW_COMMITS, 100, 50)
+            };
+            // The commit clock counts 300 commits and 45,000 user transactions, so the
+            // lower rate passes its floor.
+            assert!(below(TestClock::Commits).contains(&Some(2)));
+            // The time clock counts 150 commits and 22,500 user transactions.
+            assert!(below(TestClock::Time).iter().all(Option::is_none));
+
+            // 210 user transactions per commit is 1,050 per second, which passes the
+            // time clock's floor.
+            let staggered = StaggeredSubmission::new(
+                test_signal_config_with_volume_floor(TestClock::Time),
+                true,
+            );
+            let transitions =
+                record_spaced(&staggered, 200, 2 * TEST_SIGNAL_WINDOW_COMMITS, 140, 70);
+            assert!(transitions.contains(&Some(2)));
+        }
+
+        #[test]
+        fn time_clock_dwell_is_commit_time() {
+            let staggered = StaggeredSubmission::new(test_signal_config(TestClock::Time), true);
+            assert_eq!(staggered.record(1000, 2000).transition, Some(2));
+            // Empty commits come every 400 ms, so the ratio stays at 50% until the
+            // burst leaves the 30 s window on the 75th commit. The 60 s dwell then
+            // takes 150 commits, the 75th of them included.
+            let transitions = record_spaced(&staggered, 400, 300, 0, 0);
+            let off = transitions
+                .iter()
+                .position(|transition| *transition == Some(0))
+                .expect("signal never turned off");
+            assert_eq!(off + 1, 75 + 150 - 1);
+            assert_eq!(transitions.iter().flatten().count(), 1);
+        }
+
+        #[test]
+        fn time_clock_caps_the_gap_after_a_stall() {
+            let stall = |max_commit_gap_ms| {
+                let staggered = StaggeredSubmission::new(
+                    SignalConfig {
+                        clock: SignalClock::CommitTimeMs { max_commit_gap_ms },
+                        ..test_signal_config(TestClock::Time)
+                    },
+                    true,
+                );
+                assert_eq!(staggered.record(1000, 2000).transition, Some(2));
+                // The burst leaves the window on the last of these commits, which starts
+                // the dwell.
+                // The commits are empty, so the ratio stays at 50% until then.
+                let transitions = record_spaced(
+                    &staggered,
+                    TEST_COMMIT_INTERVAL_MS,
+                    TEST_SIGNAL_WINDOW_COMMITS,
+                    0,
+                    0,
+                );
+                assert!(transitions.iter().all(Option::is_none));
+                // Consensus stalls for ten minutes, longer than the window and the dwell.
+                record_spaced(&staggered, 600_000, 1, 0, 0)[0]
+            };
+            // The dwell holds 100 ms before the stall, and the capped gap adds one
+            // second.
+            assert_eq!(stall(TEST_MAX_COMMIT_GAP_MS), None);
+            // Without the cap the stall would end the dwell at once.
+            assert_eq!(stall(u64::MAX), Some(0));
+        }
+
+        #[test]
+        fn time_clock_keeps_the_window_across_a_stall() {
+            let after_stall = |max_commit_gap_ms| {
+                let staggered = StaggeredSubmission::new(
+                    SignalConfig {
+                        clock: SignalClock::CommitTimeMs { max_commit_gap_ms },
+                        ..test_signal_config(TestClock::Time)
+                    },
+                    true,
+                );
+                assert_eq!(staggered.record(1000, 2000).transition, Some(2));
+                // Consensus stalls for ten minutes, longer than the window.
+                let signal = staggered.record_commit(600_000, 0, 100, 100);
+                (
+                    signal.window_consensus_user_txns,
+                    staggered.signal.lock().window.len(),
+                )
+            };
+            // The capped gap keeps the burst in the window.
+            assert_eq!(after_stall(TEST_MAX_COMMIT_GAP_MS), (3100, 2));
+            // Without the cap the stall would empty the window.
+            assert_eq!(after_stall(u64::MAX), (100, 1));
+        }
+
+        #[test]
+        fn time_clock_does_not_count_time_twice_after_a_timestamp_decreases() {
+            let staggered = StaggeredSubmission::new(test_signal_config(TestClock::Time), true);
+            for timestamp_ms in [1_000, 1_800, 1_100, 1_900] {
+                staggered.record_commit(timestamp_ms, 0, 100, 100);
+            }
+            assert_eq!(staggered.signal.lock().clock, 900);
+        }
+
+        #[test]
+        fn commit_clock_ignores_commit_timestamps() {
+            // Equal, decreasing and very large gaps between timestamps.
+            let irregular = |i: usize| match i % 3 {
+                0 | 1 => 5_000,
+                _ => 1_000_000 * i as u64,
+            };
+            let even = |i: usize| i as u64 * TEST_COMMIT_INTERVAL_MS;
+            let run = |timestamp_ms: &dyn Fn(usize) -> u64| {
+                let staggered =
+                    StaggeredSubmission::new(test_signal_config(TestClock::Commits), true);
+                let mut signals = vec![staggered.record_commit(timestamp_ms(0), 1000, 2000, 3000)];
+                for i in 1..=TEST_SIGNAL_WINDOW_COMMITS + TEST_SIGNAL_EXIT_DWELL_COMMITS + 10 {
+                    signals.push(staggered.record_commit(timestamp_ms(i), 0, 100, 100));
+                }
+                signals
+                    .into_iter()
+                    .map(|signal| {
+                        (
+                            signal.transition,
+                            signal.commits_in_previous_band,
+                            signal.duplication_ratio,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            };
+            let evenly_spaced = run(&even);
+            assert!(
+                evenly_spaced
+                    .iter()
+                    .any(|(transition, ..)| *transition == Some(0))
+            );
+            assert_eq!(run(&irregular), evenly_spaced);
+        }
+
+        #[rstest]
+        fn de_escalation_resets_the_dwell(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
+            let staggered = StaggeredSubmission::new(test_signal_config(clock), true);
+            assert_eq!(staggered.record(1000, 2000).transition, Some(2));
+            // A steady 4% is below band 2's exit ratio and above band 1's. Band 2's
+            // dwell ends with the signal in band 1. The test stops there, because a
+            // further 4% commit would reset the dwell on its own.
+            let moved_to_band1 = (0..TEST_SIGNAL_WINDOW_COMMITS + TEST_SIGNAL_EXIT_DWELL_COMMITS)
+                .map(|_| staggered.record(4, 100).transition)
+                .find(Option::is_some)
+                .flatten();
+            assert_eq!(moved_to_band1, Some(1));
+            // A commit that takes the ratio below band 1's exit ratio starts band 1's
+            // dwell. It does not continue band 2's.
+            let signal = staggered.record(0, 100_000);
+            assert!(signal.duplication_ratio < TEST_SIGNAL_BANDS[0].exit_ratio);
+            assert_eq!(signal.transition, None);
+            assert_eq!(staggered.signal_band(), 1);
+        }
+
+        #[rstest]
+        fn band_duration_counts_uncapped_consensus_time_per_band(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
+            let staggered = StaggeredSubmission::new(test_signal_config(clock), true);
+            // Runs one cycle: off for `off_ms`, a burst into band 2, one gap of
+            // `stall_ms` inside the band, then empty commits until the signal is off.
+            let cycle = |off_ms: u64, stall_ms: u64| {
+                let entered = staggered.record_txns_after(off_ms, 1000, 2000, 3000);
+                assert_eq!(entered.transition, Some(2));
+                staggered.record_txns_after(stall_ms, 0, 0, 0);
+                let mut in_band_ms = stall_ms;
+                for _ in 0..2 * (TEST_SIGNAL_WINDOW_COMMITS + TEST_SIGNAL_EXIT_DWELL_COMMITS) {
+                    let signal = staggered.record_txns_after(TEST_COMMIT_INTERVAL_MS, 0, 0, 0);
+                    in_band_ms += TEST_COMMIT_INTERVAL_MS;
+                    if signal.transition.is_some() {
+                        assert_eq!(signal.transition, Some(0));
+                        return (
+                            entered.ms_in_previous_band,
+                            signal.ms_in_previous_band,
+                            in_band_ms,
+                        );
+                    }
+                }
+                panic!("signal never left band 2");
+            };
+            // The first cycle starts at the first commit, so the signal spends no time
+            // off. The stall is longer than the gap cap and counts in full.
+            let stall_ms = 10 * TEST_MAX_COMMIT_GAP_MS;
+            let (off_ms, band_ms, expected_band_ms) = cycle(0, stall_ms);
+            assert_eq!(off_ms, 0);
+            assert_eq!(band_ms, expected_band_ms);
+            // The second cycle starts from zero after each transition.
+            let (off_ms, band_ms, expected_band_ms) = cycle(7_000, TEST_COMMIT_INTERVAL_MS);
+            assert_eq!(off_ms, 7_000);
+            assert_eq!(band_ms, expected_band_ms);
+        }
+
+        #[test]
+        fn time_clock_first_commit_advances_by_zero() {
+            let staggered = StaggeredSubmission::new(test_signal_config(TestClock::Time), true);
+            staggered.record_commit(1_000_000, 0, 100, 100);
+            assert_eq!(staggered.signal.lock().clock, 0);
+            staggered.record_commit(1_000_250, 0, 100, 100);
+            assert_eq!(staggered.signal.lock().clock, 250);
+        }
+
+        #[test]
+        fn time_clock_follows_irregular_gaps() {
+            let staggered = StaggeredSubmission::new(
+                SignalConfig {
+                    clock: SignalClock::CommitTimeMs {
+                        max_commit_gap_ms: 999,
+                    },
+                    window: 1_000,
+                    ..test_signal_config(TestClock::Time)
+                },
+                true,
+            );
+            // Each commit carries a distinct count, so the window total names the
+            // commits it holds.
+            let totals: Vec<u64> = [
+                (0, 1),
+                (50, 2),
+                (900, 4),
+                (1_000, 8),
+                (1_000, 16),
+                (1_950, 32),
+            ]
+            .into_iter()
+            .map(|(timestamp_ms, txns)| {
+                staggered
+                    .record_commit(timestamp_ms, 0, txns, txns)
+                    .window_consensus_user_txns
+            })
+            .collect();
+            // The commit at 1,000 ms evicts the commit at 0 ms. The commits at 1,000 ms
+            // share a timestamp and both stay. The commit at 1,950 ms evicts the
+            // commits at 50 and 900 ms.
+            assert_eq!(totals, vec![1, 3, 7, 14, 30, 56]);
+        }
+
+        #[test]
+        fn time_clock_bounds_the_window_when_timestamps_stand_still() {
+            let staggered = StaggeredSubmission::new(
+                SignalConfig {
+                    clock: SignalClock::CommitTimeMs {
+                        max_commit_gap_ms: 1,
+                    },
+                    window: 5,
+                    ..test_signal_config(TestClock::Time)
+                },
+                true,
+            );
+            for _ in 0..8 {
+                staggered.record_commit(1_000, 0, 100, 100);
+            }
+            let signal = staggered.signal.lock();
+            assert_eq!(signal.clock, 0);
+            assert_eq!(signal.window.len(), 5);
+            assert_eq!(signal.window_sum.consensus_user_txns, 500);
+        }
+
+        #[rstest]
+        fn signal_state_is_independent_of_manual_activation(
+            #[values(TestClock::Commits, TestClock::Time)] clock: TestClock,
+        ) {
+            let staggered = StaggeredSubmission::new(test_signal_config(clock), true);
             staggered.set_active(true);
             // The signal starts at off, so quiet commits cause no transition and the
             // manual setting stays.

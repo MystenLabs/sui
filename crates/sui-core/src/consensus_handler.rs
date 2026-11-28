@@ -1477,7 +1477,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let mut deferred_txns = BTreeMap::new();
         let mut cancelled_txns = BTreeMap::new();
 
-        self.record_duplication_signal(state);
+        self.record_duplication_signal(state, commit_info);
 
         for transaction in ordered_txns {
             self.handle_deferral_and_cancellation(
@@ -1891,7 +1891,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     ///
     /// The signal always runs. It changes staggering only when both the protocol flag
     /// and the node config enable it. Otherwise the metrics still show what it would do.
-    fn record_duplication_signal(&self, state: &CommitHandlerState) {
+    fn record_duplication_signal(
+        &self,
+        state: &CommitHandlerState,
+        commit_info: &ConsensusCommitInfo,
+    ) {
         self.metrics
             .staggered_submission_excess_copies
             .observe(state.staggering_counts.excess_copies as f64);
@@ -1904,6 +1908,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
         let staggered = self.epoch_store.staggered_submission();
         let outcome = staggered.record_commit(
+            commit_info.timestamp,
             state.staggering_counts.excess_copies,
             state.staggering_counts.unique_user_txns,
             state.staggering_counts.consensus_user_txns(),
@@ -1927,12 +1932,16 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .staggered_submission_signal_transitions
                 .with_label_values(&[crate::staggered_submission::signal_band_label(band)])
                 .inc();
+            let previous_band =
+                crate::staggered_submission::signal_band_label(outcome.previous_band);
             self.metrics
                 .staggered_submission_band_duration_commits
-                .with_label_values(&[crate::staggered_submission::signal_band_label(
-                    outcome.previous_band,
-                )])
+                .with_label_values(&[previous_band])
                 .observe(outcome.commits_in_previous_band as f64);
+            self.metrics
+                .staggered_submission_band_duration_ms
+                .with_label_values(&[previous_band])
+                .observe(outcome.ms_in_previous_band as f64);
         }
     }
 
