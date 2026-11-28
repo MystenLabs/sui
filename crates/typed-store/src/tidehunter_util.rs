@@ -107,6 +107,23 @@ fn parse_env_bool(name: &str) -> Option<bool> {
     })
 }
 
+fn parse_env_pct(name: &str) -> Option<u8> {
+    env::var(name).ok().map(|value| parse_pct(name, &value))
+}
+
+/// Parses a percentage in `1..=100`.
+fn parse_pct(name: &str, value: &str) -> u8 {
+    let parsed = value
+        .parse::<u8>()
+        .unwrap_or_else(|_| panic!("Failed to parse {name}"));
+    assert!(
+        (1..=100).contains(&parsed),
+        "{name} must be between 1 and 100"
+    );
+    println!("Using {name} from env variable {parsed}");
+    parsed
+}
+
 pub fn default_max_dirty_keys() -> usize {
     parse_env_usize("TH_DEFAULT_MAX_DIRTY_KEYS", 1).unwrap_or(1024)
 }
@@ -191,7 +208,12 @@ fn thdb_config(metric_conf: &MetricConf) -> Config {
         compressed_batch_cache_bytes,
         index_blob_cache_bytes,
         index_blob_cache_min_bytes,
-        relocation_max_reclaim_pct: 100,
+        // A relocation run copies the live records below its target position before it deletes
+        // the WAL prefix, so a run over the whole prunable range needs disk space for all of that
+        // live data at once. TH_RELOCATION_MAX_RECLAIM_PCT limits how far one run advances to
+        // that percent of the WAL. The pruner starts one run per epoch, so a limit below
+        // 100 / (epochs retained) lets the WAL grow past the configured retention.
+        relocation_max_reclaim_pct: parse_env_pct("TH_RELOCATION_MAX_RECLAIM_PCT").unwrap_or(100),
         ..default_config
     };
 
@@ -368,4 +390,34 @@ impl ThConfig {
 
 pub fn default_cells_per_mutex() -> usize {
     1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_pct;
+
+    #[test]
+    fn parse_pct_accepts_range_bounds() {
+        assert_eq!(parse_pct("TEST_PCT", "1"), 1);
+        assert_eq!(parse_pct("TEST_PCT", "10"), 10);
+        assert_eq!(parse_pct("TEST_PCT", "100"), 100);
+    }
+
+    #[test]
+    #[should_panic(expected = "TEST_PCT must be between 1 and 100")]
+    fn parse_pct_rejects_zero() {
+        parse_pct("TEST_PCT", "0");
+    }
+
+    #[test]
+    #[should_panic(expected = "TEST_PCT must be between 1 and 100")]
+    fn parse_pct_rejects_above_100() {
+        parse_pct("TEST_PCT", "101");
+    }
+
+    #[test]
+    #[should_panic(expected = "Failed to parse TEST_PCT")]
+    fn parse_pct_rejects_non_numeric() {
+        parse_pct("TEST_PCT", "ten");
+    }
 }
