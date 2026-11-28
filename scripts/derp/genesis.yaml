@@ -1,0 +1,69 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# The committee of sui-operations' Antithesis cluster
+# (docker/sui-antithesis/genesis/compose-validators.yaml): four validators
+# of equal stake, two-minute epochs. The validators' keys are fixed, so that
+# `sui genesis` makes the same genesis every time. The gas accounts are
+# sui.keystore's keys: one per stress client, since a client merges all of its
+# account's coins at startup.
+accounts:
+  - address: '0x9b1b191f7df4f55c0f73e7638606ca4029fd52a2735b98f2d5674038affe3481'
+    gas_amounts:
+      - 750000000000000000
+      - 750000000000000000
+  - address: '0xcee102dc40813de1ba3f4c6e4751c0b0453047c1385e8c0feb10c201301f0e19'
+    gas_amounts:
+      - 750000000000000000
+      - 750000000000000000
+parameters:
+  # DERP guests' clock starts at 1_800_000_000 s; a genesis made natively would
+  # otherwise start at the host's time.
+  chain_start_timestamp_ms: 1800000000000
+  allow_insertion_of_extra_objects: false
+  epoch_duration_ms: 120000
+validator_config_info:
+  - &validator
+    name: validator1
+    key_pair: PsYCiO/ANC8EpPIj862w+ay2tQwie7PqpdQGfh4CnNs=
+    worker_key_pair: +QR6cqzhvEE4DB0B5wiavsGDMmiyBSw4nNbb14QFSJo=
+    account_key_pair: AL8uGYE2QSvMuTg9/F595DEcvc7hEdVz4GCpPZ6QRUBE
+    network_key_pair: y7ZJgM5efVX+7QtkxIRKkiJabIBRghMgmZQrwhmNz68=
+    commission_rate: 0
+    gas_price: 1000
+    stake: 20000000000000000
+    consensus_address: /ip4/127.0.0.1/tcp/8083/http
+    network_address: /dns/validator1/tcp/8080/http
+    narwhal_primary_address: /dns/validator1/udp/8081
+    narwhal_worker_address: /dns/validator1/udp/8082
+    p2p_address: /dns/validator1/udp/8084
+  - <<: *validator
+    name: validator2
+    key_pair: MnBnk52leunBoeUiFQYwxRS+EeOzgHdOhZd1m/GWlvc=
+    worker_key_pair: IZKP4mJdpp27ddeLcFLHuoSz+8YGrZgPpuNcOMUGy4U=
+    account_key_pair: APoSVChNyFR/z4INIqmuZxvHQy+a9tt5xdqQFSyqDrii
+    network_key_pair: 5XHNbW5BS5GffaT/+sA7tQkzHEbzCjXhG+iAfcDIbh0=
+    network_address: /dns/validator2/tcp/8080/http
+    narwhal_primary_address: /dns/validator2/udp/8081
+    narwhal_worker_address: /dns/validator2/udp/8082
+    p2p_address: /dns/validator2/udp/8084
+  - <<: *validator
+    name: validator3
+    key_pair: NphoGC/ceo3moNGyTrA/vR3CNuz0mhChwPtn1VnAXdM=
+    worker_key_pair: Adc6kF+WuH/EC50krYAESfjZZrdT13DEZPtR3HxDjAs=
+    account_key_pair: AFdLBAQS3PrR/ezqmSTXnqqGIHen0dYbkKsDIK+Gnore
+    network_key_pair: ss+uy1hIVSICMzok/0G2+6+W+co8KFjXLtEH2yCikeA=
+    network_address: /dns/validator3/tcp/8080/http
+    narwhal_primary_address: /dns/validator3/udp/8081
+    narwhal_worker_address: /dns/validator3/udp/8082
+    p2p_address: /dns/validator3/udp/8084
+  - <<: *validator
+    name: validator4
+    key_pair: PVgcxCitLfZMrQQR7qPzh9cS4fSl0TR9EMdpV9r82Zc=
+    worker_key_pair: KXygl0pXGIheUhtpXQAjqpfybon0BB3FlJ/kEmcZShQ=
+    account_key_pair: AK7Ij/+xF1YSbDvjhtoJBWlFBJZQtBmTb5SfELiKM1nC
+    network_key_pair: CouPG7B49ESFo8afwhoLAQ9GyLwkNX7IWx4Mkb+zqBg=
+    network_address: /dns/validator4/tcp/8080/http
+    narwhal_primary_address: /dns/validator4/udp/8081
+    narwhal_worker_address: /dns/validator4/udp/8082
+    p2p_address: /dns/validator4/udp/8084

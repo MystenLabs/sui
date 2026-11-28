@@ -1,0 +1,167 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# A DERP run file (https://github.com/mlogan/derp): a Sui cluster after
+# sui-operations' Antithesis test
+# (docker/sui-antithesis/docker-compose-antithesis.yaml): four validators,
+# a fullnode, an observer fullnode following validator1's consensus, and two
+# stress clients. Each node is a host of its own, reachable by its compose
+# name. Start it with ./run.sh, which builds the binaries, makes the genesis
+# (cluster/) and links each host's sui-node into bin/<host>/; with --split
+# REV some of the hosts run sui-node built at another commit.
+seed: 1
+# Pauses are derp's default (1/200 of scheduling choices, 10us..100ms); spelled out here.
+pause: { chance: 1/200, for: 10us..100ms }
+stop-after: 1200s        # the stress clients normally end the run first
+# stress builds Move packages from this checkout's crates and examples, at paths
+# fixed when it was compiled, and backtraces read the binaries under target.
+# A relative entry is resolved from this file.
+allow: [../../crates, ../../examples, ../../target]
+env:
+  RUST_BACKTRACE: 1
+  RUST_LOG: info
+  # debug_fatal! crashes the node, as in tests. Unlike in_test_configuration()
+  # overrides, every commit honors this variable, so both halves of a split
+  # cluster run with the same checks.
+  SUI_ENABLE_DEBUG_ASSERTIONS: 1
+  TH_FRAG_SIZE: 8388608
+  NEW_CHECKPOINT_WARNING_TIMEOUT_MS: 30000
+  NEW_CHECKPOINT_PANIC_TIMEOUT_MS: 300000
+  TOKIO_WORKER_THREADS: 4
+  # Tidehunter only: each cell gets a bloom filter and value cache up front. At
+  # the release defaults (32k cells per keyspace, 1000 cached values per cell)
+  # a cluster held twice the memory.
+  TH_DEFAULT_MUTEX_COUNT: 16
+  TH_DEFAULT_VALUE_CACHE_SIZE: 100
+hosts:
+  - name: validator1
+    files: [cluster/validator1/node.yaml, cluster/genesis.blob]
+    processes:
+      - argv: [bin/validator1/sui-node, --config-path, node.yaml]
+        env: { SUI_DB_SYNC_TO_DISK: true }
+        daemon: true
+        restart: on-failure
+        # Graceful shutdowns and restarts, as in an Antithesis upgrade test.
+        restart-delay: 10s..30s
+        shutdown:
+          every: 120s..240s
+          times: 2
+          grace: 10s
+  - name: validator2
+    files: [cluster/validator2/node.yaml, cluster/genesis.blob]
+    processes:
+      - argv: [bin/validator2/sui-node, --config-path, node.yaml]
+        env: { SUI_DB_SYNC_TO_DISK: true }
+        daemon: true
+        restart: on-failure
+        # Crashes make validator2 recover from its database and catch up
+        # through checkpoint execution.
+        restart-delay: 20s..60s
+        crash:
+          every: 90s..180s
+          times: 3
+  - name: validator3
+    files: [cluster/validator3/node.yaml, cluster/genesis.blob]
+    processes:
+      - argv: [bin/validator3/sui-node, --config-path, node.yaml]
+        env: { SUI_DB_SYNC_TO_DISK: true }
+        daemon: true
+        restart: on-failure
+        restart-delay: 10s..30s
+        shutdown:
+          every: 120s..240s
+          times: 2
+          grace: 10s
+  - name: validator4
+    files: [cluster/validator4/node.yaml, cluster/genesis.blob]
+    processes:
+      - argv: [bin/validator4/sui-node, --config-path, node.yaml]
+        env: { SUI_DB_SYNC_TO_DISK: true }
+        daemon: true
+        restart: on-failure
+  - name: fullnode1
+    files: [cluster/fullnode1/node.yaml, cluster/genesis.blob]
+    processes:
+      - argv: [bin/fullnode1/sui-node, --config-path, node.yaml]
+        daemon: true
+        restart: on-failure
+  - name: observer-fullnode1
+    files: [cluster/observer-fullnode1/node.yaml, cluster/genesis.blob]
+    processes:
+      - argv: [bin/observer-fullnode1/sui-node, --config-path, node.yaml]
+        daemon: true
+        restart: on-failure
+  # Each stress client waits for fullnode1 to answer, has its own gas account
+  # in sui.keystore, and is not restarted: its failure is the run's.
+  #
+  # stress-mix runs every workload at the weights of the sui-benchmark
+  # simtests' default load. It submits through the fullnode, except soft
+  # bundles, which go to validators.
+  - name: stress-mix
+    files: [cluster/genesis.blob, sui.keystore]
+    processes:
+      - argv: [bin/stress,
+               --staggered-start-max-multiplier, 0,
+               --wait-for-fullnode, 300s,
+               --fullnode-rpc-addresses, "http://fullnode1:9000",
+               --use-fullnode-for-execution, true,
+               --min-tps, 0.1,
+               --num-client-threads, 24,
+               --num-transfer-accounts, 2,
+               --primary-gas-owner-id, "0x9b1b191f7df4f55c0f73e7638606ca4029fd52a2735b98f2d5674038affe3481",
+               --genesis-blob-path, genesis.blob,
+               --keystore-path, sui.keystore,
+               --benchmark-stats-path, bench_result.json,
+               --run-duration, 600s,
+               bench,
+               # At 10 qps composite's share (2 of 19) rounds down to 1 qps; below it, to 0.
+               --target-qps, 10,
+               # Each payload builds a batch every in-flight-ratio seconds, which paces lifecycles.
+               --in-flight-ratio, 5,
+               --shared-counter, 2,
+               --num-shared-counters, 1,
+               --transfer-object, 2,
+               --delegation, 2,
+               --batch-payment, 2,
+               --batch-payment-size, 15,
+               --shared-deletion, 2,
+               --randomness, 2,
+               --randomized-transaction, 2,
+               --slow, 2,
+               --composite, 2,
+               --gas-double-spend, 1,
+               --adversarial, 0,
+               --client-metric-host, 0.0.0.0,
+               --num-workers, 24]
+  # stress-composite: the composite workload with every operation and
+  # lifecycle (--composite-profile full), submitted to the validators
+  # directly, some transfers to several validators or more than once.
+  - name: stress-composite
+    files: [cluster/genesis.blob, sui.keystore]
+    processes:
+      - argv: [bin/stress,
+               --staggered-start-max-multiplier, 0,
+               --wait-for-fullnode, 300s,
+               --fullnode-rpc-addresses, "http://fullnode1:9000",
+               --use-fullnode-for-execution, false,
+               --min-tps, 0.1,
+               --num-client-threads, 24,
+               --num-transfer-accounts, 2,
+               --primary-gas-owner-id, "0xcee102dc40813de1ba3f4c6e4751c0b0453047c1385e8c0feb10c201301f0e19",
+               --genesis-blob-path, genesis.blob,
+               --keystore-path, sui.keystore,
+               --benchmark-stats-path, bench_result.json,
+               --run-duration, 600s,
+               bench,
+               --target-qps, 8,
+               # Each payload builds a batch every in-flight-ratio seconds, which paces lifecycles.
+               --in-flight-ratio, 5,
+               # Amplification applies only to unbatched workloads such as transfer-object.
+               --transfer-object, 1,
+               --composite, 1,
+               --composite-profile, full,
+               --randomized-transaction, 1,
+               --amplification-probability, 0.05,
+               --duplicate-probability, 0.05,
+               --client-metric-host, 0.0.0.0,
+               --num-workers, 24]

@@ -233,6 +233,8 @@ enum NextOp {
         gas_used: u64,
         /// The payload updated with the effects of the transaction
         payload: Box<dyn Payload>,
+        /// False for a batch in which no transaction executed, which is not a success
+        executed: bool,
     },
     // The transaction failed and could not be retried.
     // Payload is preserved so its gas coin can be recycled.
@@ -873,6 +875,7 @@ async fn run_bench_worker(
                     num_commands,
                     payload,
                     gas_used: effects.gas_used(),
+                    executed: true,
                 }
             }
             Err(err) => {
@@ -1130,16 +1133,18 @@ async fn run_bench_worker(
                             break;
                         }
                     }
-                    NextOp::Response { latency, num_commands, payload, gas_used } => {
-                        num_success_txes += 1;
-                        num_success_cmds += num_commands as u64;
+                    NextOp::Response { latency, num_commands, payload, gas_used, executed } => {
+                        if executed {
+                            num_success_txes += 1;
+                            num_success_cmds += num_commands as u64;
+                            latency_histogram.saturating_record(latency.as_millis().try_into().unwrap());
+                        }
                         num_in_flight -= 1;
                         worker_gas_used += gas_used;
                         free_pool.push_back(payload);
-                        latency_histogram.saturating_record(latency.as_millis().try_into().unwrap());
 
-                        let _ = group_gas_used.fetch_add(worker_gas_used, Ordering::SeqCst);
-                        let _ = total_benchmark_gas_used.fetch_add(worker_gas_used, Ordering::SeqCst);
+                        let _ = group_gas_used.fetch_add(gas_used, Ordering::SeqCst);
+                        let _ = total_benchmark_gas_used.fetch_add(gas_used, Ordering::SeqCst);
 
                         // Update total benchmark progress
                         if update_progress(1) {
@@ -1183,12 +1188,7 @@ async fn run_bench_worker(
     while let Some(result) = futures.next().await {
         let p = match result {
             NextOp::Failure { payload } => payload,
-            NextOp::Response {
-                latency: _,
-                num_commands: _,
-                gas_used: _,
-                payload,
-            } => payload,
+            NextOp::Response { payload, .. } => payload,
             NextOp::Retry(b) => b.1,
         };
         free_pool.push_back(p);
@@ -1465,6 +1465,7 @@ fn process_bundle_results(
             num_commands: num_txs as u16,
             gas_used: 0,
             payload,
+            executed: true,
         }
     } else if any_retriable {
         debug!("Batch had retriable error(s), returning payload for retry");
@@ -1473,6 +1474,7 @@ fn process_bundle_results(
             num_commands: 0,
             gas_used: 0,
             payload,
+            executed: false,
         }
     } else {
         // All transactions failed with non-retriable errors.
@@ -1491,6 +1493,7 @@ fn process_bundle_results(
             num_commands: 0,
             gas_used: 0,
             payload,
+            executed: false,
         }
     }
 }
@@ -1657,6 +1660,7 @@ mod tests {
                 num_commands: 1,
                 gas_used: 100,
                 payload: Box::new(MockPayload { id: 2 }),
+                executed: true,
             },
             NextOp::Failure {
                 payload: Box::new(MockPayload { id: 3 }),
