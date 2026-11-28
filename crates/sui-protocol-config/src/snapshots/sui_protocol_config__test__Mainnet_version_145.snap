@@ -287,6 +287,10 @@ package_publish_cost_per_byte: 80
 package_publish_charge_fixed: 1000000000
 package_publish_charge_per_module: 10000000
 package_publish_charge_per_dependency: 10000000
+mutable_system_object_input_charge_ids:
+  - 00000000000000000000000000000000000000000000000000000000000000cf
+  - 00000000000000000000000000000000000000000000000000000000000000fa
+mutable_system_object_input_charge: 250000000
 obj_access_cost_read_per_byte: 15
 obj_access_cost_read_per_package_kb: 154
 obj_access_cost_mutate_per_byte: 40

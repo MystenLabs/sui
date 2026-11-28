@@ -368,6 +368,7 @@ fn is_object_struct(
 mod tests {
     use super::*;
     use expect_test::expect;
+    use sui_protocol_config::ProtocolConfig;
 
     #[test]
     fn test_parse_sui_numeric_address() {
@@ -525,5 +526,25 @@ mod tests {
             "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<address,0x000000000000000000000000000000000000000000000000000000000000dee9::custodian_v2::Account<0x0000000000000000000000000000000000000000000000000000000000000234::coin::COIN>>"
         ];
         expected.assert_eq(&result.to_canonical_string(/* with_prefix */ true));
+    }
+
+    #[test]
+    fn mutable_system_object_input_charge_ids_are_implicitly_read_system_objects() {
+        let config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let ids = config
+            .mutable_system_object_input_charge_ids()
+            .expect("latest protocol version configures mutable system object input charges");
+        assert!(
+            !ids.is_empty(),
+            "latest protocol version configures at least one mutable system object input charge"
+        );
+
+        for id in ids {
+            let object_id = ObjectID::from(*id);
+            assert!(
+                IMPLICITLY_READ_SYSTEM_OBJECTS.contains(&object_id),
+                "configured mutable system object input charge ID {id} is not implicitly read",
+            );
+        }
     }
 }
