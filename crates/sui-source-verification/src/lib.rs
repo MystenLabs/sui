@@ -176,15 +176,9 @@ fn explain_unpinned_dependencies(source_path: &Path, mut error: AggregateError) 
 
 /// Fail up front for the handful of releases known not to work for verification, naming a nearby
 /// release that does — so a package recording such a toolchain gets a precise, actionable error
-/// rather than an opaque download or build failure. Unparseable versions (e.g. a nightly) are let
-/// through to be attempted.
+/// rather than an opaque download or build failure.
 fn check_toolchain_version(version: &str) -> Result<(), Error> {
-    let parse = || -> Option<(u32, u32, u32)> {
-        let mut parts = version.split('.');
-        let mut next = || parts.next()?.parse::<u32>().ok();
-        Some((next()?, next()?, next()?))
-    };
-    let Some(v) = parse() else { return Ok(()) };
+    let v = toolchain_version::parse(version)?;
 
     let (reason, alternative) = if v <= (1, 8, 1) {
         // No release publishes a binary for this platform this far back.
@@ -211,7 +205,7 @@ fn check_toolchain_version(version: &str) -> Result<(), Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::check_toolchain_version;
+    use super::{Error, check_toolchain_version};
 
     fn suggestion(version: &str) -> Option<String> {
         check_toolchain_version(version)
@@ -241,10 +235,15 @@ mod tests {
                 .unwrap()
                 .contains("--toolchain-version 1.65.2")
         );
-        // Usable and unparseable versions are let through.
+        // Usable versions are let through.
         assert!(suggestion("1.65.2").is_none());
         assert!(suggestion("1.50.0").is_none());
-        assert!(suggestion("nightly").is_none());
+        for version in ["nightly", "1.80", "../1.80.1"] {
+            assert!(matches!(
+                check_toolchain_version(version),
+                Err(Error::InvalidToolchainVersion { .. })
+            ));
+        }
     }
 
     /// The `--json` output uses stable, camelCase keys and renders addresses as `0x` strings.

@@ -13,6 +13,7 @@ use tar::Archive;
 use tracing::debug;
 
 use crate::error::Error;
+use crate::toolchain_version;
 
 const CURRENT_COMPILER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -23,6 +24,12 @@ const CURRENT_COMPILER_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// (avoiding a redundant download of the version already in hand). This is also the precache /
 /// warm entry point: calling it ahead of time populates the cache so later runs need no network.
 pub fn ensure_binary(version: &str) -> Result<PathBuf, Error> {
+    ensure_binary_in(&binary_cache_dir(), version)
+}
+
+fn ensure_binary_in(cache_root: &Path, version: &str) -> Result<PathBuf, Error> {
+    toolchain_version::parse(version)?;
+
     if version == CURRENT_COMPILER_VERSION {
         return std::env::current_exe().map_err(|e| Error::BinaryDownload {
             version: version.to_string(),
@@ -33,7 +40,6 @@ pub fn ensure_binary(version: &str) -> Result<PathBuf, Error> {
     let platform = detect_platform(version)?;
     let binary_name = platform.binary_name();
 
-    let cache_root = binary_cache_dir();
     let version_dir = cache_root.join(version);
     let canonical = version_dir.join("target").join("release").join(binary_name);
 
@@ -46,7 +52,7 @@ pub fn ensure_binary(version: &str) -> Result<PathBuf, Error> {
         version,
         platform.artifact_str(),
         binary_name,
-        &cache_root,
+        cache_root,
         &version_dir,
     )
     .map_err(|e| Error::BinaryDownload {
@@ -55,7 +61,7 @@ pub fn ensure_binary(version: &str) -> Result<PathBuf, Error> {
     })?;
 
     touch_last_used(&version_dir);
-    evict_stale(&cache_root, cache_limit());
+    evict_stale(cache_root, cache_limit());
 
     Ok(canonical)
 }
@@ -453,6 +459,32 @@ mod tests {
         assert!(!cache.path().join("1.3.0").exists());
         // The in-progress install is never evicted.
         assert!(cache.path().join(".tmp-9.9.9-1").exists());
+    }
+
+    #[test]
+    fn rejects_invalid_version() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_root = tmp.path().join("cache").join("binaries");
+        fs::create_dir_all(&cache_root).unwrap();
+
+        let other_dir = tmp.path().join("other").join("1.80.1");
+        let release_dir = other_dir.join("target").join("release");
+        fs::create_dir_all(&release_dir).unwrap();
+        for binary_name in ["sui", "sui.exe"] {
+            fs::write(release_dir.join(binary_name), b"").unwrap();
+        }
+
+        let relative = "../../other/1.80.1";
+        let absolute = other_dir.to_str().unwrap();
+        for version in [relative, absolute] {
+            let result = ensure_binary_in(&cache_root, version);
+            assert!(
+                matches!(result, Err(Error::InvalidToolchainVersion { .. })),
+                "{version}: {result:?}"
+            );
+        }
+
+        assert!(!other_dir.join(LAST_USED_FILE).exists());
     }
 
     /// `suiup_tarball_in` matches a cached release under either the mainnet or testnet naming.
