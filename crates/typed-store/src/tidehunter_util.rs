@@ -199,7 +199,22 @@ fn thdb_config(metric_conf: &MetricConf) -> Config {
         config.with_index_auto_sharding();
     }
 
+    // The side WAL the `objects` records are promoted to; see `promote_objects`.
+    if metric_conf.db_name.starts_with("perpetual") && promote_objects() {
+        config.wal_generations = 2;
+    }
+
     config
+}
+
+/// Whether the perpetual database keeps long-lived `objects` records in a second WAL
+/// generation (`TH_PROMOTE_OBJECTS=true`). Relocation then moves the records that survive it
+/// into a side WAL once, instead of copying them to the WAL tail again on every pass.
+///
+/// The setting cannot be switched off again once a relocation pass has promoted records: the
+/// database then no longer opens with a single WAL generation.
+pub fn promote_objects() -> bool {
+    parse_env_bool("TH_PROMOTE_OBJECTS").unwrap_or(false)
 }
 
 #[cfg(not(debug_assertions))]
