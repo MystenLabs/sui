@@ -15,7 +15,7 @@ task 1, lines 11-43:
 //# publish --sender A
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
 mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1031000000, storage_cost: 19463600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 45-48:
@@ -24,7 +24,7 @@ task 2, lines 45-48:
 //> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
 //> 1: sui::balance::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
 mutated: object(0,0), object(1,5)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
 accumulators_written: (object(2,0), B, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 1)
 gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 2462154, non_refundable_storage_fee: 246
 
@@ -42,7 +42,7 @@ task 4, lines 53-56:
 //> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
 //> 1: sui::balance::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
 mutated: object(0,0), object(1,5)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
 accumulators_written: (object(2,0), B, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 1)
 gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 2462154, non_refundable_storage_fee: 246
 
@@ -93,6 +93,6 @@ task 12, lines 82-85:
 //> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
 //> 1: sui::balance::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
 mutated: object(0,0), object(1,5)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
 accumulators_written: (object(2,0), B, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 1)
 gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 2462154, non_refundable_storage_fee: 246

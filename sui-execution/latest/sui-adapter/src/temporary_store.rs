@@ -40,6 +40,7 @@ use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapp
 use sui_types::transaction::{Command, GasData, TransactionKind, is_gasless_transaction};
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
+    SUI_FREEZE_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     digests::ObjectDigest,
     effects::EffectsObjectChange,
@@ -1192,6 +1193,13 @@ impl TemporaryStore<'_> {
 impl ExecutionState for TemporaryStore<'_> {
     fn lamport_timestamp(&self) -> SequenceNumber {
         self.lamport_timestamp
+    }
+
+    fn freeze_list_version(&self) -> Option<SequenceNumber> {
+        self.system_object_versions
+            .get(&SUI_FREEZE_LIST_OBJECT_ID)
+            .and_then(|_| self.load_implicitly_read_system_object(&SUI_FREEZE_LIST_OBJECT_ID))
+            .map(|object| object.version())
     }
 }
 

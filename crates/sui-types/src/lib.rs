@@ -38,6 +38,7 @@ pub mod bridge;
 pub mod clock;
 pub mod coin;
 pub mod coin_registry;
+pub mod coin_regulation;
 pub mod coin_reservation;
 pub mod collection_types;
 pub mod committee;
@@ -240,6 +241,12 @@ pub trait MoveTypeTagTrait {
 
     fn get_instance_type_tag(&self) -> TypeTag {
         Self::get_type_tag()
+    }
+}
+
+impl MoveTypeTagTrait for bool {
+    fn get_type_tag() -> TypeTag {
+        TypeTag::Bool
     }
 }
 

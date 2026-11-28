@@ -8,7 +8,7 @@ use crate::deny_list_v1::{
     DENY_LIST_COIN_TYPE_INDEX, DENY_LIST_MODULE, addresses_by_coin_type_for_denylist_check,
 };
 use crate::dynamic_field::{DOFWrapper, get_dynamic_field_from_store};
-use crate::error::{ExecutionError, UserInputError, UserInputResult};
+use crate::error::{ExecutionError, SuiResult, UserInputError};
 use crate::execution_status::ExecutionErrorKind;
 use crate::gas_coin::GAS;
 use crate::id::UID;
@@ -114,13 +114,19 @@ impl MoveTypeTagTrait for GlobalPauseKey {
     }
 }
 
+/// Skips the coin types for which `is_migrated` holds, without reading their deny lists.
+///
+/// A coin type migrated to `sui::coin_regulation` is regulated by the FreezeList instead of the
+/// deny list, so its deny list entries no longer apply. `is_migrated` takes the coin type's
+/// `type_name` string.
 pub fn check_coin_deny_list_v2_during_signing(
     sender: SuiAddress,
     input_objects: &CheckedInputObjects,
     receiving_objects: &ReceivingObjects,
     funds_withdrawals: BTreeSet<(SuiAddress, String)>,
     object_store: &dyn ObjectStore,
-) -> UserInputResult {
+    is_migrated: impl Fn(&str) -> SuiResult<bool>,
+) -> SuiResult {
     let addresses_by_coin_type = addresses_by_coin_type_for_denylist_check(
         sender,
         input_objects,
@@ -128,16 +134,19 @@ pub fn check_coin_deny_list_v2_during_signing(
         funds_withdrawals,
     );
     for (coin_type, addresses) in addresses_by_coin_type {
+        if is_migrated(&coin_type)? {
+            continue;
+        }
         let Some(deny_list) = get_per_type_coin_deny_list_v2(&coin_type, object_store) else {
             continue;
         };
         if check_global_pause(&deny_list, object_store, None) {
-            return Err(UserInputError::CoinTypeGlobalPause { coin_type });
+            return Err(UserInputError::CoinTypeGlobalPause { coin_type }.into());
         }
         if let Some(address) = addresses.into_iter().find(|address| {
             check_address_denied_by_config(&deny_list, *address, object_store, None)
         }) {
-            return Err(UserInputError::AddressDeniedForCoin { address, coin_type });
+            return Err(UserInputError::AddressDeniedForCoin { address, coin_type }.into());
         }
     }
     Ok(())
@@ -266,3 +275,7 @@ where
     };
     setting.read_value(cur_epoch).cloned()
 }
+
+#[cfg(test)]
+#[path = "unit_tests/deny_list_v2_tests.rs"]
+mod deny_list_v2_tests;

@@ -15,7 +15,7 @@ use crate::{
         execution::{
             self,
             balance_tracking::{self, ObjectData},
-            trace_utils,
+            coin_regulation, trace_utils,
             values::{Local, Locals, Value},
         },
         linkage::resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
@@ -491,11 +491,21 @@ where
         let mut gas_payment_location = None;
         let mut input_owners = vec![];
         let mut withdrawal_addresses = vec![];
+        let mut withdrawal_coin_types = BTreeSet::new();
         for withdrawal in &self.locations.input_withdrawal_metadata {
             withdrawal_addresses.push(withdrawal.source.source_account().into());
             if let T::WithdrawalSource::Allowance { id, .. } = &withdrawal.source {
                 withdrawal_addresses.push((*id).into());
             }
+            let T::Type::Datatype(dt) = &withdrawal.ty else {
+                invariant_violation!("withdrawal input must be a datatype");
+            };
+            let [balance_type] = dt.type_arguments.as_slice() else {
+                invariant_violation!("withdrawal input must have exactly one type argument");
+            };
+            let balance_type = TypeTag::try_from(balance_type.clone())
+                .map_err(|_| make_invariant_violation!("Unable to convert Type to TypeTag"))?;
+            withdrawal_coin_types.extend(Balance::maybe_get_balance_type_param(&balance_type));
         }
         let gas = gas
             .map(|(payment_location, m, mut g)| {
@@ -566,6 +576,7 @@ where
             tx_context,
             gas_meter,
             user_events,
+            metrics,
             ..
         } = self;
         let ref_context: &RefCell<TxContext> = &tx_context;
@@ -727,7 +738,16 @@ where
             generated_ids,
             results: results_v2,
         };
-        let _balance_tracking = balance_tracking::finish(before, balances_after, objects)?;
+        let balance_tracking = balance_tracking::finish(before, balances_after, objects)?;
+        if env.protocol_config.enable_coin_regulation() {
+            coin_regulation::check(
+                env.state_view,
+                &balance_tracking,
+                &withdrawal_coin_types,
+                env.protocol_config,
+                &metrics.limits_metrics,
+            )?;
+        }
         Ok(results)
     }
 
@@ -2451,7 +2471,26 @@ pub(crate) fn finish(
     let DenyListResult {
         result,
         num_non_gas_coin_owners,
-    } = state_view.check_coin_deny_list(receiving_funds_type_and_owners);
+    } = if protocol_config.enable_coin_regulation() {
+        // A coin type migrated to `sui::coin_regulation` is regulated by the FreezeList instead of
+        // the deny list, so the deny list skips it. Its owners are still charged for, so migrating
+        // does not change gas.
+        let num_non_gas_coin_owners = receiving_funds_type_and_owners
+            .iter()
+            .filter(|(coin_type, _)| !sui_types::gas_coin::GAS::is_gas_type(coin_type))
+            .map(|(_, owners)| owners.len() as u64)
+            .sum();
+        let unmigrated = coin_regulation::remove_migrated_coin_types(
+            state_view,
+            receiving_funds_type_and_owners,
+        )?;
+        DenyListResult {
+            num_non_gas_coin_owners,
+            ..state_view.check_coin_deny_list(unmigrated)
+        }
+    } else {
+        state_view.check_coin_deny_list(receiving_funds_type_and_owners)
+    };
     gas_meter.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
     result?;
 

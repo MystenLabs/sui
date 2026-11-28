@@ -10,4 +10,8 @@ use sui_types::{
 pub trait ExecutionState: Storage + RuntimeObjectResolver + ImplicitSystemObjectResolver {
     /// The version given to every object the transaction writes.
     fn lamport_timestamp(&self) -> SequenceNumber;
+
+    /// The FreezeList version this transaction was sequenced against, recording the read for
+    /// effects. `None` when no version was assigned.
+    fn freeze_list_version(&self) -> Option<SequenceNumber>;
 }
