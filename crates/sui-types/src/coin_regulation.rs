@@ -180,11 +180,33 @@ pub fn is_address_frozen(
         .exists(resolver)
 }
 
+/// The latest `CoinTypeState` of `coin_type`, or `None` if the FreezeList does not regulate it.
+pub fn get_latest_coin_type_state(
+    store: &dyn ObjectStore,
+    coin_type: &TypeTag,
+) -> SuiResult<Option<CoinTypeState>> {
+    CoinTypeKey::field(coin_type)
+        .into_unbounded_id()?
+        .load_object(store)
+        .map(|field| field.load_value())
+        .transpose()
+}
+
 pub fn has_latest_coin_type_state(store: &dyn ObjectStore, coin_type: &TypeTag) -> SuiResult<bool> {
     Ok(CoinTypeKey::field(coin_type)
         .into_unbounded_id()?
-        .load_object(store)
-        .is_some())
+        .exists(store))
+}
+
+/// Whether `addr` is frozen for `coin_type` in the latest FreezeList.
+pub fn is_latest_address_frozen(
+    store: &dyn ObjectStore,
+    coin_type: &TypeTag,
+    addr: SuiAddress,
+) -> SuiResult<bool> {
+    Ok(FrozenAddressKey::field(coin_type, addr)
+        .into_unbounded_id()?
+        .exists(store))
 }
 
 #[cfg(test)]

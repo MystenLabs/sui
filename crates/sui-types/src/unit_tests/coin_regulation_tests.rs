@@ -82,7 +82,7 @@ fn coin_type_name_uses_full_addresses_without_prefix() {
 }
 
 #[test]
-fn bounded_reads() {
+fn bounded_and_latest_reads() {
     let version = SequenceNumber::from_u64(5);
     let regulated = GAS::type_tag();
     let unregulated = balance_of_sui();
@@ -109,7 +109,7 @@ fn bounded_reads() {
 
     assert_eq!(
         get_coin_type_state(&store, version, &regulated).unwrap(),
-        Some(state)
+        Some(state.clone())
     );
     assert_eq!(
         get_coin_type_state(&store, version, &unregulated).unwrap(),
@@ -118,6 +118,17 @@ fn bounded_reads() {
     assert!(is_address_frozen(&store, version, &regulated, alice()).unwrap());
     assert!(!is_address_frozen(&store, version, &regulated, bob).unwrap());
     assert!(!is_address_frozen(&store, version, &unregulated, alice()).unwrap());
+
+    assert_eq!(
+        get_latest_coin_type_state(&store, &regulated).unwrap(),
+        Some(state)
+    );
+    assert_eq!(
+        get_latest_coin_type_state(&store, &unregulated).unwrap(),
+        None
+    );
+    assert!(is_latest_address_frozen(&store, &regulated, alice()).unwrap());
+    assert!(!is_latest_address_frozen(&store, &regulated, bob).unwrap());
 }
 
 /// Keeps every version of each child.
