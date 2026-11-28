@@ -1,0 +1,351 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 31 tasks
+
+// A coin type first defined in version 2 of its package.
+// Later transactions name the coin type as V2::m::New.
+// Named by its defining IDs it is V2::m::New.
+// `Old`, `One`, and `Wrapper` are defined in version 1, `New` in version 2. B is frozen, then the
+// coin is paused. Every transfer that involves B, and every transfer after the pause, is denied.
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 12-128:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1031000000, storage_cost: 19684000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 130-262:
+//# upgrade --package V1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1031000000, storage_cost: 20527600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 3, lines 264-398:
+//# upgrade --package V2 --upgrade-capability 1,1 --sender A
+created: object(3,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1031000000, storage_cost: 20755600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 4, line 400:
+//# run V2::m::create_new --args object(0xc) @B --sender A
+created: object(4,0), object(4,1), object(4,2), object(4,3), object(4,4), object(4,5), object(4,6), object(4,7), object(4,8), object(4,9), object(4,10), object(4,11), object(4,12), object(4,13)
+mutated: 0x000000000000000000000000000000000000000000000000000000000000000c, object(0,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(4,14), B, sui::balance::Balance<V2::m::New>, Merge, 100)
+gas summary: computation_cost: 1000000, storage_cost: 27603200,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 5, lines 402-403:
+// `type_name::with_defining_ids<T>()` as Move prints it.
+//# view-object 4,7
+Owner: Account Address ( A )
+Version: 5
+Contents: V1::m::Name {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,7),
+        },
+    },
+    name: std::ascii::String {
+        bytes: vector[
+            97u8,
+            102u8,
+            51u8,
+            101u8,
+            54u8,
+            53u8,
+            51u8,
+            102u8,
+            49u8,
+            102u8,
+            99u8,
+            56u8,
+            57u8,
+            55u8,
+            57u8,
+            99u8,
+            53u8,
+            52u8,
+            57u8,
+            50u8,
+            97u8,
+            53u8,
+            98u8,
+            102u8,
+            57u8,
+            57u8,
+            56u8,
+            56u8,
+            97u8,
+            101u8,
+            102u8,
+            55u8,
+            48u8,
+            102u8,
+            49u8,
+            54u8,
+            99u8,
+            57u8,
+            52u8,
+            57u8,
+            52u8,
+            102u8,
+            54u8,
+            52u8,
+            54u8,
+            100u8,
+            102u8,
+            53u8,
+            54u8,
+            56u8,
+            48u8,
+            97u8,
+            102u8,
+            100u8,
+            56u8,
+            99u8,
+            49u8,
+            97u8,
+            52u8,
+            52u8,
+            49u8,
+            97u8,
+            102u8,
+            54u8,
+            58u8,
+            58u8,
+            109u8,
+            58u8,
+            58u8,
+            78u8,
+            101u8,
+            119u8,
+        ],
+    },
+}
+
+task 6, lines 405-406:
+// A's Coin.
+//# view-object 4,3
+Owner: Account Address ( A )
+Version: 5
+Contents: sui::coin::Coin<V1::m::New> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,3),
+        },
+    },
+    balance: sui::balance::Balance<V1::m::New> {
+        value: 9760u64,
+    },
+}
+
+task 7, lines 408-409:
+// B's Wrapper.
+//# view-object 4,5
+Owner: Account Address ( B )
+Version: 5
+Contents: V1::m::Wrapper<V1::m::New> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,5),
+        },
+    },
+    coin: sui::coin::Coin<V1::m::New> {
+        id: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+        balance: sui::balance::Balance<V1::m::New> {
+            value: 10u64,
+        },
+    },
+}
+
+task 8, line 411:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 9, lines 413-416:
+// Control before the freeze: B can send.
+//# programmable --sender B --inputs object(4,4) 1 @A
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([Result(0)], Input(2))
+created: object(9,0)
+mutated: object(0,1), object(4,4)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 3572000,  storage_rebate: 1291871, non_refundable_storage_fee: 129
+
+task 10, line 418:
+//# run sui::coin_regulation::freeze_address --args object(0xcf) object(4,1) @B --type-args V2::m::New --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressFrozen"), type_params: [Struct(StructTag { address: V2, module: Identifier("m"), name: Identifier("New"), type_params: [] })] }, contents: [211, 27, 123, 80, 104, 177, 57, 148, 28, 237, 197, 43, 3, 111, 85, 200, 148, 253, 57, 74, 23, 14, 43, 163, 66, 69, 163, 36, 241, 209, 108, 139] }
+created: object(10,0), object(10,1)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(4,1)
+gas summary: computation_cost: 1000000, storage_cost: 9743200,  storage_rebate: 2705329, non_refundable_storage_fee: 271
+
+task 11, lines 420-421:
+// The `CoinTypeKey` field.
+//# view-object 10,0
+Owner: Object ID: ( 0x00000000000000000000000000000000000000000000000000000000000000cf )
+Version: 6
+Contents: sui::dynamic_field::Field<sui::coin_regulation::CoinTypeKey<V1::m::New>, sui::coin_regulation::CoinTypeState> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(10,0),
+        },
+    },
+    name: sui::coin_regulation::CoinTypeKey<V1::m::New> {
+        dummy_field: false,
+    },
+    value: sui::coin_regulation::CoinTypeState {
+        paused: false,
+        num_frozen_addresses: 1u64,
+    },
+}
+
+task 12, lines 423-424:
+// The `FrozenAddressKey` field.
+//# view-object 10,1
+Owner: Object ID: ( 0x00000000000000000000000000000000000000000000000000000000000000cf )
+Version: 6
+Contents: sui::dynamic_field::Field<sui::coin_regulation::FrozenAddressKey<V1::m::New>, sui::coin_regulation::FrozenAddressState> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(10,1),
+        },
+    },
+    name: sui::coin_regulation::FrozenAddressKey<V1::m::New> {
+        pos0: B,
+    },
+    value: sui::coin_regulation::FrozenAddressState {
+        seize_auths: sui::vec_set::VecSet<sui::object::ID> {
+            contents: vector[],
+        },
+        frozen_epoch: 0u64,
+        unfreeze_lock: sui::coin_regulation::UnfreezeLock::None{},
+    },
+}
+
+task 13, lines 426-429:
+// Frozen sender: Coin.
+//# programmable --sender B --inputs object(4,4) 1 @A
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([Result(0)], Input(2))
+Error: Error checking transaction input objects: Address @B is denied for coin object(2,0)::m::New
+
+task 14, lines 431-432:
+// Frozen sender: Coin held in an object.
+//# run V3::m::split_wrapped --args object(4,5) 1 @A --type-args V2::m::New --sender B
+Error: Transaction Effects Status: Address B is denied for coin V2::m::New
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: B, coin_type: "V2::m::New" }, source: None, command: None } }
+
+task 15, lines 434-437:
+// Frozen sender: address balance, with the type named as in the freeze.
+//# programmable --sender B --inputs withdraw<sui::balance::Balance<V2::m::New>>(1) @A
+//> 0: sui::balance::redeem_funds<V2::m::New>(Input(0));
+//> 1: sui::balance::send_funds<V2::m::New>(Result(0), Input(1));
+Error: Error checking transaction input objects: Address @B is denied for coin object(2,0)::m::New
+
+task 16, lines 439-442:
+// Frozen sender: address balance, with the type named by its defining IDs.
+//# programmable --sender B --inputs withdraw<sui::balance::Balance<V2::m::New>>(1) @A
+//> 0: sui::balance::redeem_funds<V2::m::New>(Input(0));
+//> 1: sui::balance::send_funds<V2::m::New>(Result(0), Input(1));
+Error: Error checking transaction input objects: Address @B is denied for coin object(2,0)::m::New
+
+task 17, lines 444-445:
+// Frozen sender: address balance funded from a Coin held in an object.
+//# run V3::m::send_wrapped_funds --args object(4,5) 1 @A --type-args V2::m::New --sender B
+Error: Transaction Effects Status: Address B is denied for coin V2::m::New
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: B, coin_type: "V2::m::New" }, source: None, command: None } }
+
+task 18, lines 447-450:
+// Frozen recipient: Coin.
+//# programmable --sender A --inputs object(4,3) 1 @B
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([Result(0)], Input(2))
+Error: Transaction Effects Status: Address B is denied for coin V2::m::New
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: B, coin_type: "V2::m::New" }, source: None, command: None } }
+
+task 19, lines 452-455:
+// Frozen recipient: address balance.
+//# programmable --sender A --inputs object(4,3) 1 @B
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> sui::coin::send_funds<V2::m::New>(Result(0), Input(2))
+Error: Transaction Effects Status: Address B is denied for coin V2::m::New
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: B, coin_type: "V2::m::New" }, source: None, command: None } }
+
+task 20, lines 457-458:
+// Frozen recipient: an object that holds the Coin.
+//# run V3::m::give_wrapped --args object(4,6) @B --type-args V2::m::New --sender A
+Error: Transaction Effects Status: Address B is denied for coin V2::m::New
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: B, coin_type: "V2::m::New" }, source: None, command: None } }
+
+task 21, lines 460-461:
+// Frozen sender: reads a Balance held in a dynamic field.
+//# run V3::m::peek_boxed --args object(4,8) --type-args V2::m::New --sender B
+Error: Transaction Effects Status: Address B is denied for coin V2::m::New
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: B, coin_type: "V2::m::New" }, source: None, command: None } }
+
+task 22, lines 463-464:
+// Frozen sender: moves a Balance between dynamic fields.
+//# run V3::m::rebox --args object(4,8) --type-args V2::m::New --sender B
+Error: Transaction Effects Status: Address B is denied for coin V2::m::New
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: B, coin_type: "V2::m::New" }, source: None, command: None } }
+
+task 23, lines 466-469:
+// Control: an unfrozen recipient is allowed.
+//# programmable --sender A --inputs object(4,3) 1 @C
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([Result(0)], Input(2))
+created: object(23,0)
+mutated: object(0,0), object(4,3)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 3572000,  storage_rebate: 2279772, non_refundable_storage_fee: 228
+
+task 24, line 471:
+//# run sui::coin_regulation::enable_global_pause --args object(0xcf) object(4,1) --type-args V2::m::New --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("CoinTypePaused"), type_params: [Struct(StructTag { address: V2, module: Identifier("m"), name: Identifier("New"), type_params: [] })] }, contents: [0] }
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(4,1), object(10,0)
+gas summary: computation_cost: 1000000, storage_cost: 6756400,  storage_rebate: 6755724, non_refundable_storage_fee: 676
+
+task 25, lines 473-476:
+// Paused: Coin input, no frozen address involved.
+//# programmable --sender A --inputs object(4,3) 1 @C
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([Result(0)], Input(2))
+Error: Error checking transaction input objects: Coin type is globally paused for use: object(2,0)::m::New
+
+task 26, lines 478-479:
+// Paused: Coin held in an object, no frozen address involved.
+//# run V3::m::split_wrapped --args object(4,6) 1 @C --type-args V2::m::New --sender A
+Error: Transaction Effects Status: Coin type is globally paused for use: V2::m::New
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "V2::m::New" }, source: None, command: None } }
+
+task 27, lines 481-482:
+// Paused: address balance deposit from a Coin held in an object.
+//# run V3::m::send_wrapped_funds --args object(4,6) 1 @C --type-args V2::m::New --sender A
+Error: Transaction Effects Status: Coin type is globally paused for use: V2::m::New
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "V2::m::New" }, source: None, command: None } }
+
+task 28, lines 484-485:
+// Paused: an object that holds the Coin changes owner.
+//# run V3::m::give_wrapped --args object(4,6) @C --type-args V2::m::New --sender A
+Error: Transaction Effects Status: Coin type is globally paused for use: V2::m::New
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "V2::m::New" }, source: None, command: None } }
+
+task 29, lines 487-488:
+// Paused: reads a Balance held in a dynamic field.
+//# run V3::m::peek_boxed --args object(4,9) --type-args V2::m::New --sender A
+Error: Transaction Effects Status: Coin type is globally paused for use: V2::m::New
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "V2::m::New" }, source: None, command: None } }
+
+task 30, lines 490-491:
+// Paused: moves a Balance between dynamic fields.
+//# run V3::m::rebox --args object(4,9) --type-args V2::m::New --sender A
+Error: Transaction Effects Status: Coin type is globally paused for use: V2::m::New
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "V2::m::New" }, source: None, command: None } }

@@ -1,0 +1,47 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+// Migrating a coin type does not change the gas charged for its coin owners, though the legacy deny
+// list no longer checks them.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-42:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
+mutated: object(0,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1031000000, storage_cost: 19554800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 44:
+//# run sui::coin_registry::migrate_legacy_metadata --args object(0xc) object(1,2) --type-args test::regulated_coin::REGULATED_COIN --sender A
+created: object(2,0), object(2,1)
+mutated: 0x000000000000000000000000000000000000000000000000000000000000000c, object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7030000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 3, line 46:
+//# run test::regulated_coin::send_100 --args object(1,5) --sender A
+created: object(3,0), object(3,1), object(3,2), object(3,3), object(3,4), object(3,5), object(3,6), object(3,7), object(3,8), object(3,9), object(3,10), object(3,11), object(3,12), object(3,13), object(3,14), object(3,15), object(3,16), object(3,17), object(3,18), object(3,19), object(3,20), object(3,21), object(3,22), object(3,23), object(3,24), object(3,25), object(3,26), object(3,27), object(3,28), object(3,29), object(3,30), object(3,31), object(3,32), object(3,33), object(3,34), object(3,35), object(3,36), object(3,37), object(3,38), object(3,39), object(3,40), object(3,41), object(3,42), object(3,43), object(3,44), object(3,45), object(3,46), object(3,47), object(3,48), object(3,49), object(3,50), object(3,51), object(3,52), object(3,53), object(3,54), object(3,55), object(3,56), object(3,57), object(3,58), object(3,59), object(3,60), object(3,61), object(3,62), object(3,63), object(3,64), object(3,65), object(3,66), object(3,67), object(3,68), object(3,69), object(3,70), object(3,71), object(3,72), object(3,73), object(3,74), object(3,75), object(3,76), object(3,77), object(3,78), object(3,79), object(3,80), object(3,81), object(3,82), object(3,83), object(3,84), object(3,85), object(3,86), object(3,87), object(3,88), object(3,89), object(3,90), object(3,91), object(3,92), object(3,93), object(3,94), object(3,95), object(3,96), object(3,97), object(3,98), object(3,99)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 15300000, storage_cost: 149902400,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 4, lines 48-50:
+//# programmable --sender A --inputs object(2,0) object(0xcf) object(0x403) object(1,3) vector[] @A
+//> 0: sui::coin_registry::migrate_to_compliance_cap<test::regulated_coin::REGULATED_COIN>(Input(0), Input(1), Input(2), Input(3), Input(4));
+//> TransferObjects([Result(0)], Input(5))
+events: Event { package_id: sui, transaction_module: Identifier("coin_registry"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("DenyCapMigrated"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [45, 123, 18, 104, 128, 1, 216, 97, 101, 17, 243, 3, 210, 7, 162, 8, 158, 202, 123, 174, 212, 48, 16, 55, 251, 143, 185, 186, 9, 20, 226, 35] }
+created: object(4,0), object(4,1)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 13748400,  storage_rebate: 4939506, non_refundable_storage_fee: 494
+
+task 5, lines 52-53:
+// The same computation cost as before the migration.
+//# run test::regulated_coin::send_100 --args object(1,5) --sender A
+created: object(5,0), object(5,1), object(5,2), object(5,3), object(5,4), object(5,5), object(5,6), object(5,7), object(5,8), object(5,9), object(5,10), object(5,11), object(5,12), object(5,13), object(5,14), object(5,15), object(5,16), object(5,17), object(5,18), object(5,19), object(5,20), object(5,21), object(5,22), object(5,23), object(5,24), object(5,25), object(5,26), object(5,27), object(5,28), object(5,29), object(5,30), object(5,31), object(5,32), object(5,33), object(5,34), object(5,35), object(5,36), object(5,37), object(5,38), object(5,39), object(5,40), object(5,41), object(5,42), object(5,43), object(5,44), object(5,45), object(5,46), object(5,47), object(5,48), object(5,49), object(5,50), object(5,51), object(5,52), object(5,53), object(5,54), object(5,55), object(5,56), object(5,57), object(5,58), object(5,59), object(5,60), object(5,61), object(5,62), object(5,63), object(5,64), object(5,65), object(5,66), object(5,67), object(5,68), object(5,69), object(5,70), object(5,71), object(5,72), object(5,73), object(5,74), object(5,75), object(5,76), object(5,77), object(5,78), object(5,79), object(5,80), object(5,81), object(5,82), object(5,83), object(5,84), object(5,85), object(5,86), object(5,87), object(5,88), object(5,89), object(5,90), object(5,91), object(5,92), object(5,93), object(5,94), object(5,95), object(5,96), object(5,97), object(5,98), object(5,99)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 15300000, storage_cost: 149902400,  storage_rebate: 2462154, non_refundable_storage_fee: 246

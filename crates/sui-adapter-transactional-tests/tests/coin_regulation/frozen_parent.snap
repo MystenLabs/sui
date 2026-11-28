@@ -1,0 +1,140 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 16 tasks
+
+// A freeze of an object's ID blocks its coin while that ID is the coin's direct parent. A Bag
+// moved to a new object sheds a freeze of the outer object's ID but not a freeze of its own ID.
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 9-94:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
+mutated: object(0,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1031000000, storage_cost: 26790000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 96:
+//# run sui::coin_registry::finalize_registration --args object(0xc) receiving(1,2) --type-args test::regulated_coin::REGULATED_COIN --sender A
+created: object(2,0), object(2,1)
+mutated: 0x000000000000000000000000000000000000000000000000000000000000000c, object(0,0)
+deleted: object(1,2)
+gas summary: computation_cost: 1000000, storage_cost: 8094000,  storage_rebate: 4217578, non_refundable_storage_fee: 422
+
+task 3, lines 98-101:
+//# programmable --sender A --inputs object(1,5) 100 @A
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: test::regulated_coin::df_vault(Result(0));
+//> TransferObjects([Result(1)], Input(2))
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 6125600,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 4, lines 103-106:
+//# programmable --sender A --inputs object(1,5) 100 @A
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: test::regulated_coin::bag_vault(Result(0));
+//> TransferObjects([Result(1)], Input(2))
+created: object(4,0), object(4,1)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 6452400,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 5, lines 108-111:
+//# programmable --sender A --inputs object(1,5) 100 @A
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: test::regulated_coin::bag_vault(Result(0));
+//> TransferObjects([Result(1)], Input(2))
+created: object(5,0), object(5,1)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 6452400,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 6, lines 113-118:
+// Freeze B, the ID of the first two objects, and the ID of the Bag inside the third.
+//# programmable --sender A --inputs object(0xcf) object(1,3) object(3,0) object(4,0) object(5,0) @B
+//> 0: test::regulated_coin::freeze_object<test::regulated_coin::Vault>(Input(0), Input(1), Input(2));
+//> 1: test::regulated_coin::freeze_object<test::regulated_coin::BagVault>(Input(0), Input(1), Input(3));
+//> 2: test::regulated_coin::freeze_bag(Input(0), Input(1), Input(4));
+//> 3: sui::coin_regulation::freeze_address<test::regulated_coin::REGULATED_COIN>(Input(0), Input(1), Input(5));
+events: Event { package_id: test, transaction_module: Identifier("regulated_coin"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressFrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [186, 157, 20, 81, 7, 251, 117, 82, 243, 133, 47, 184, 246, 88, 103, 193, 118, 97, 44, 224, 187, 4, 26, 26, 62, 151, 241, 200, 77, 213, 202, 163] }, Event { package_id: test, transaction_module: Identifier("regulated_coin"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressFrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [105, 3, 210, 96, 24, 72, 133, 5, 92, 102, 61, 12, 148, 226, 150, 98, 241, 36, 133, 249, 92, 229, 251, 78, 186, 126, 90, 113, 123, 29, 125, 124] }, Event { package_id: test, transaction_module: Identifier("regulated_coin"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressFrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [215, 20, 14, 121, 50, 148, 38, 233, 179, 154, 145, 112, 221, 223, 235, 19, 134, 215, 68, 76, 249, 138, 168, 1, 193, 185, 50, 16, 117, 113, 140, 203] }, Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressFrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [211, 27, 123, 80, 104, 177, 57, 148, 28, 237, 197, 43, 3, 111, 85, 200, 148, 253, 57, 74, 23, 14, 43, 163, 66, 69, 163, 36, 241, 209, 108, 139] }
+created: object(6,0), object(6,1), object(6,2), object(6,3), object(6,4)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3), object(3,0), object(4,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 24464400,  storage_rebate: 7553645, non_refundable_storage_fee: 755
+
+task 7, lines 120-122:
+// The objects reach the frozen B and leave it again.
+//# programmable --sender A --inputs object(3,0) object(4,0) object(5,0) @B
+//> TransferObjects([Input(0), Input(1), Input(2)], Input(3))
+mutated: object(0,0), object(3,0), object(4,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 5654400,  storage_rebate: 5653835, non_refundable_storage_fee: 565
+
+task 8, lines 124-125:
+//# programmable --sender B --inputs object(3,0) object(4,0) object(5,0) @C
+//> TransferObjects([Input(0), Input(1), Input(2)], Input(3))
+mutated: object(0,1), object(3,0), object(4,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 5654400,  storage_rebate: 4665933, non_refundable_storage_fee: 467
+
+task 9, lines 127-130:
+// Frozen object ID that is the parent of the dynamic field.
+//# programmable --sender C --inputs object(3,0) @C
+//> 0: test::regulated_coin::take_df(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+Error: Transaction Effects Status: Address fake(3,0) is denied for coin test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: fake(3,0), coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
+
+task 10, lines 132-135:
+// Frozen object ID around an unfrozen Bag.
+//# programmable --sender C --inputs object(4,0) @C
+//> 0: test::regulated_coin::take_bag(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+Error: Transaction Effects Status: Address fake(4,0) is denied for coin test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: fake(4,0), coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
+
+task 11, lines 137-140:
+// Unfrozen object ID around a frozen Bag.
+//# programmable --sender C --inputs object(5,0) @C
+//> 0: test::regulated_coin::take_bag(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+Error: Transaction Effects Status: Address _ is denied for coin test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: _, coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
+
+task 12, lines 142-145:
+// The unfrozen Bag moves to an object with a new ID.
+//# programmable --sender C --inputs object(4,0) @C
+//> 0: test::regulated_coin::rewrap_bag(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+created: object(12,0)
+mutated: object(0,2)
+deleted: object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 2652400,  storage_rebate: 2652135, non_refundable_storage_fee: 265
+
+task 13, lines 147-149:
+//# programmable --sender C --inputs object(12,0) @C
+//> 0: test::regulated_coin::take_bag(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+created: object(13,0)
+mutated: object(0,2), object(12,0)
+deleted: object(4,1)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 4126800,  storage_rebate: 4977502, non_refundable_storage_fee: 498
+
+task 14, lines 151-154:
+// The frozen Bag moves to an object with a new ID.
+//# programmable --sender C --inputs object(5,0) @C
+//> 0: test::regulated_coin::rewrap_bag(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+created: object(14,0)
+mutated: object(0,2)
+deleted: object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2652400,  storage_rebate: 2652135, non_refundable_storage_fee: 265
+
+task 15, lines 156-158:
+//# programmable --sender C --inputs object(14,0) @C
+//> 0: test::regulated_coin::take_bag(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+Error: Transaction Effects Status: Address _ is denied for coin test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: _, coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }

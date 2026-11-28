@@ -1,0 +1,93 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+// A Coin received from an object, under a frozen parent ID or a frozen coin ID. Simulator mode
+// skips the signing check, so execution decides.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-50:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
+mutated: object(0,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1031000000, storage_cost: 22146400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 51:
+//# run sui::coin_registry::finalize_registration --args object(0xc) receiving(1,2) --type-args test::regulated_coin::REGULATED_COIN --sender A
+created: object(2,0), object(2,1)
+mutated: 0x000000000000000000000000000000000000000000000000000000000000000c, object(0,0)
+deleted: object(1,2)
+gas summary: computation_cost: 1000000, storage_cost: 8094000,  storage_rebate: 4217578, non_refundable_storage_fee: 422
+
+task 3, lines 53-56:
+// Setup: two parents.
+//# programmable --sender A
+//> 0: test::regulated_coin::new_parent();
+//> test::regulated_coin::new_parent()
+created: object(3,0), object(3,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3678400,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 4, lines 58-66:
+// Setup: two Coins at the first parent's address, and one at the second's whose ID is frozen here.
+//# programmable --sender A --inputs object(1,5) 100 object(3,0) object(3,1) object(0xcf) object(1,3)
+//> 0: SplitCoins(Input(0), [Input(1), Input(1), Input(1)]);
+//> 1: sui::object::id_address<test::regulated_coin::Parent>(Input(2));
+//> 2: sui::object::id_address<test::regulated_coin::Parent>(Input(3));
+//> 3: sui::object::id_address<sui::coin::Coin<test::regulated_coin::REGULATED_COIN>>(NestedResult(0,2));
+//> 4: sui::coin_regulation::freeze_address<test::regulated_coin::REGULATED_COIN>(Input(4), Input(5), Result(3));
+//> 5: TransferObjects([NestedResult(0,0), NestedResult(0,1)], Result(1));
+//> TransferObjects([NestedResult(0,2)], Result(2))
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressFrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [33, 80, 112, 137, 17, 194, 179, 8, 211, 27, 212, 201, 14, 125, 197, 252, 244, 85, 168, 30, 155, 82, 215, 170, 81, 128, 169, 205, 242, 162, 157, 252] }
+created: object(4,0), object(4,1), object(4,2), object(4,3), object(4,4)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3), object(1,5), object(3,0), object(3,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 18878400,  storage_rebate: 7052095, non_refundable_storage_fee: 705
+
+task 5, lines 68-71:
+// Control: A receives a Coin from the first parent.
+//# programmable --sender A --inputs object(3,0) receiving(4,0) @A
+//> 0: test::regulated_coin::receive(Input(0), Input(1));
+//> TransferObjects([Result(0)], Input(2))
+mutated: object(0,0), object(3,0), object(4,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 3807600,  storage_rebate: 3807219, non_refundable_storage_fee: 381
+
+task 6, lines 73-76:
+// A receives a Coin whose ID is frozen.
+//# programmable --sender A --inputs object(3,1) receiving(4,2) @A
+//> 0: test::regulated_coin::receive(Input(0), Input(1));
+//> TransferObjects([Result(0)], Input(2))
+Error: Transaction Effects Status: Address fake(4,2) is denied for coin test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: fake(4,2), coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
+
+task 7, lines 78-81:
+// Setup: freeze the first parent's ID.
+//# programmable --sender A --inputs object(0xcf) object(1,3) object(3,0)
+//> 0: sui::object::id_address<test::regulated_coin::Parent>(Input(2));
+//> sui::coin_regulation::freeze_address<test::regulated_coin::REGULATED_COIN>(Input(0), Input(1), Result(0))
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressFrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [254, 80, 249, 19, 243, 30, 99, 122, 55, 113, 154, 195, 195, 160, 80, 121, 110, 30, 58, 152, 15, 68, 40, 147, 184, 59, 237, 38, 190, 62, 39, 7] }
+created: object(7,0)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3), object(3,0), object(4,3)
+gas summary: computation_cost: 1000000, storage_cost: 11635600,  storage_rebate: 8465553, non_refundable_storage_fee: 847
+
+task 8, lines 83-86:
+// A receives a Coin sent to a frozen parent.
+//# programmable --sender A --inputs object(3,0) receiving(4,1) @A
+//> 0: test::regulated_coin::receive(Input(0), Input(1));
+//> TransferObjects([Result(0)], Input(2))
+Error: Transaction Effects Status: Address fake(3,0) is denied for coin test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: fake(3,0), coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
+
+task 9, lines 88-92:
+// A sends T to the frozen parent's address.
+//# programmable --sender A --inputs object(1,5) 1 object(3,0)
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: sui::object::id_address<test::regulated_coin::Parent>(Input(2));
+//> TransferObjects([Result(0)], Result(1))
+Error: Transaction Effects Status: Address fake(3,0) is denied for coin test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: fake(3,0), coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }

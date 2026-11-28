@@ -7,6 +7,8 @@ use serde::Deserialize;
 use serde_json::json;
 use sui_types::Identifier;
 use sui_types::SUI_COIN_REGISTRY_ADDRESS;
+use sui_types::SUI_FRAMEWORK_ADDRESS;
+use sui_types::TypeTag;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
@@ -36,6 +38,36 @@ query GetCoinMetadata($coinType: String!) {
         regulatedState
         allowGlobalPause
     }
+}
+"#;
+
+const CAP_QUERY: &str = r#"
+query GetCap($cap: SuiAddress!, $version: UInt53!, $digest: String!, $owner: SuiAddress!) {
+    transactionEffects(digest: $digest) {
+        objectChanges {
+            nodes {
+                address
+                idCreated
+                idDeleted
+                inputState { ...Cap }
+                outputState { ...Cap }
+            }
+        }
+    }
+    latest: object(address: $cap) { ...Cap }
+    before: object(address: $cap, version: $version) { ...Cap }
+    address(address: $owner) {
+        denyCaps: objects(filter: { type: "0x2::coin::DenyCapV2" }) { nodes { address } }
+        complianceCaps: objects(filter: { type: "0x2::coin_regulation::ComplianceCap" }) {
+            nodes { address }
+        }
+    }
+}
+
+fragment Cap on Object {
+    address
+    version
+    asMoveObject { contents { type { repr } } }
 }
 "#;
 
@@ -594,6 +626,83 @@ async fn test_legacy_regulated_migrate_regulated_metadata() {
     assert_eq!(migrated, metadata);
 }
 
+#[tokio::test]
+async fn test_legacy_regulated_migrate_to_compliance_cap() {
+    let mut cluster = FullCluster::new().await.unwrap();
+    let (sender, kp, fx) = coin_registry::publish(&mut cluster, "legacy_regulated").await;
+
+    cluster.create_checkpoint().await;
+    let outputs = query_owned_outputs(&cluster, sender).await;
+    let deny_cap = outputs.deny.unwrap();
+    let gas = fx.gas_object().unwrap().0;
+
+    let fx = coin_registry::migrate(&mut cluster, sender, &kp, &outputs, gas).await;
+    let currency = find::shared(&fx).unwrap();
+    let gas = fx.gas_object().unwrap().0;
+
+    let fx = coin_registry::migrate_to_compliance_cap(
+        &mut cluster,
+        sender,
+        &kp,
+        &outputs,
+        currency,
+        gas,
+    )
+    .await;
+    let digest = fx.transaction_digest().to_string();
+    cluster.create_checkpoint().await;
+
+    let response: serde_json::Value = reqwest::Client::new()
+        .post(cluster.graphql_url().as_str())
+        .json(&json!({
+            "query": CAP_QUERY,
+            "variables": {
+                "cap": deny_cap.0.to_string(),
+                "version": deny_cap.1.value(),
+                "digest": digest,
+                "owner": sender.to_string(),
+            },
+        }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let data = response
+        .get("data")
+        .unwrap_or_else(|| panic!("{response:#}"));
+
+    let coin_type = TypeTag::Struct(Box::new(outputs.coin_type.clone()));
+    let deny_cap_type = framework_type("coin", "DenyCapV2", coin_type.clone());
+    let compliance_cap_type = framework_type("coin_regulation", "ComplianceCap", coin_type);
+
+    let change = data["transactionEffects"]["objectChanges"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|change| change["address"] == data["latest"]["address"])
+        .unwrap();
+    assert_eq!(change["idCreated"], false);
+    assert_eq!(change["idDeleted"], false);
+    assert_eq!(cap_type(&change["inputState"]), deny_cap_type);
+    assert_eq!(cap_type(&change["outputState"]), compliance_cap_type);
+    assert_eq!(change["inputState"]["version"], deny_cap.1.value());
+    assert_eq!(change["outputState"], data["latest"]);
+
+    let cap_id: ObjectID = data["latest"]["address"].as_str().unwrap().parse().unwrap();
+    assert_eq!(cap_id, deny_cap.0);
+    assert_eq!(cap_type(&data["latest"]), compliance_cap_type);
+    assert_eq!(cap_type(&data["before"]), deny_cap_type);
+
+    let owned = &data["address"];
+    assert_eq!(owned["denyCaps"]["nodes"], json!([]));
+    assert_eq!(
+        owned["complianceCaps"]["nodes"],
+        json!([{ "address": data["latest"]["address"] }])
+    );
+}
+
 /// Run a GraphQL query to fetch the coin metadata for `coin_type` from `cluster`.
 async fn query_metadata(cluster: &FullCluster, coin_type: &str) -> CoinMetadataResponse {
     let client = reqwest::Client::new();
@@ -717,4 +826,22 @@ async fn query_objects(cluster: &FullCluster, owner: SuiAddress) -> Vec<(StructT
     }
 
     objects
+}
+
+fn framework_type(module: &str, name: &str, coin_type: TypeTag) -> StructTag {
+    StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: Identifier::new(module).unwrap(),
+        name: Identifier::new(name).unwrap(),
+        type_params: vec![coin_type],
+    }
+}
+
+/// The type of an object fetched with the `Cap` fragment.
+fn cap_type(object: &serde_json::Value) -> StructTag {
+    object["asMoveObject"]["contents"]["type"]["repr"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap()
 }

@@ -1,0 +1,267 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 31 tasks
+
+// Freezing the Clock, the framework package, or the coin's own package blocks nothing.
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 8-71:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
+mutated: object(0,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1031000000, storage_cost: 23210400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 73:
+//# run sui::coin_registry::finalize_registration --args object(0xc) receiving(1,2) --type-args test::regulated_coin::REGULATED_COIN --sender A
+created: object(2,0), object(2,1)
+mutated: 0x000000000000000000000000000000000000000000000000000000000000000c, object(0,0)
+deleted: object(1,2)
+gas summary: computation_cost: 1000000, storage_cost: 8094000,  storage_rebate: 4217578, non_refundable_storage_fee: 422
+
+task 3, lines 75-76:
+// The cap cannot pause.
+//# run sui::coin_regulation::enable_global_pause --args object(0xcf) object(1,3) --type-args test::regulated_coin::REGULATED_COIN --sender A
+Error: Transaction Effects Status: Move Abort in sui::coin_regulation::enable_global_pause (function index 6) at offset 8 at line 252 with clever code 5
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("coin_regulation") }, function: 6, instruction: 8, function_name: Some("enable_global_pause") }, 13836466512498130955) at command Some(0)
+
+task 4, lines 78-82:
+// B gets an address balance and a Coin.
+//# programmable --sender A --inputs object(1,5) 100 @B
+//> 0: SplitCoins(Input(0), [Input(1), Input(1)]);
+//> 1: sui::coin::send_funds<test::regulated_coin::REGULATED_COIN>(NestedResult(0,0), Input(2));
+//> TransferObjects([NestedResult(0,1)], Input(2))
+created: object(4,0)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(4,1), B, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100)
+gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 5, line 84:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 6, lines 86-88:
+// Before any freeze: a call into 0x2 with the coin as a type argument.
+//# programmable --sender A --inputs object(1,5) 1 @B
+//> sui::pay::split_and_transfer<test::regulated_coin::REGULATED_COIN>(Input(0), Input(1), Input(2))
+created: object(6,0)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 7, lines 90-92:
+// Before any freeze: a call that reads the Clock.
+//# programmable --sender A --inputs object(1,5) 1 @B immshared(6)
+//> test::regulated_coin::pay_at(Input(0), Input(1), Input(2), Input(3))
+created: object(7,0)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000006, 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 8, line 94:
+//# run sui::coin_regulation::freeze_address --args object(0xcf) object(1,3) @0x6 --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressFrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6] }
+created: object(8,0), object(8,1)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3)
+gas summary: computation_cost: 1000000, storage_cost: 10290400,  storage_rebate: 4270773, non_refundable_storage_fee: 427
+
+task 9, lines 96-98:
+// Clock frozen: a call that reads the Clock and moves the coin.
+//# programmable --sender A --inputs object(1,5) 1 @B immshared(6)
+//> test::regulated_coin::pay_at(Input(0), Input(1), Input(2), Input(3))
+created: object(9,0)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000006, 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 10, lines 100-104:
+// Clock frozen: the Clock is read by one command and the coin is moved by other commands.
+//# programmable --sender A --inputs immshared(6) object(1,5) 1 @B
+//> 0: test::regulated_coin::read_clock(Input(0));
+//> 1: SplitCoins(Input(1), [Input(2)]);
+//> TransferObjects([Result(1)], Input(3))
+created: object(10,0)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000006, 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 11, lines 106-108:
+// Clock frozen: a Clock read without the coin.
+//# programmable --sender A --inputs immshared(6)
+//> test::regulated_coin::read_clock(Input(0))
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000006
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 12, lines 110-112:
+// Clock frozen: a call into 0x2 with the coin as a type argument and no Clock.
+//# programmable --sender A --inputs object(1,5) 1 @B
+//> sui::pay::split_and_transfer<test::regulated_coin::REGULATED_COIN>(Input(0), Input(1), Input(2))
+created: object(12,0)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 13, line 114:
+//# run sui::coin_regulation::freeze_address --args object(0xcf) object(1,3) @0x2 --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressFrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2] }
+created: object(13,0)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3), object(8,0)
+gas summary: computation_cost: 1000000, storage_cost: 10290400,  storage_rebate: 7120488, non_refundable_storage_fee: 712
+
+task 14, lines 116-118:
+// 0x2 frozen: a call into 0x2 with the coin as a type argument.
+//# programmable --sender A --inputs object(1,5) 1 @B
+//> sui::pay::split_and_transfer<test::regulated_coin::REGULATED_COIN>(Input(0), Input(1), Input(2))
+created: object(14,0)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 15, lines 120-123:
+// 0x2 frozen: a deposit to an address balance.
+//# programmable --sender A --inputs object(1,5) 1 @B
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> sui::coin::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2))
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+accumulators_written: (object(4,1), B, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 1)
+gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 16, lines 125-128:
+// 0x2 frozen: a withdrawal from an address balance.
+//# programmable --sender B --inputs withdraw<sui::balance::Balance<test::regulated_coin::REGULATED_COIN>>(1) @A
+//> 0: sui::balance::redeem_funds<test::regulated_coin::REGULATED_COIN>(Input(0));
+//> 1: sui::balance::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(1));
+mutated: object(0,1)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+accumulators_written: (object(4,1), B, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Split, 1), (object(16,0), A, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 17, lines 130-134:
+// 0x2 frozen: MakeMoveVec with a 0x2 type, and a call into the coin's package.
+//# programmable --sender A --inputs object(1,5) 1 @B
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: MakeMoveVec<sui::coin::Coin<test::regulated_coin::REGULATED_COIN>>([Result(0)]);
+//> test::regulated_coin::send_all(Result(1), Input(2))
+created: object(17,0)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 18, lines 136-138:
+// 0x2 frozen: a call into the coin's package with no type argument.
+//# programmable --sender A --inputs object(1,5) 1 @B
+//> test::regulated_coin::pay(Input(0), Input(1), Input(2))
+created: object(18,0)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 19, lines 140-142:
+// 0x2 frozen: a call into the coin's package with the coin as the only type argument.
+//# programmable --sender A --inputs object(1,5) 1 @B
+//> test::regulated_coin::pay_generic<test::regulated_coin::REGULATED_COIN, test::regulated_coin::REGULATED_COIN>(Input(0), Input(1), Input(2))
+created: object(19,0)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 20, lines 144-146:
+// 0x2 frozen: the same call with SUI as an unused type argument.
+//# programmable --sender A --inputs object(1,5) 1 @B
+//> test::regulated_coin::pay_generic<test::regulated_coin::REGULATED_COIN, sui::sui::SUI>(Input(0), Input(1), Input(2))
+created: object(20,0)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 21, lines 148-151:
+// 0x2 frozen: plain SplitCoins and TransferObjects.
+//# programmable --sender A --inputs object(1,5) 1 @B
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([Result(0)], Input(2))
+created: object(21,0)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 22, lines 153-155:
+// 0x2 frozen: plain TransferObjects of a whole Coin.
+//# programmable --sender B --inputs object(4,0) @A
+//> TransferObjects([Input(0)], Input(1))
+mutated: object(0,1), object(4,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 23, lines 157-159:
+// 0x2 frozen: plain MergeCoins.
+//# programmable --sender A --inputs object(1,5) object(4,0)
+//> MergeCoins(Input(0), [Input(1)])
+mutated: object(0,0), object(1,5)
+deleted: object(4,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 3936406, non_refundable_storage_fee: 394
+
+task 24, line 161:
+//# run sui::coin_regulation::freeze_address --args object(0xcf) object(1,3) @test --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressFrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [228, 212, 79, 218, 76, 188, 217, 244, 63, 98, 83, 163, 116, 55, 78, 112, 170, 89, 121, 194, 111, 80, 69, 131, 132, 117, 11, 161, 227, 72, 130, 215] }
+created: object(24,0)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3), object(8,0)
+gas summary: computation_cost: 1000000, storage_cost: 10290400,  storage_rebate: 7120488, non_refundable_storage_fee: 712
+
+task 25, lines 163-165:
+// Coin package frozen: a call into the coin's package with no type argument.
+//# programmable --sender A --inputs object(1,5) 1 @B
+//> test::regulated_coin::pay(Input(0), Input(1), Input(2))
+created: object(25,0)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 26, lines 167-170:
+// Coin package frozen: plain SplitCoins and TransferObjects.
+//# programmable --sender A --inputs object(1,5) 1 @B
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([Result(0)], Input(2))
+created: object(26,0)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 27, lines 172-173:
+// The unfreeze is itself a call into 0x2 with the coin as a type argument.
+//# run sui::coin_regulation::unfreeze_address --args object(0xcf) object(1,3) @0x2 --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressUnfrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2] }
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3), object(8,0)
+deleted: object(13,0)
+gas summary: computation_cost: 1000000, storage_cost: 7121200,  storage_rebate: 10289371, non_refundable_storage_fee: 1029
+
+task 28, lines 175-177:
+// Only the coin package and the Clock frozen: a call into 0x2 with the coin as a type argument.
+//# programmable --sender A --inputs object(1,5) 1 @B
+//> sui::pay::split_and_transfer<test::regulated_coin::REGULATED_COIN>(Input(0), Input(1), Input(2))
+created: object(28,0)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 29, line 179:
+//# run sui::coin_regulation::unfreeze_address --args object(0xcf) object(1,3) @test --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressUnfrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [228, 212, 79, 218, 76, 188, 217, 244, 63, 98, 83, 163, 116, 55, 78, 112, 170, 89, 121, 194, 111, 80, 69, 131, 132, 117, 11, 161, 227, 72, 130, 215] }
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3), object(8,0)
+deleted: object(24,0)
+gas summary: computation_cost: 1000000, storage_cost: 7121200,  storage_rebate: 10289371, non_refundable_storage_fee: 1029
+
+task 30, lines 181-183:
+// Only the Clock frozen again.
+//# programmable --sender A --inputs object(1,5) 1 @B
+//> sui::pay::split_and_transfer<test::regulated_coin::REGULATED_COIN>(Input(0), Input(1), Input(2))
+created: object(30,0)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2462154, non_refundable_storage_fee: 246

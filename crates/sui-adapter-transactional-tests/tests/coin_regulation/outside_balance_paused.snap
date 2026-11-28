@@ -1,0 +1,285 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 34 tasks
+
+// Objects whose coin sits outside their own bytes change owner while the coin is paused. The new
+// owner takes the coin out once the pause is lifted.
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 9-131:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
+mutated: object(0,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1031000000, storage_cost: 32011200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 133:
+//# run sui::coin_registry::finalize_registration --args object(0xc) receiving(1,2) --type-args test::regulated_coin::REGULATED_COIN --sender A
+created: object(2,0), object(2,1)
+mutated: 0x000000000000000000000000000000000000000000000000000000000000000c, object(0,0)
+deleted: object(1,2)
+gas summary: computation_cost: 1000000, storage_cost: 8094000,  storage_rebate: 4217578, non_refundable_storage_fee: 422
+
+task 3, lines 135-139:
+// Each holding place gets 100 and stays with A.
+//# programmable --sender A --inputs object(1,5) 100 @A
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: test::regulated_coin::df_vault(Result(0));
+//> TransferObjects([Result(1)], Input(2))
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 6125600,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 4, lines 141-144:
+//# programmable --sender A --inputs object(1,5) 100 @A
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: test::regulated_coin::dof_vault(Result(0));
+//> TransferObjects([Result(1)], Input(2))
+created: object(4,0), object(4,1), object(4,2)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 7729200,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 5, lines 146-149:
+//# programmable --sender A --inputs object(1,5) 100 @A
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: test::regulated_coin::bag_vault(Result(0));
+//> TransferObjects([Result(1)], Input(2))
+created: object(5,0), object(5,1)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 6452400,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 6, lines 151-154:
+//# programmable --sender A --inputs object(1,5) 100 @A
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: test::regulated_coin::table_vault(Result(0));
+//> TransferObjects([Result(1)], Input(2))
+created: object(6,0), object(6,1)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 6467600,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 7, lines 156-159:
+//# programmable --sender A --inputs object(1,5) 100 @A
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: test::regulated_coin::account_vault(Result(0));
+//> TransferObjects([Result(1)], Input(2))
+created: object(7,0)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(7,1), fake(7,0), sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100)
+gas summary: computation_cost: 1000000, storage_cost: 3800000,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 8, lines 161-164:
+//# programmable --sender A --inputs object(1,5) 100 @A
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: test::regulated_coin::receive_vault(Result(0));
+//> TransferObjects([Result(1)], Input(2))
+created: object(8,0), object(8,1)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 5274400,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 9, lines 166-170:
+// Control: the Balance is in the object's own bytes.
+//# programmable --sender A --inputs object(1,5) 100 @A
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: test::regulated_coin::wrapper(Result(0));
+//> TransferObjects([Result(1)], Input(2))
+created: object(9,0)
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 3876000,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+
+task 10, line 172:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 11, line 174:
+//# run sui::coin_regulation::enable_global_pause --args object(0xcf) object(1,3) --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("CoinTypePaused"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [0] }
+created: object(11,0)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3)
+gas summary: computation_cost: 1000000, storage_cost: 7121200,  storage_rebate: 2887711, non_refundable_storage_fee: 289
+
+task 12, lines 176-178:
+// Control: the Wrapper is transferred while the coin is paused.
+//# programmable --sender A --inputs object(9,0) @C
+//> TransferObjects([Input(0)], Input(1))
+Error: Transaction Effects Status: Coin type is globally paused for use: test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
+
+task 13, lines 180-182:
+// Dynamic field holding a Balance.
+//# programmable --sender A --inputs object(3,0) @C
+//> TransferObjects([Input(0)], Input(1))
+mutated: object(0,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2325367, non_refundable_storage_fee: 233
+
+task 14, lines 184-186:
+// Dynamic object field holding a Coin.
+//# programmable --sender A --inputs object(4,1) @C
+//> TransferObjects([Input(0)], Input(1))
+mutated: object(0,0), object(4,1)
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2325367, non_refundable_storage_fee: 233
+
+task 15, lines 188-190:
+// Bag entry holding a Balance.
+//# programmable --sender A --inputs object(5,0) @C
+//> TransferObjects([Input(0)], Input(1))
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2652400,  storage_rebate: 2652135, non_refundable_storage_fee: 265
+
+task 16, lines 192-194:
+// Table entry holding a Balance.
+//# programmable --sender A --inputs object(6,0) @C
+//> TransferObjects([Input(0)], Input(1))
+mutated: object(0,0), object(6,0)
+gas summary: computation_cost: 1000000, storage_cost: 2667600,  storage_rebate: 2667333, non_refundable_storage_fee: 267
+
+task 17, lines 196-198:
+// Address balance of the object's ID.
+//# programmable --sender A --inputs object(7,0) @C
+//> TransferObjects([Input(0)], Input(1))
+mutated: object(0,0), object(7,0)
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2325367, non_refundable_storage_fee: 233
+
+task 18, lines 200-202:
+// Coin sent to the object's ID and not received.
+//# programmable --sender A --inputs object(8,1) @C
+//> TransferObjects([Input(0)], Input(1))
+mutated: object(0,0), object(8,1)
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2325367, non_refundable_storage_fee: 233
+
+task 19, lines 204-207:
+// The new owner tries to take the coin out of each while the coin is paused.
+//# programmable --sender C --inputs object(3,0) @C
+//> 0: test::regulated_coin::take_df(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+Error: Transaction Effects Status: Coin type is globally paused for use: test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
+
+task 20, lines 209-211:
+//# programmable --sender C --inputs object(4,1) @C
+//> 0: test::regulated_coin::take_dof(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+Error: Transaction Effects Status: Coin type is globally paused for use: test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
+
+task 21, lines 213-215:
+//# programmable --sender C --inputs object(5,0) @C
+//> 0: test::regulated_coin::take_bag(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+Error: Transaction Effects Status: Coin type is globally paused for use: test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
+
+task 22, lines 217-219:
+//# programmable --sender C --inputs object(6,0) @C
+//> 0: test::regulated_coin::take_table(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+Error: Transaction Effects Status: Coin type is globally paused for use: test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
+
+task 23, lines 221-223:
+//# programmable --sender C --inputs object(7,0) 100 @C
+//> 0: test::regulated_coin::take_account(Input(0), Input(1));
+//> TransferObjects([Result(0)], Input(2))
+Error: Transaction Effects Status: Coin type is globally paused for use: test::regulated_coin::REGULATED_COIN
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "test::regulated_coin::REGULATED_COIN" }, source: None, command: None } }
+
+task 24, lines 225-227:
+//# programmable --sender C --inputs object(8,1) receiving(8,0) @C
+//> 0: test::regulated_coin::take_receive(Input(0), Input(1));
+//> TransferObjects([Result(0)], Input(2))
+Error: Error checking transaction input objects: Coin type is globally paused for use: object(1,0)::regulated_coin::REGULATED_COIN
+
+task 25, line 229:
+//# run sui::coin_regulation::disable_global_pause --args object(0xcf) object(1,3) --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("CoinTypeUnpaused"), type_params: [Struct(StructTag { address: test, module: Identifier("regulated_coin"), name: Identifier("REGULATED_COIN"), type_params: [] })] }, contents: [0] }
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(1,3), object(11,0)
+gas summary: computation_cost: 1000000, storage_cost: 7121200,  storage_rebate: 7120488, non_refundable_storage_fee: 712
+
+task 26, lines 231-233:
+//# programmable --sender C --inputs object(3,0) @C
+//> 0: test::regulated_coin::take_df(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+created: object(26,0)
+mutated: object(0,2), object(3,0)
+deleted: object(3,1)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 3800000,  storage_rebate: 4650735, non_refundable_storage_fee: 465
+
+task 27, lines 235-237:
+//# programmable --sender C --inputs object(4,1) @C
+//> 0: test::regulated_coin::take_dof(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+mutated: object(0,2), object(4,0), object(4,1)
+deleted: object(4,2)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 3800000,  storage_rebate: 6254175, non_refundable_storage_fee: 625
+
+task 28, lines 239-241:
+//# programmable --sender C --inputs object(5,0) @C
+//> 0: test::regulated_coin::take_bag(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+created: object(28,0)
+mutated: object(0,2), object(5,0)
+deleted: object(5,1)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 4126800,  storage_rebate: 4977502, non_refundable_storage_fee: 498
+
+task 29, lines 243-245:
+//# programmable --sender C --inputs object(6,0) @C
+//> 0: test::regulated_coin::take_table(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+created: object(29,0)
+mutated: object(0,2), object(6,0)
+deleted: object(6,1)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 4142000,  storage_rebate: 4992701, non_refundable_storage_fee: 499
+
+task 30, lines 247-249:
+//# programmable --sender C --inputs object(7,0) 100 @C
+//> 0: test::regulated_coin::take_account(Input(0), Input(1));
+//> TransferObjects([Result(0)], Input(2))
+created: object(30,0)
+mutated: object(0,2), object(7,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000acc
+accumulators_written: (object(7,1), fake(7,0), sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Split, 100)
+gas summary: computation_cost: 1000000, storage_cost: 3800000,  storage_rebate: 2325367, non_refundable_storage_fee: 233
+
+task 31, lines 251-253:
+//# programmable --sender C --inputs object(8,1) receiving(8,0) @C
+//> 0: test::regulated_coin::take_receive(Input(0), Input(1));
+//> TransferObjects([Result(0)], Input(2))
+mutated: object(0,2), object(8,0), object(8,1)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 3800000,  storage_rebate: 3799620, non_refundable_storage_fee: 380
+
+task 32, lines 255-256:
+//# programmable --sender C --inputs object(26,0) object(4,0) object(28,0) object(29,0) object(30,0) object(8,0)
+//> MergeCoins(Input(0), [Input(1), Input(2), Input(3), Input(4), Input(5)])
+mutated: object(0,2), object(26,0)
+deleted: object(4,0), object(8,0), object(28,0), object(29,0), object(30,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 9833417, non_refundable_storage_fee: 983
+
+task 33, line 258:
+//# view-object 26,0
+Owner: Account Address ( C )
+Version: 25
+Contents: sui::coin::Coin<test::regulated_coin::REGULATED_COIN> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(26,0),
+        },
+    },
+    balance: sui::balance::Balance<test::regulated_coin::REGULATED_COIN> {
+        value: 600u64,
+    },
+}

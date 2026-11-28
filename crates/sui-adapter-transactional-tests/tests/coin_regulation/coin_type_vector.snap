@@ -1,0 +1,363 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 29 tasks
+
+// Coin type `test::shapes::One<vector<u8>>`, made with `coin_registry::new_currency`.
+// B is frozen, then the coin is paused. Every transfer that involves B, and every transfer after
+// the pause, is denied.
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 10-152:
+//# publish --sender A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1031000000, storage_cost: 20884800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 154:
+//# run test::shapes::create_one --type-args vector<u8> --args object(0xc) @B --sender A
+created: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7), object(2,8), object(2,9), object(2,10), object(2,11), object(2,12), object(2,13)
+mutated: 0x000000000000000000000000000000000000000000000000000000000000000c, object(0,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(2,14), B, sui::balance::Balance<test::shapes::One<vector<u8>>>, Merge, 100)
+gas summary: computation_cost: 1000000, storage_cost: 28439200,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 3, lines 156-157:
+// `type_name::with_defining_ids<T>()` as Move prints it.
+//# view-object 2,7
+Owner: Account Address ( A )
+Version: 3
+Contents: test::shapes::Name {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,7),
+        },
+    },
+    name: std::ascii::String {
+        bytes: vector[
+            51u8,
+            57u8,
+            102u8,
+            101u8,
+            53u8,
+            99u8,
+            50u8,
+            97u8,
+            102u8,
+            49u8,
+            101u8,
+            100u8,
+            100u8,
+            48u8,
+            97u8,
+            100u8,
+            53u8,
+            100u8,
+            50u8,
+            54u8,
+            54u8,
+            54u8,
+            54u8,
+            98u8,
+            99u8,
+            57u8,
+            56u8,
+            51u8,
+            50u8,
+            99u8,
+            100u8,
+            52u8,
+            102u8,
+            102u8,
+            49u8,
+            49u8,
+            55u8,
+            52u8,
+            100u8,
+            54u8,
+            53u8,
+            97u8,
+            101u8,
+            50u8,
+            100u8,
+            102u8,
+            100u8,
+            50u8,
+            55u8,
+            98u8,
+            56u8,
+            53u8,
+            102u8,
+            48u8,
+            54u8,
+            99u8,
+            102u8,
+            53u8,
+            98u8,
+            53u8,
+            100u8,
+            102u8,
+            97u8,
+            99u8,
+            58u8,
+            58u8,
+            115u8,
+            104u8,
+            97u8,
+            112u8,
+            101u8,
+            115u8,
+            58u8,
+            58u8,
+            79u8,
+            110u8,
+            101u8,
+            60u8,
+            118u8,
+            101u8,
+            99u8,
+            116u8,
+            111u8,
+            114u8,
+            60u8,
+            117u8,
+            56u8,
+            62u8,
+            62u8,
+        ],
+    },
+}
+
+task 4, lines 159-160:
+// A's Coin.
+//# view-object 2,3
+Owner: Account Address ( A )
+Version: 3
+Contents: sui::coin::Coin<test::shapes::One<vector<u8>>> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,3),
+        },
+    },
+    balance: sui::balance::Balance<test::shapes::One<vector<u8>>> {
+        value: 9760u64,
+    },
+}
+
+task 5, lines 162-163:
+// B's Coin.
+//# view-object 2,4
+Owner: Account Address ( B )
+Version: 3
+Contents: sui::coin::Coin<test::shapes::One<vector<u8>>> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,4),
+        },
+    },
+    balance: sui::balance::Balance<test::shapes::One<vector<u8>>> {
+        value: 100u64,
+    },
+}
+
+task 6, lines 165-166:
+// B's Wrapper.
+//# view-object 2,5
+Owner: Account Address ( B )
+Version: 3
+Contents: test::shapes::Wrapper<test::shapes::One<vector<u8>>> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,5),
+        },
+    },
+    coin: sui::coin::Coin<test::shapes::One<vector<u8>>> {
+        id: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+        balance: sui::balance::Balance<test::shapes::One<vector<u8>>> {
+            value: 10u64,
+        },
+    },
+}
+
+task 7, line 168:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 8, lines 170-173:
+// Control before the freeze: B can send.
+//# programmable --sender B --inputs object(2,4) 1 @A
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([Result(0)], Input(2))
+created: object(8,0)
+mutated: object(0,1), object(2,4)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 3678400,  storage_rebate: 1345065, non_refundable_storage_fee: 135
+
+task 9, line 175:
+//# run sui::coin_regulation::freeze_address --args object(0xcf) object(2,1) @B --type-args test::shapes::One<vector<u8>> --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressFrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("shapes"), name: Identifier("One"), type_params: [Vector(U8)] })] }, contents: [211, 27, 123, 80, 104, 177, 57, 148, 28, 237, 197, 43, 3, 111, 85, 200, 148, 253, 57, 74, 23, 14, 43, 163, 66, 69, 163, 36, 241, 209, 108, 139] }
+created: object(9,0), object(9,1)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 9902800,  storage_rebate: 2758524, non_refundable_storage_fee: 276
+
+task 10, lines 177-178:
+// The `CoinTypeKey` field.
+//# view-object 9,0
+Owner: Object ID: ( 0x00000000000000000000000000000000000000000000000000000000000000cf )
+Version: 4
+Contents: sui::dynamic_field::Field<sui::coin_regulation::CoinTypeKey<test::shapes::One<vector<u8>>>, sui::coin_regulation::CoinTypeState> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(9,0),
+        },
+    },
+    name: sui::coin_regulation::CoinTypeKey<test::shapes::One<vector<u8>>> {
+        dummy_field: false,
+    },
+    value: sui::coin_regulation::CoinTypeState {
+        paused: false,
+        num_frozen_addresses: 1u64,
+    },
+}
+
+task 11, lines 180-181:
+// The `FrozenAddressKey` field.
+//# view-object 9,1
+Owner: Object ID: ( 0x00000000000000000000000000000000000000000000000000000000000000cf )
+Version: 4
+Contents: sui::dynamic_field::Field<sui::coin_regulation::FrozenAddressKey<test::shapes::One<vector<u8>>>, sui::coin_regulation::FrozenAddressState> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(9,1),
+        },
+    },
+    name: sui::coin_regulation::FrozenAddressKey<test::shapes::One<vector<u8>>> {
+        pos0: B,
+    },
+    value: sui::coin_regulation::FrozenAddressState {
+        seize_auths: sui::vec_set::VecSet<sui::object::ID> {
+            contents: vector[],
+        },
+        frozen_epoch: 0u64,
+        unfreeze_lock: sui::coin_regulation::UnfreezeLock::None{},
+    },
+}
+
+task 12, lines 183-186:
+// Frozen sender: Coin.
+//# programmable --sender B --inputs object(2,4) 1 @A
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([Result(0)], Input(2))
+Error: Error checking transaction input objects: Address @B is denied for coin object(1,0)::shapes::One<vector<u8>>
+
+task 13, lines 188-189:
+// Frozen sender: Coin held in an object.
+//# run test::shapes::split_wrapped --args object(2,5) 1 @A --type-args test::shapes::One<vector<u8>> --sender B
+Error: Transaction Effects Status: Address B is denied for coin test::shapes::One<vector<u8>>
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: B, coin_type: "test::shapes::One<vector<u8>>" }, source: None, command: None } }
+
+task 14, lines 191-194:
+// Frozen sender: address balance.
+//# programmable --sender B --inputs withdraw<sui::balance::Balance<test::shapes::One<vector<u8>>>>(1) @A
+//> 0: sui::balance::redeem_funds<test::shapes::One<vector<u8>>>(Input(0));
+//> 1: sui::balance::send_funds<test::shapes::One<vector<u8>>>(Result(0), Input(1));
+Error: Error checking transaction input objects: Address @B is denied for coin object(1,0)::shapes::One<vector<u8>>
+
+task 15, lines 196-197:
+// Frozen sender: address balance funded from a Coin held in an object.
+//# run test::shapes::send_wrapped_funds --args object(2,5) 1 @A --type-args test::shapes::One<vector<u8>> --sender B
+Error: Transaction Effects Status: Address B is denied for coin test::shapes::One<vector<u8>>
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: B, coin_type: "test::shapes::One<vector<u8>>" }, source: None, command: None } }
+
+task 16, lines 199-202:
+// Frozen recipient: Coin.
+//# programmable --sender A --inputs object(2,3) 1 @B
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([Result(0)], Input(2))
+Error: Transaction Effects Status: Address B is denied for coin test::shapes::One<vector<u8>>
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: B, coin_type: "test::shapes::One<vector<u8>>" }, source: None, command: None } }
+
+task 17, lines 204-207:
+// Frozen recipient: address balance.
+//# programmable --sender A --inputs object(2,3) 1 @B
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> sui::coin::send_funds<test::shapes::One<vector<u8>>>(Result(0), Input(2))
+Error: Transaction Effects Status: Address B is denied for coin test::shapes::One<vector<u8>>
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: B, coin_type: "test::shapes::One<vector<u8>>" }, source: None, command: None } }
+
+task 18, lines 209-210:
+// Frozen recipient: an object that holds the Coin.
+//# run test::shapes::give_wrapped --args object(2,6) @B --type-args test::shapes::One<vector<u8>> --sender A
+Error: Transaction Effects Status: Address B is denied for coin test::shapes::One<vector<u8>>
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: B, coin_type: "test::shapes::One<vector<u8>>" }, source: None, command: None } }
+
+task 19, lines 212-213:
+// Frozen sender: reads a Balance held in a dynamic field.
+//# run test::shapes::peek_boxed --args object(2,8) --type-args test::shapes::One<vector<u8>> --sender B
+Error: Transaction Effects Status: Address B is denied for coin test::shapes::One<vector<u8>>
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: B, coin_type: "test::shapes::One<vector<u8>>" }, source: None, command: None } }
+
+task 20, lines 215-216:
+// Frozen sender: moves a Balance between dynamic fields.
+//# run test::shapes::rebox --args object(2,8) --type-args test::shapes::One<vector<u8>> --sender B
+Error: Transaction Effects Status: Address B is denied for coin test::shapes::One<vector<u8>>
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: B, coin_type: "test::shapes::One<vector<u8>>" }, source: None, command: None } }
+
+task 21, lines 218-221:
+// Control: an unfrozen recipient is allowed.
+//# programmable --sender A --inputs object(2,3) 1 @C
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([Result(0)], Input(2))
+created: object(21,0)
+mutated: object(0,0), object(2,3)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf
+gas summary: computation_cost: 1000000, storage_cost: 3678400,  storage_rebate: 2332967, non_refundable_storage_fee: 233
+
+task 22, line 223:
+//# run sui::coin_regulation::enable_global_pause --args object(0xcf) object(2,1) --type-args test::shapes::One<vector<u8>> --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin_regulation"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("CoinTypePaused"), type_params: [Struct(StructTag { address: test, module: Identifier("shapes"), name: Identifier("One"), type_params: [Vector(U8)] })] }, contents: [0] }
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, object(0,0), object(2,1), object(9,0)
+gas summary: computation_cost: 1000000, storage_cost: 6862800,  storage_rebate: 6862114, non_refundable_storage_fee: 686
+
+task 23, lines 225-228:
+// Paused: Coin input, no frozen address involved.
+//# programmable --sender A --inputs object(2,3) 1 @C
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([Result(0)], Input(2))
+Error: Error checking transaction input objects: Coin type is globally paused for use: object(1,0)::shapes::One<vector<u8>>
+
+task 24, lines 230-231:
+// Paused: Coin held in an object, no frozen address involved.
+//# run test::shapes::split_wrapped --args object(2,6) 1 @C --type-args test::shapes::One<vector<u8>> --sender A
+Error: Transaction Effects Status: Coin type is globally paused for use: test::shapes::One<vector<u8>>
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "test::shapes::One<vector<u8>>" }, source: None, command: None } }
+
+task 25, lines 233-234:
+// Paused: address balance deposit from a Coin held in an object.
+//# run test::shapes::send_wrapped_funds --args object(2,6) 1 @C --type-args test::shapes::One<vector<u8>> --sender A
+Error: Transaction Effects Status: Coin type is globally paused for use: test::shapes::One<vector<u8>>
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "test::shapes::One<vector<u8>>" }, source: None, command: None } }
+
+task 26, lines 236-237:
+// Paused: an object that holds the Coin changes owner.
+//# run test::shapes::give_wrapped --args object(2,6) @C --type-args test::shapes::One<vector<u8>> --sender A
+Error: Transaction Effects Status: Coin type is globally paused for use: test::shapes::One<vector<u8>>
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "test::shapes::One<vector<u8>>" }, source: None, command: None } }
+
+task 27, lines 239-240:
+// Paused: reads a Balance held in a dynamic field.
+//# run test::shapes::peek_boxed --args object(2,9) --type-args test::shapes::One<vector<u8>> --sender A
+Error: Transaction Effects Status: Coin type is globally paused for use: test::shapes::One<vector<u8>>
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "test::shapes::One<vector<u8>>" }, source: None, command: None } }
+
+task 28, lines 242-243:
+// Paused: moves a Balance between dynamic fields.
+//# run test::shapes::rebox --args object(2,9) --type-args test::shapes::One<vector<u8>> --sender A
+Error: Transaction Effects Status: Coin type is globally paused for use: test::shapes::One<vector<u8>>
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CoinTypeGlobalPause { coin_type: "test::shapes::One<vector<u8>>" }, source: None, command: None } }

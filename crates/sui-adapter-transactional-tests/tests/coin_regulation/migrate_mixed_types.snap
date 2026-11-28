@@ -1,0 +1,114 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 14 tasks
+
+// One transaction touches the migrated COIN_A and the legacy COIN_B. The legacy deny list still
+// applies to COIN_B, and only the FreezeList applies to COIN_A.
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 9-58:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5), object(1,6), object(1,7), object(1,8), object(1,9), object(1,10)
+mutated: object(0,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1041000000, storage_cost: 31920000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 60:
+//# run sui::coin_registry::migrate_legacy_metadata --args object(0xc) object(1,2) --type-args test::coin_a::COIN_A --sender A
+created: object(2,0), object(2,1)
+mutated: 0x000000000000000000000000000000000000000000000000000000000000000c, object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6840000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 3, lines 62-65:
+//# programmable --sender A --inputs object(1,5) object(1,10) 10 @B
+//> 0: SplitCoins(Input(0), [Input(2)]);
+//> 1: SplitCoins(Input(1), [Input(2)]);
+//> TransferObjects([Result(0), Result(1)], Input(3))
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(1,5), object(1,10)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 6399200,  storage_rebate: 3693231, non_refundable_storage_fee: 369
+
+task 4, lines 67-70:
+//# programmable --sender A --inputs object(1,5) object(1,10) 10 @C
+//> 0: SplitCoins(Input(0), [Input(2)]);
+//> 1: SplitCoins(Input(1), [Input(2)]);
+//> TransferObjects([Result(0), Result(1)], Input(3))
+created: object(4,0), object(4,1)
+mutated: object(0,0), object(1,5), object(1,10)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 6399200,  storage_rebate: 3693231, non_refundable_storage_fee: 369
+
+task 5, line 72:
+//# run sui::coin::deny_list_v2_add --args object(0x403) object(1,3) @B --type-args test::coin_a::COIN_A --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin"), sender: A, type_: StructTag { address: sui, module: Identifier("deny_list"), name: Identifier("PerTypeConfigCreated"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 80, 97, 57, 48, 48, 102, 54, 54, 52, 53, 50, 56, 56, 98, 49, 97, 56, 48, 98, 51, 54, 57, 53, 48, 98, 99, 102, 52, 53, 51, 57, 100, 97, 57, 102, 54, 53, 57, 50, 101, 51, 54, 57, 97, 49, 97, 48, 100, 48, 52, 56, 53, 99, 102, 54, 101, 100, 54, 57, 97, 55, 48, 98, 52, 54, 58, 58, 99, 111, 105, 110, 95, 97, 58, 58, 67, 79, 73, 78, 95, 65, 25, 185, 194, 39, 60, 13, 11, 172, 133, 179, 227, 114, 249, 145, 155, 73, 94, 87, 125, 76, 167, 34, 173, 88, 120, 24, 136, 71, 240, 151, 162, 135] }
+created: object(5,0), object(5,1), object(5,2)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
+gas summary: computation_cost: 1000000, storage_cost: 11947200,  storage_rebate: 2652135, non_refundable_storage_fee: 265
+
+task 6, line 74:
+//# run sui::coin::deny_list_v2_add --args object(0x403) object(1,8) @B --type-args test::coin_b::COIN_B --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin"), sender: A, type_: StructTag { address: sui, module: Identifier("deny_list"), name: Identifier("PerTypeConfigCreated"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 80, 97, 57, 48, 48, 102, 54, 54, 52, 53, 50, 56, 56, 98, 49, 97, 56, 48, 98, 51, 54, 57, 53, 48, 98, 99, 102, 52, 53, 51, 57, 100, 97, 57, 102, 54, 53, 57, 50, 101, 51, 54, 57, 97, 49, 97, 48, 100, 48, 52, 56, 53, 99, 102, 54, 101, 100, 54, 57, 97, 55, 48, 98, 52, 54, 58, 58, 99, 111, 105, 110, 95, 98, 58, 58, 67, 79, 73, 78, 95, 66, 128, 120, 232, 24, 33, 40, 181, 244, 153, 166, 190, 206, 175, 126, 205, 243, 89, 99, 238, 88, 7, 149, 238, 190, 72, 192, 115, 227, 210, 74, 134, 40] }
+created: object(6,0), object(6,1), object(6,2)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,8)
+gas summary: computation_cost: 1000000, storage_cost: 11947200,  storage_rebate: 4278372, non_refundable_storage_fee: 428
+
+task 7, line 76:
+//# run sui::coin::deny_list_v2_add --args object(0x403) object(1,3) @C --type-args test::coin_a::COIN_A --sender A
+created: object(7,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
+gas summary: computation_cost: 1000000, storage_cost: 6741200,  storage_rebate: 4278372, non_refundable_storage_fee: 428
+
+task 8, line 78:
+//# advance-epoch
+Epoch advanced: 1
+
+task 9, lines 80-84:
+// Migration freezes the listed C for COIN_A. B is not listed, and its legacy COIN_A entry is
+// ignored.
+//# programmable --sender A --inputs object(2,0) object(0xcf) object(0x403) object(1,3) vector[@C] @A
+//> 0: sui::coin_registry::migrate_to_compliance_cap<test::coin_a::COIN_A>(Input(0), Input(1), Input(2), Input(3), Input(4));
+//> TransferObjects([Result(0)], Input(5))
+events: Event { package_id: sui, transaction_module: Identifier("coin_registry"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("AddressFrozen"), type_params: [Struct(StructTag { address: test, module: Identifier("coin_a"), name: Identifier("COIN_A"), type_params: [] })] }, contents: [240, 73, 205, 46, 99, 107, 174, 60, 172, 87, 77, 183, 141, 26, 218, 137, 142, 231, 86, 93, 139, 34, 84, 24, 27, 65, 52, 63, 162, 162, 211, 237] }, Event { package_id: sui, transaction_module: Identifier("coin_registry"), sender: A, type_: StructTag { address: sui, module: Identifier("coin_regulation"), name: Identifier("DenyCapMigrated"), type_params: [Struct(StructTag { address: test, module: Identifier("coin_a"), name: Identifier("COIN_A"), type_params: [] })] }, contents: [117, 44, 2, 31, 49, 177, 209, 157, 195, 185, 229, 235, 145, 215, 13, 147, 119, 118, 154, 222, 120, 70, 213, 71, 94, 53, 246, 254, 23, 48, 177, 87] }
+created: object(9,0), object(9,1), object(9,2)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 16241200,  storage_rebate: 6254175, non_refundable_storage_fee: 625
+
+task 10, lines 86-91:
+// Execution denies the recipient B for COIN_B. The deny list checks COIN_A first, so this shows
+// B's COIN_A entry is ignored.
+//# programmable --sender A --inputs object(1,5) object(1,10) 1 @B
+//> 0: SplitCoins(Input(0), [Input(2)]);
+//> 1: SplitCoins(Input(1), [Input(2)]);
+//> TransferObjects([Result(0), Result(1)], Input(3))
+Error: Transaction Effects Status: Address B is denied for coin test::coin_b::COIN_B
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: AddressDeniedForCoin { address: B, coin_type: "test::coin_b::COIN_B" }, source: None, command: None } }
+
+task 11, lines 93-97:
+// Signing denies the sender B for COIN_B, also past its ignored COIN_A entry.
+//# programmable --sender B --inputs object(3,0) object(3,1) 1 @A
+//> 0: SplitCoins(Input(0), [Input(2)]);
+//> 1: SplitCoins(Input(1), [Input(2)]);
+//> TransferObjects([Result(0), Result(1)], Input(3))
+Error: Error checking transaction input objects: Address @B is denied for coin object(1,0)::coin_b::COIN_B
+
+task 12, lines 99-103:
+// Signing denies the sender C for COIN_A through the FreezeList.
+//# programmable --sender C --inputs object(4,0) object(4,1) 1 @A
+//> 0: SplitCoins(Input(0), [Input(2)]);
+//> 1: SplitCoins(Input(1), [Input(2)]);
+//> TransferObjects([Result(0), Result(1)], Input(3))
+Error: Error checking transaction input objects: Address @C is denied for coin object(1,0)::coin_a::COIN_A
+
+task 13, lines 105-108:
+// C is frozen only for COIN_A, so it can move COIN_B.
+//# programmable --sender C --inputs object(4,1) 1 @A
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([Result(0)], Input(2))
+created: object(13,0)
+mutated: object(0,2), object(4,1)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000cf, 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 3693600,  storage_rebate: 1352665, non_refundable_storage_fee: 135

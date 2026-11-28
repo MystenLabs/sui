@@ -2844,6 +2844,12 @@ async fn create_validator_fullnode(
     reference_gas_price: Option<u64>,
     with_fullnode: bool,
 ) -> (Arc<AuthorityState>, Option<Arc<AuthorityState>>) {
+    // Genesis and both node builds need the same process-wide protocol config override.
+    // Install it here because separate overrides in each build would conflict.
+    let _guard = {
+        let protocol_config = protocol_config.clone();
+        ProtocolConfig::apply_overrides_for_testing(move |_, _| protocol_config.clone())
+    };
     // Build network config once and share it between validator and fullnode
     let network_config = {
         let mut builder =
@@ -2853,12 +2859,6 @@ async fn create_validator_fullnode(
         Arc::new(builder.build())
     };
 
-    // Both builds need the same process-wide protocol config override.
-    // Install it here because separate overrides in each build would conflict.
-    let _guard = {
-        let protocol_config = protocol_config.clone();
-        ProtocolConfig::apply_overrides_for_testing(move |_, _| protocol_config.clone())
-    };
     let build_node = |keypair: Option<AuthorityKeyPair>| {
         let network_config = network_config.clone();
         let objects = objects.to_vec();
