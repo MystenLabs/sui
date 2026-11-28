@@ -21,6 +21,7 @@ pub mod consensus_transaction_pool;
 pub(crate) mod consensus_types;
 pub mod consensus_validator;
 pub mod db_checkpoint_handler;
+pub mod encrypted_transactions;
 pub mod epoch;
 pub mod execution_cache;
 mod execution_driver;

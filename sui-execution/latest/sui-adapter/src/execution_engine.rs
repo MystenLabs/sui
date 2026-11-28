@@ -1037,6 +1037,11 @@ pub(crate) mod checked {
                 pt,
                 trace_builder_opt,
             ),
+            // The authority replaces an encrypted transaction with its decrypted programmable
+            // transaction before it calls the executor.
+            TransactionKind::EncryptedTransaction(_) => {
+                panic!("EncryptedTransaction must be decrypted before execution");
+            }
             TransactionKind::ProgrammableSystemTransaction(pt) => {
                 accumulator_settlement::execute::<Mode::Error>(
                     protocol_config,

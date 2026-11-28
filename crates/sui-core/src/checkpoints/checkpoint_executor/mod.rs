@@ -833,6 +833,8 @@ impl CheckpointExecutor {
                     fx_digests.push(fx_digest);
                 });
 
+            let transactions =
+                crate::encrypted_transactions::decrypt_checkpoint_transactions(transactions);
             let executed_fx_digests = self
                 .transaction_cache_reader
                 .multi_get_executed_effects_digests(&tx_digests);
@@ -881,6 +883,8 @@ impl CheckpointExecutor {
                 })
                 .collect();
 
+            let transactions =
+                crate::encrypted_transactions::decrypt_checkpoint_transactions(transactions);
             let executed_fx_digests = self
                 .transaction_cache_reader
                 .multi_get_executed_effects_digests(&tx_digests);

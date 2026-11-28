@@ -690,6 +690,9 @@ mod checked {
                 )?;
                 Ok(Mode::empty_results())
             }
+            TransactionKind::EncryptedTransaction(_) => {
+                panic!("EncryptedTransaction should not exist in execution layer v2");
+            }
             TransactionKind::ProgrammableSystemTransaction(_) => {
                 panic!("ProgrammableSystemTransaction should not exist in execution layer v2");
             }

@@ -25,6 +25,7 @@ use crate::crypto::{
 };
 use crate::digests::{AdditionalConsensusStateDigest, SenderSignedDataDigest};
 use crate::digests::{ChainIdentifier, ConsensusCommitDigest};
+use crate::encrypted_transaction::EncryptedTransaction;
 use crate::execution::{ExecutionTimeObservationKey, SharedInput};
 use crate::funds_accumulator::{FUNDS_ACCUMULATOR_MODULE_NAME, WITHDRAWAL_SPLIT_FUNC_NAME};
 use crate::gas::minimum_gas_budget;
@@ -525,6 +526,10 @@ pub enum TransactionKind {
 
     /// A system transaction that is expressed as a PTB
     ProgrammableSystemTransaction(ProgrammableTransaction),
+
+    /// A programmable transaction whose inputs and commands are encrypted to the random beacon
+    /// key. Validators decrypt it after it is committed.
+    EncryptedTransaction(EncryptedTransaction),
     // .. more transaction types go here
 }
 
@@ -1987,7 +1992,31 @@ impl TransactionKind {
             | TransactionKind::RandomnessStateUpdate(_)
             | TransactionKind::EndOfEpochTransaction(_)
             | TransactionKind::ProgrammableSystemTransaction(_) => true,
-            TransactionKind::ProgrammableTransaction(_) => false,
+            TransactionKind::ProgrammableTransaction(_)
+            | TransactionKind::EncryptedTransaction(_) => false,
+        }
+    }
+
+    /// The programmable transaction that this transaction executes: the transaction itself, or
+    /// the decrypted transaction of an encrypted transaction once it is decrypted.
+    pub fn user_programmable_transaction(&self) -> Option<&ProgrammableTransaction> {
+        match self {
+            TransactionKind::ProgrammableTransaction(pt) => Some(pt),
+            TransactionKind::EncryptedTransaction(et) => et.decrypted(),
+            _ => None,
+        }
+    }
+
+    /// The kind that the executor runs. An encrypted transaction runs its decrypted
+    /// programmable transaction.
+    pub fn into_executable_kind(self) -> Self {
+        match self {
+            TransactionKind::EncryptedTransaction(et) => {
+                TransactionKind::ProgrammableTransaction(et.decrypted().cloned().unwrap_or_else(
+                    || panic!("encrypted transaction executed before it was decrypted"),
+                ))
+            }
+            kind => kind,
         }
     }
 
@@ -2112,14 +2141,18 @@ impl TransactionKind {
             Self::ProgrammableTransaction(pt) | Self::ProgrammableSystemTransaction(pt) => {
                 Either::Right(Either::Left(pt.shared_input_objects()))
             }
+            Self::EncryptedTransaction(et) => match et.decrypted() {
+                Some(pt) => Either::Right(Either::Left(pt.shared_input_objects())),
+                None => Either::Right(Either::Right(iter::empty())),
+            },
             Self::Genesis(_) => Either::Right(Either::Right(iter::empty())),
         }
     }
 
     fn move_calls(&self) -> Vec<(usize, &ObjectID, &str, &str)> {
-        match &self {
-            Self::ProgrammableTransaction(pt) => pt.move_calls(),
-            _ => vec![],
+        match self.user_programmable_transaction() {
+            Some(pt) => pt.move_calls(),
+            None => vec![],
         }
     }
 
@@ -2136,6 +2169,10 @@ impl TransactionKind {
             | TransactionKind::EndOfEpochTransaction(_)
             | TransactionKind::ProgrammableSystemTransaction(_) => vec![],
             TransactionKind::ProgrammableTransaction(pt) => pt.receiving_objects(),
+            TransactionKind::EncryptedTransaction(et) => et
+                .decrypted()
+                .map(|pt| pt.receiving_objects())
+                .unwrap_or_default(),
         }
     }
 
@@ -2196,6 +2233,10 @@ impl TransactionKind {
             Self::ProgrammableTransaction(p) | Self::ProgrammableSystemTransaction(p) => {
                 return p.input_objects();
             }
+            Self::EncryptedTransaction(et) => match et.decrypted() {
+                Some(p) => return p.input_objects(),
+                None => vec![],
+            },
         };
         // Ensure that there are no duplicate inputs. This cannot be removed because:
         // In [`AuthorityState::check_locks`], we check that there are no duplicate mutable
@@ -2214,7 +2255,7 @@ impl TransactionKind {
     pub fn get_funds_withdrawals<'a>(
         &'a self,
     ) -> impl Iterator<Item = &'a FundsWithdrawalArg> + 'a {
-        let TransactionKind::ProgrammableTransaction(pt) = &self else {
+        let Some(pt) = self.user_programmable_transaction() else {
             return Either::Left(iter::empty());
         };
         Either::Right(pt.inputs.iter().filter_map(|input| {
@@ -2227,7 +2268,7 @@ impl TransactionKind {
     }
 
     pub fn get_coin_reservation_obj_refs(&self) -> impl Iterator<Item = ObjectRef> + '_ {
-        let TransactionKind::ProgrammableTransaction(pt) = &self else {
+        let Some(pt) = self.user_programmable_transaction() else {
             return Either::Left(iter::empty());
         };
         Either::Right(pt.coin_reservation_obj_refs())
@@ -2299,22 +2340,34 @@ impl TransactionKind {
                     ));
                 }
             }
+            TransactionKind::EncryptedTransaction(et) => {
+                if !config.encrypted_transactions() {
+                    return Err(UserInputError::Unsupported(
+                        "encrypted transactions are not enabled".to_string(),
+                    ));
+                }
+                et.check_format()
+                    .map_err(|e| UserInputError::Unsupported(e.to_string()))?;
+                if let Some(pt) = et.decrypted() {
+                    pt.validity_check(config)?;
+                }
+            }
         };
         Ok(())
     }
 
     /// number of commands, or 0 if it is a system transaction
     pub fn num_commands(&self) -> usize {
-        match self {
-            TransactionKind::ProgrammableTransaction(pt) => pt.commands.len(),
-            _ => 0,
+        match self.user_programmable_transaction() {
+            Some(pt) => pt.commands.len(),
+            None => 0,
         }
     }
 
     pub fn iter_commands(&self) -> impl Iterator<Item = &Command> {
-        match self {
-            TransactionKind::ProgrammableTransaction(pt) => pt.commands.iter(),
-            _ => [].iter(),
+        match self.user_programmable_transaction() {
+            Some(pt) => pt.commands.iter(),
+            None => [].iter(),
         }
     }
 
@@ -2339,6 +2392,7 @@ impl TransactionKind {
             Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
             Self::RandomnessStateUpdate(_) => "RandomnessStateUpdate",
             Self::EndOfEpochTransaction(_) => "EndOfEpochTransaction",
+            Self::EncryptedTransaction(_) => "EncryptedTransaction",
         }
     }
 }
@@ -2408,6 +2462,10 @@ impl Display for TransactionKind {
             }
             Self::EndOfEpochTransaction(_) => {
                 writeln!(writer, "Transaction Kind : End of Epoch Transaction")?;
+            }
+            Self::EncryptedTransaction(et) => {
+                writeln!(writer, "Transaction Kind : Encrypted")?;
+                writeln!(writer, "Epoch : {}", et.epoch)?;
             }
         }
         write!(f, "{}", writer)
@@ -3208,6 +3266,13 @@ pub trait TransactionDataAPI {
         chain_identifier: ChainIdentifier,
     ) -> BTreeMap<AccumulatorObjId, u64>;
 
+    /// Like `process_funds_withdrawals_for_execution`, but returns an error where that function
+    /// panics. It does not require a transaction that is known to be valid.
+    fn try_process_funds_withdrawals_for_execution(
+        &self,
+        chain_identifier: ChainIdentifier,
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>>;
+
     /// Validates the declared funder, the spender, and the funds type of each
     /// `WithdrawFrom::SenderAllowance` against its loaded input object. Execution trusts the
     /// declared funder, which is immutable on the allowance. Policy checks live in Move.
@@ -3371,6 +3436,17 @@ impl TransactionDataAPI for TransactionDataV1 {
         &self,
         chain_identifier: ChainIdentifier,
     ) -> BTreeMap<AccumulatorObjId, u64> {
+        self.try_process_funds_withdrawals_for_execution(chain_identifier)
+            .expect("checked at signing time")
+    }
+
+    fn try_process_funds_withdrawals_for_execution(
+        &self,
+        chain_identifier: ChainIdentifier,
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>> {
+        let invalid = |error: &str| UserInputError::InvalidWithdrawReservation {
+            error: error.to_string(),
+        };
         let mut withdraws: Vec<_> = self.get_funds_withdrawals().collect();
         withdraws.extend(self.get_funds_withdrawal_for_gas_payment());
 
@@ -3379,21 +3455,24 @@ impl TransactionDataAPI for TransactionDataV1 {
         for withdraw in withdraws {
             let reserved_amount = match &withdraw.reservation {
                 Reservation::MaxAmountU64(amount) => {
-                    assert!(*amount > 0, "verified in validity check");
+                    fp_ensure!(
+                        *amount > 0,
+                        invalid("Balance withdraw reservation amount must be non-zero")
+                    );
                     *amount
                 }
             };
 
             let withdrawal_owner = withdraw.owner_for_withdrawal(self);
 
-            // unwrap checked at signing time
             let account_id =
                 AccumulatorValue::get_field_id(withdrawal_owner, &withdraw.type_arg.to_type_tag())
-                    .unwrap();
+                    .map_err(|e| invalid(&e.to_string()))?;
 
             let value = withdraw_map.entry(account_id).or_default();
-            // overflow checked at signing time
-            *value = value.checked_add(reserved_amount).unwrap();
+            *value = value
+                .checked_add(reserved_amount)
+                .ok_or_else(|| invalid("Balance withdraw reservation overflow"))?;
         }
 
         // It is not necessarily possible to construct a FundsWithdrawalArg for coin reservations, because
@@ -3401,8 +3480,8 @@ impl TransactionDataAPI for TransactionDataV1 {
         // cancel the transaction if there are no funds available.
         for obj in self.coin_reservation_obj_refs() {
             assert_reachable!("processing coin reservation withdrawal");
-            // unwrap safe because of signing time checks
-            let parsed = ParsedObjectRefWithdrawal::parse(&obj, chain_identifier).unwrap();
+            let parsed = ParsedObjectRefWithdrawal::parse(&obj, chain_identifier)
+                .ok_or_else(|| invalid("Invalid coin reservation"))?;
             let value = withdraw_map
                 // new_unchecked is safe because we verify that this is a valid accumulator object id
                 // at signing time
@@ -3410,11 +3489,12 @@ impl TransactionDataAPI for TransactionDataV1 {
                 // here, we only need the accumulator object id.
                 .entry(AccumulatorObjId::new_unchecked(parsed.unmasked_object_id))
                 .or_default();
-            // overflow checked at signing time
-            *value = value.checked_add(parsed.reservation_amount()).unwrap();
+            *value = value
+                .checked_add(parsed.reservation_amount())
+                .ok_or_else(|| invalid("Balance withdraw reservation overflow"))?;
         }
 
-        withdraw_map
+        Ok(withdraw_map)
     }
 
     fn check_allowance_inputs(&self, input_objects: &InputObjects) -> UserInputResult<()> {
@@ -3483,7 +3563,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         if self.is_gas_paid_from_address_balance() && self.gas_data().budget > 0 {
             return true;
         }
-        if let TransactionKind::ProgrammableTransaction(pt) = &self.kind {
+        if let Some(pt) = self.kind.user_programmable_transaction() {
             for input in &pt.inputs {
                 if matches!(input, CallArg::FundsWithdrawal(_)) {
                     return true;
@@ -3937,6 +4017,39 @@ impl TransactionDataAPI for TransactionDataV1 {
 
         self.kind().validity_check(config)?;
 
+        if let TransactionKind::EncryptedTransaction(et) = &self.kind {
+            fp_ensure!(
+                et.epoch == context.epoch,
+                UserInputError::Unsupported(format!(
+                    "encrypted transaction for epoch {} submitted in epoch {}",
+                    et.epoch, context.epoch
+                ))
+                .into()
+            );
+            let min_price = config.encrypted_transaction_min_gas_price();
+            fp_ensure!(
+                self.gas_data.price >= min_price,
+                UserInputError::GasPriceUnderRGP {
+                    gas_price: self.gas_data.price,
+                    reference_gas_price: min_price,
+                }
+                .into()
+            );
+            // Several transactions can reserve gas from one address balance, and those that it
+            // does not cover pay nothing. Their keys would be derived for free.
+            fp_ensure!(
+                !self
+                    .gas_data
+                    .payment
+                    .iter()
+                    .any(|(_, _, digest)| ParsedDigest::is_coin_reservation_digest(digest)),
+                UserInputError::Unsupported(
+                    "encrypted transactions must pay gas with coins".to_string()
+                )
+                .into()
+            );
+        }
+
         if config.enable_gasless() && self.is_gasless_transaction() {
             let TransactionKind::ProgrammableTransaction(pt) = &self.kind else {
                 debug_fatal!("gasless transaction is not a ProgrammableTransaction");
@@ -3974,6 +4087,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         if self.gas_owner() == self.sender() {
             return Ok(());
         }
+        // The sponsor of an encrypted transaction could not see a use of its gas coin.
         if matches!(&self.kind, TransactionKind::ProgrammableTransaction(_)) {
             return Ok(());
         }
@@ -4000,7 +4114,8 @@ impl TransactionDataAPI for TransactionDataV1 {
             | TransactionKind::Genesis(_)
             | TransactionKind::AuthenticatorStateUpdate(_)
             | TransactionKind::EndOfEpochTransaction(_)
-            | TransactionKind::RandomnessStateUpdate(_) => false,
+            | TransactionKind::RandomnessStateUpdate(_)
+            | TransactionKind::EncryptedTransaction(_) => false,
         }
     }
 
@@ -4306,6 +4421,21 @@ impl SenderSignedData {
     #[cfg(test)]
     pub fn intent_message_mut_for_testing(&mut self) -> &mut IntentMessage<TransactionData> {
         &mut self.inner_mut().intent_message
+    }
+
+    /// Sets the programmable transaction that an encrypted transaction executes. `None` makes
+    /// it run no command. The digest does not change. Returns false for other kinds.
+    pub fn set_encrypted_transaction_plaintext(
+        &mut self,
+        transaction: Option<ProgrammableTransaction>,
+    ) -> bool {
+        match self.inner_mut().intent_message.value.kind_mut() {
+            TransactionKind::EncryptedTransaction(et) => {
+                et.set_decrypted(transaction);
+                true
+            }
+            _ => false,
+        }
     }
 
     // used cross-crate, so cannot be #[cfg(test)]

@@ -58,6 +58,7 @@ use sui_types::crypto::RandomnessRound;
 use sui_types::digests::{
     ChainIdentifier, CheckpointDigest, TransactionDigest, TransactionEffectsDigest,
 };
+use sui_types::encrypted_transaction::BeaconPublicKey;
 use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
@@ -1640,7 +1641,7 @@ impl SuiNode {
             let randomness_manager = RandomnessManager::try_new(
                 Arc::downgrade(&epoch_store),
                 Box::new(consensus_adapter.clone()),
-                randomness_handle,
+                randomness_handle.clone(),
                 authority_key_pair,
                 randomness_receiver_handle.clone(),
             )
@@ -1649,6 +1650,9 @@ impl SuiNode {
                 epoch_store
                     .set_randomness_manager(randomness_manager)
                     .await?;
+            }
+            if epoch_store.protocol_config().encrypted_transactions() {
+                epoch_store.set_encrypted_transaction_keys(Arc::new(randomness_handle));
             }
         }
 
@@ -1870,6 +1874,11 @@ impl SuiNode {
             server.into_handle()
         });
         Ok((server, admission_queue))
+    }
+
+    /// The random beacon public key of the current epoch, if DKG completed.
+    pub fn beacon_public_key(&self) -> Option<BeaconPublicKey> {
+        self.randomness_receiver_handle.public_key()
     }
 
     pub fn state(&self) -> Arc<AuthorityState> {

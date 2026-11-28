@@ -2045,7 +2045,10 @@ impl AuthorityState {
         let protocol_config = epoch_store.protocol_config();
         let transaction_data = &certificate.data().intent_message().value;
         let sender = transaction_data.sender();
-        let (mut kind, signer, gas_data) = transaction_data.execution_parts();
+        let (kind, signer, gas_data) = transaction_data.execution_parts();
+        // An encrypted transaction executes its decrypted programmable transaction, which the
+        // consensus handler or the checkpoint executor sets before scheduling.
+        let mut kind = kind.into_executable_kind();
         let early_execution_error = get_early_execution_error(
             &tx_digest,
             &input_objects,
@@ -2340,6 +2343,12 @@ impl AuthorityState {
         if transaction.kind().is_system_tx() {
             return Err(SuiErrorKind::UnsupportedFeatureError {
                 error: "simulate does not support system transactions".to_string(),
+            }
+            .into());
+        }
+        if matches!(transaction.kind(), TransactionKind::EncryptedTransaction(_)) {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
+                error: "simulate does not support encrypted transactions".to_string(),
             }
             .into());
         }

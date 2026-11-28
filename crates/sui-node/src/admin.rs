@@ -11,6 +11,7 @@ use axum::{
 };
 use base64::Engine;
 use fastcrypto::encoding::{Encoding, Hex};
+use fastcrypto::serde_helpers::ToFromByteArray;
 use fastcrypto::traits::ToFromBytes;
 use humantime::parse_duration;
 use mysten_network::Multiaddr;
@@ -21,6 +22,7 @@ use std::{
     str::FromStr,
 };
 use sui_network::endpoint_manager::{AddressSource, EndpointId};
+use sui_types::encrypted_transaction::BeaconKeyInfo;
 use sui_types::{
     base_types::{AuthorityName, ConciseableName},
     crypto::{NetworkPublicKey, RandomnessPartialSignature, RandomnessRound, RandomnessSignature},
@@ -113,6 +115,8 @@ const DB_SHELL_LS: &str = "/db-shell/ls";
 const DB_SHELL_READ: &str = "/db-shell/read";
 const DB_SHELL_DELETE: &str = "/db-shell/delete";
 const BROADCAST_TX_DENY_CONFIG: &str = "/broadcast-transaction-deny-config";
+// Returns the beacon public key that encrypted transactions target, as JSON `BeaconKeyInfo`.
+const ENCRYPTED_TRANSACTION_BEACON_KEY: &str = "/encrypted-transaction-beacon-key";
 const WITHDRAW_TX_DENY_CONFIG: &str = "/withdraw-transaction-deny-config";
 const TX_DENY_CONFIG: &str = "/transaction-deny-config";
 
@@ -181,6 +185,10 @@ pub async fn run_admin_server(
             post(withdraw_transaction_deny_config),
         )
         .route(TX_DENY_CONFIG, get(transaction_deny_config_dump))
+        .route(
+            ENCRYPTED_TRANSACTION_BEACON_KEY,
+            get(encrypted_transaction_beacon_key),
+        )
         .with_state(Arc::new(app_state));
 
     let socket_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
@@ -679,6 +687,32 @@ async fn update_endpoint(
             parsed_addresses.len(),
         ),
     )
+}
+
+async fn encrypted_transaction_beacon_key(
+    State(state): State<Arc<AppState>>,
+) -> (StatusCode, String) {
+    let epoch_store = state.node.state().load_epoch_store_one_call_per_task();
+    if !epoch_store.protocol_config().encrypted_transactions() {
+        return (
+            StatusCode::PRECONDITION_FAILED,
+            "encrypted transactions are not enabled\n".to_string(),
+        );
+    }
+    let Some(public_key) = state.node.beacon_public_key() else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "the random beacon DKG has not completed in this epoch\n".to_string(),
+        );
+    };
+    let info = BeaconKeyInfo {
+        epoch: epoch_store.epoch(),
+        beacon_public_key: public_key.to_byte_array().to_vec(),
+    };
+    match serde_json::to_string(&info) {
+        Ok(json) => (StatusCode::OK, format!("{json}\n")),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}\n")),
+    }
 }
 
 async fn submit_transaction_deny_config_update(

@@ -78,6 +78,8 @@ impl TransactionKind {
                     inner: programmable::ProgrammableTransaction { native: pt, scope },
                 },
             )),
+            // GraphQL has no type for encrypted transactions yet.
+            K::EncryptedTransaction(_) => None,
         }
     }
 }

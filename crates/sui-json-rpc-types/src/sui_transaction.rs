@@ -557,6 +557,9 @@ impl SuiTransactionBlockKind {
                 // This case is handled separately by the callers
                 unreachable!()
             }
+            TransactionKind::EncryptedTransaction(_) => {
+                anyhow::bail!("JSON-RPC does not support encrypted transactions")
+            }
             TransactionKind::AuthenticatorStateUpdate(update) => {
                 Self::AuthenticatorStateUpdate(SuiAuthenticatorStateUpdate {
                     epoch: update.epoch,

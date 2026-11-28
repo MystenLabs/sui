@@ -506,3 +506,103 @@ fn node_from_committee(
         weight: stake.try_into().unwrap(),
     }
 }
+
+#[sim_test]
+async fn test_encrypted_transaction_key_derivation() {
+    telemetry_subscribers::init_for_testing();
+    let committee_fixture = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let committee = committee_fixture.committee();
+    let threshold: u16 = committee.validity_threshold().try_into().unwrap();
+
+    let mut networks: Vec<anemo::Network> = Vec::new();
+    let mut nodes = Vec::new();
+    let mut handles = Vec::new();
+    let mut authority_info = HashMap::new();
+    for (authority, stake) in committee.members() {
+        let (tx, _rx) = mpsc::channel(3);
+        let (unstarted, router) = Builder::new(*authority, tx).build();
+        let network = utils::build_network(|r| r.merge(router));
+        for n in networks.iter() {
+            network.connect(n.local_addr()).await.unwrap();
+        }
+        networks.push(network.clone());
+        let node = node_from_committee(committee, authority, *stake);
+        authority_info.insert(*authority, (network.peer_id(), node.id));
+        nodes.push(node);
+        let (r, handle) = unstarted.build(network);
+        handles.push((authority, handle));
+        tokio::spawn(r.start());
+    }
+    let nodes = nodes::Nodes::new(nodes).unwrap();
+
+    let mut public_key = None;
+    for (authority, handle) in handles.iter() {
+        let mock_dkg_output = mocked_dkg::generate_mocked_output::<PkG, EncG>(
+            nodes.clone(),
+            threshold.into(),
+            0,
+            committee
+                .authority_index(authority)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        );
+        public_key = Some(mock_dkg_output.vss_pk.c0());
+        handle.update_epoch(0, authority_info.clone(), mock_dkg_output, threshold, None);
+    }
+    let public_key = public_key.unwrap();
+
+    let id_message = [
+        sui_types::encrypted_transaction::ID_TAG,
+        b"test identity".as_slice(),
+    ]
+    .concat();
+
+    // Only one node requests the key. Its shares alone are below the threshold, and the other
+    // nodes do not release theirs, so no key is derived.
+    let mut first = handles[0]
+        .1
+        .derive_encrypted_transaction_key(0, id_message.clone());
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    assert!(first.try_recv().is_err());
+
+    // Once every other node but the last processed the commit, all of them derive the same
+    // verified key.
+    let last = handles.len() - 1;
+    let mut receivers = vec![first];
+    for (_, handle) in &handles[1..last] {
+        receivers.push(handle.derive_encrypted_transaction_key(0, id_message.clone()));
+    }
+    let mut keys = vec![];
+    for receiver in receivers {
+        keys.push(receiver.await.unwrap());
+    }
+
+    // A node that requests the key after the others finished derives it from the shares that
+    // they sent. Another call joins the same derivation.
+    tokio::time::sleep(Duration::from_secs(20)).await;
+    for _ in 0..2 {
+        keys.push(
+            handles[last]
+                .1
+                .derive_encrypted_transaction_key(0, id_message.clone())
+                .await
+                .unwrap(),
+        );
+    }
+    for key in &keys {
+        assert_eq!(key, &keys[0]);
+        ThresholdBls12381MinSig::verify(&public_key, &id_message, key).unwrap();
+    }
+
+    // A malformed identity is refused, so the beacon's round messages cannot be signed.
+    let round_message = RandomnessRound(5).signature_message();
+    for (_, handle) in handles.iter() {
+        assert!(
+            handle
+                .derive_encrypted_transaction_key(0, round_message.clone())
+                .await
+                .is_err()
+        );
+    }
+}

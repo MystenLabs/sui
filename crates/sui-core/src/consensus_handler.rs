@@ -48,7 +48,7 @@ use sui_types::{
     messages_consensus::{
         AuthorityCapabilitiesV2, AuthorityIndex, ConsensusDeterminedVersionAssignments,
         ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
-        ExecutionTimeObservation, SharedTransactionDenyConfig,
+        ExecutionTimeObservation, Round, SharedTransactionDenyConfig,
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{
@@ -56,7 +56,7 @@ use sui_types::{
         TransactionKey, VerifiedTransaction, WithAliases, paid_proposer_count,
     },
 };
-use tokio::task::JoinSet;
+use tokio::{sync::watch, task::JoinSet};
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::{
@@ -81,6 +81,7 @@ use crate::{
     },
     consensus_throughput_calculator::ConsensusThroughputCalculator,
     consensus_types::consensus_output_api::{ConsensusCommitAPI, ParsedTransaction},
+    encrypted_transactions::{self, CertifiedKeys, PrologueKeys},
     epoch::{
         randomness::{AdvanceDkgError, DkgStatus, RandomnessManager},
         reconfiguration::ReconfigState,
@@ -184,7 +185,7 @@ impl ConsensusHandlerInitializer {
             self.state.get_transaction_cache_reader().clone(),
             self.state.metrics.clone(),
         );
-        ConsensusHandler::new(
+        let mut handler = ConsensusHandler::new(
             self.epoch_store.clone(),
             self.checkpoint_service.clone(),
             settlement_scheduler,
@@ -197,7 +198,12 @@ impl ConsensusHandlerInitializer {
             self.congestion_logger.clone(),
             self.consensus_gasless_counter.clone(),
             self.state.transaction_deny_config_manager().clone(),
-        )
+        );
+        handler.certified_keys = Some(CertifiedKeys {
+            checkpoint_store: self.state.checkpoint_store.clone(),
+            transaction_cache: self.state.get_transaction_cache_reader().clone(),
+        });
+        handler
     }
 }
 
@@ -385,12 +391,20 @@ mod additional_consensus_state {
                 TransactionDigest,
                 Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
             )>,
+            encrypted_transaction_keys: PrologueKeys,
             indirect_state_observer: IndirectStateObserver,
         ) -> VerifiedExecutableTransaction {
-            let version_assignments =
+            // The prologue changes shape only when the commit executes encrypted transactions.
+            let version_assignments = if encrypted_transaction_keys.is_empty() {
                 ConsensusDeterminedVersionAssignments::CancelledTransactionsV2(
                     cancelled_txn_version_assignment,
-                );
+                )
+            } else {
+                ConsensusDeterminedVersionAssignments::CancelledAndEncryptedTransactions {
+                    cancelled_transactions: cancelled_txn_version_assignment,
+                    encrypted_transaction_keys,
+                }
+            };
             let additional_state_digest =
                 indirect_state_observer.fold_with(self.additional_state_digest());
 
@@ -759,6 +773,12 @@ pub struct ConsensusHandler<C> {
     transaction_deny_config_manager: Arc<TransactionDenyConfigManager>,
 
     checkpoint_queue: Mutex<CheckpointQueue>,
+
+    // The height of the last batch that executed and settled. None in unit tests that do not
+    // execute transactions.
+    settled_height: Option<watch::Receiver<CheckpointHeight>>,
+    // Reads encrypted transaction keys from certified checkpoints. None in unit tests.
+    certified_keys: Option<CertifiedKeys>,
 }
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
@@ -826,6 +846,9 @@ impl<C> ConsensusHandler<C> {
             .protocol_config()
             .min_checkpoint_interval_ms_as_option()
             .unwrap_or_default();
+        // Commit output is persisted only after its checkpoints are executed, so everything up to
+        // the restored height has settled.
+        let settled_height = settlement_scheduler.watch_settled_height(last_consensus_stats.height);
         let execution_scheduler_sender =
             ExecutionSchedulerSender::start(settlement_scheduler, epoch_store.clone());
         let commit_rate_estimate_window_size = epoch_store
@@ -861,6 +884,8 @@ impl<C> ConsensusHandler<C> {
                 min_checkpoint_interval_ms,
                 execution_scheduler_sender,
             )),
+            settled_height: Some(settled_height),
+            certified_keys: None,
         }
     }
 
@@ -923,6 +948,8 @@ impl<C> ConsensusHandler<C> {
                 min_checkpoint_interval_ms,
                 execution_scheduler_sender,
             )),
+            settled_height: None,
+            certified_keys: None,
         }
     }
 }
@@ -989,6 +1016,8 @@ struct CommitHandlerState {
     // Transactions involved in same commit owned object lock contention (double-spend),
     // mapped to conflict info (gas vs non-gas breakdown).
     contested_transaction_digests: HashMap<TransactionDigest, ConflictInfo>,
+    // Keys of the encrypted transactions that this commit executes, recorded in its prologue.
+    encrypted_transaction_keys: PrologueKeys,
 }
 
 impl CommitHandlerState {
@@ -1002,6 +1031,7 @@ impl CommitHandlerState {
             occurrence_counts: HashMap::new(),
             staggering_counts: StaggeringCommitCounts::default(),
             contested_transaction_digests: HashMap::new(),
+            encrypted_transaction_keys: Vec::new(),
         }
     }
 
@@ -1092,6 +1122,65 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         );
     }
 
+    /// Decrypts and validates the encrypted transactions of the previous commit, which are
+    /// scheduled in the commit at `round`. Returns them in commit order with the keys for the
+    /// prologue.
+    async fn resolve_encrypted_transactions(
+        &self,
+        round: Round,
+    ) -> (Vec<VerifiedExecutableTransactionWithAliases>, PrologueKeys) {
+        let transactions = encrypted_transactions::deferred(&self.epoch_store);
+        if transactions.is_empty() {
+            return (vec![], vec![]);
+        }
+        let _scope = monitored_scope("ConsensusCommitHandler::resolve_encrypted_transactions");
+        let (scheduled_height, next_checkpoint) = {
+            let queue = self.checkpoint_queue.lock().unwrap();
+            (queue.height, queue.current_checkpoint_seq)
+        };
+        let derived_keys = async {
+            let keys = encrypted_transactions::derive_keys(&self.epoch_store, &transactions).await;
+            if let Some(mut settled_height) = self.settled_height.clone()
+                && settled_height
+                    .wait_for(|height| *height >= scheduled_height)
+                    .await
+                    .is_err()
+            {
+                // The epoch ended, and this handler is shutting down.
+                std::future::pending::<()>().await;
+            }
+            keys
+        };
+        let certified_keys = async {
+            match &self.certified_keys {
+                Some(certified) => certified.wait(next_checkpoint, round).await,
+                None => std::future::pending().await,
+            }
+        };
+        let keys = tokio::select! {
+            keys = certified_keys => {
+                return encrypted_transactions::resolve_certified(transactions, keys);
+            }
+            keys = derived_keys => keys,
+        };
+        let resolved = encrypted_transactions::resolve_derived(
+            &self.epoch_store,
+            self.cache_reader.as_ref(),
+            transactions.clone(),
+            keys,
+        );
+        // The state that was just read is ahead of the previous commit only if this node has a
+        // checkpoint that contains this commit. The checkpoint then decides.
+        match self
+            .certified_keys
+            .as_ref()
+            .and_then(|certified| certified.get(next_checkpoint, round))
+        {
+            Some(keys) => encrypted_transactions::resolve_certified(transactions, keys),
+            None => resolved,
+        }
+    }
+
     #[cfg(test)]
     pub(crate) async fn handle_consensus_commit_for_test(
         &mut self,
@@ -1119,6 +1208,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // - The highest executed checkpoint catches up to both the highest certified checkpoint
         //   and the highest verified checkpoint summary.
         self.backpressure_subscriber.await_no_backpressure().await;
+
+        // Encrypted transactions accepted in the previous commit are sequenced before any
+        // transaction of this commit, so this commit waits for their keys.
+        let (decrypted_transactions, encrypted_transaction_keys) = self
+            .resolve_encrypted_transactions(consensus_commit.leader_round())
+            .await;
 
         let epoch = self.epoch_store.epoch();
 
@@ -1164,6 +1259,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .inc();
 
         let mut state = CommitHandlerState::new(&self.epoch_store, commit_info.round);
+        state.encrypted_transaction_keys = encrypted_transaction_keys;
 
         let FilteredConsensusOutput {
             transactions,
@@ -1203,6 +1299,24 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             transaction_deny_config_updates,
         } = self.build_commit_handler_input(transactions);
 
+        // Encrypted transactions leave the normal schedule. Accepted ones are deferred to the
+        // next commit, after their keys are derived. The others run no command and release no
+        // key, so they are scheduled now.
+        let (user_transactions, accepted_encrypted, rejected_encrypted) =
+            if self.epoch_store.protocol_config().encrypted_transactions() {
+                let (encrypted, user_transactions): (Vec<_>, Vec<_>) = user_transactions
+                    .into_iter()
+                    .partition(encrypted_transactions::is_encrypted);
+                let dkg_status = randomness_manager
+                    .as_deref_mut()
+                    .map(|manager| manager.dkg_status_for_commit_round(commit_info.round));
+                let (accepted, rejected) =
+                    encrypted_transactions::select(&self.epoch_store, dkg_status, encrypted);
+                (user_transactions, accepted, rejected)
+            } else {
+                (user_transactions, vec![], vec![])
+            };
+
         self.process_gasless_transactions(&commit_info, &user_transactions);
         self.process_jwks(&mut state, &commit_info, new_jwks);
         self.process_capability_notifications(capability_notifications);
@@ -1238,7 +1352,19 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             &mut execution_time_estimator,
             &commit_info,
             user_transactions,
+            accepted_encrypted.clone(),
         );
+        // Decrypted transactions are not reordered or deferred again: a revealed transaction that
+        // waits could be overtaken by a later transaction.
+        let transactions_to_schedule: Vec<_> = decrypted_transactions
+            .into_iter()
+            .chain(
+                rejected_encrypted
+                    .into_iter()
+                    .map(encrypted_transactions::without_commands),
+            )
+            .chain(transactions_to_schedule)
+            .collect();
 
         let (should_accept_tx, lock, final_round, abandoned_deferred_txns) =
             self.handle_close_epoch(&mut state, &commit_info, end_of_publish_transactions);
@@ -1325,6 +1451,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .as_ref()
                 .expect("randomness manager should exist if randomness round is provided")
                 .generate_randomness(epoch, randomness_round);
+        }
+
+        // Key shares are released only after the commit that holds the transactions is
+        // processed. The final round abandons deferred transactions, so it releases none.
+        if !final_round {
+            drop(encrypted_transactions::derive_keys(
+                &self.epoch_store,
+                &accepted_encrypted,
+            ));
         }
 
         self.epoch_store.process_notifications(notifications.iter());
@@ -1443,6 +1578,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         execution_time_estimator: &mut ExecutionTimeEstimator,
         commit_info: &ConsensusCommitInfo,
         user_transactions: Vec<VerifiedExecutableTransactionWithAliases>,
+        encrypted_transactions: Vec<VerifiedExecutableTransactionWithAliases>,
     ) -> (
         Vec<VerifiedExecutableTransactionWithAliases>,
         Vec<VerifiedExecutableTransactionWithAliases>,
@@ -1476,6 +1612,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             Vec::with_capacity(ordered_randomness_txns.len());
         let mut deferred_txns = BTreeMap::new();
         let mut cancelled_txns = BTreeMap::new();
+        if !encrypted_transactions.is_empty() {
+            deferred_txns.insert(
+                DeferralKey::new_for_consensus_round(commit_info.round + 1, commit_info.round),
+                encrypted_transactions,
+            );
+        }
 
         self.record_duplication_signal(state);
 
@@ -1872,6 +2014,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let transaction = commit_info.create_consensus_commit_prologue_transaction(
             self.epoch_store.epoch(),
             cancelled_txn_version_assignment,
+            std::mem::take(&mut state.encrypted_transaction_keys),
             state.indirect_state_observer.take().unwrap(),
         );
         Some(VerifiedExecutableTransactionWithAliases::no_aliases(
@@ -2166,6 +2309,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let (mut txns, mut randomness_txns, previously_deferred_tx_digests) =
             self.load_deferred_transactions(state, commit_info);
+        // `resolve_encrypted_transactions` already decrypted the encrypted transactions.
+        txns.retain(|tx| !encrypted_transactions::is_encrypted(tx));
 
         txns.reserve(user_transactions.len());
         randomness_txns.reserve(user_transactions.len());

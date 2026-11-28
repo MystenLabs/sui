@@ -667,6 +667,9 @@ mod checked {
                     trace_builder_opt,
                 )
             }
+            TransactionKind::EncryptedTransaction(_) => {
+                panic!("EncryptedTransaction should not exist in execution layer v3");
+            }
             TransactionKind::ProgrammableSystemTransaction(pt) => {
                 programmable_transactions::execution::execute::<execution_mode::System>(
                     protocol_config,

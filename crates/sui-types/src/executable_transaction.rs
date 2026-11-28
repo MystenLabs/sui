@@ -8,7 +8,8 @@ use crate::{committee::EpochId, crypto::AuthorityStrongQuorumSignInfo};
 
 use crate::message_envelope::{Envelope, TrustedEnvelope, VerifiedEnvelope};
 use crate::transaction::{
-    SenderSignedData, TransactionData, TransactionDataAPI, VerifiedTransaction, WithAliases,
+    ProgrammableTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
+    VerifiedTransaction, WithAliases,
 };
 use serde::{Deserialize, Serialize};
 
@@ -77,5 +78,17 @@ impl VerifiedExecutableTransaction {
     pub fn new_for_testing(tx_data: TransactionData, keypair: &AccountKeyPair) -> Self {
         let tx = to_sender_signed_transaction(tx_data, keypair);
         Self::new_from_consensus(VerifiedTransaction::new_unchecked(tx), 0)
+    }
+
+    /// Sets the programmable transaction that an encrypted transaction executes. `None` makes
+    /// it run no command. The digest does not change.
+    pub fn with_encrypted_transaction_plaintext(
+        self,
+        transaction: Option<ProgrammableTransaction>,
+    ) -> Self {
+        let (mut data, proof) = self.into_inner().into_data_and_sig();
+        let is_encrypted = data.set_encrypted_transaction_plaintext(transaction);
+        assert!(is_encrypted, "transaction is not an encrypted transaction");
+        Self::new_unchecked(Envelope::new_from_data_and_sig(data, proof))
     }
 }

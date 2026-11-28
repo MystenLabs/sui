@@ -1799,7 +1799,12 @@ impl From<crate::messages_consensus::ConsensusDeterminedVersionAssignments>
                     })
                     .collect(),
             },
-            CancelledTransactionsV2(canceled_transactions) => Self::CanceledTransactionsV2 {
+            // The SDK type has no field for encrypted transaction keys, so they are dropped.
+            CancelledTransactionsV2(canceled_transactions)
+            | CancelledAndEncryptedTransactions {
+                cancelled_transactions: canceled_transactions,
+                ..
+            } => Self::CanceledTransactionsV2 {
                 canceled_transactions: canceled_transactions
                     .into_iter()
                     .map(|(digest, assignments)| CanceledTransactionV2 {

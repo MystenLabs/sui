@@ -8,6 +8,7 @@ mod admission_queue_tests;
 mod authenticated_events_client_test;
 mod checkpoint_rate_tests;
 mod dynamic_committee_tests;
+mod encrypted_transaction_tests;
 mod gasless_tests;
 mod get_object_inclusion_proof_tests;
 mod multisig_tests;

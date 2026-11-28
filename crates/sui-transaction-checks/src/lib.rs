@@ -478,7 +478,7 @@ mod checked {
     }
 
     /// Check one object against a reference
-    fn check_one_object(
+    pub fn check_one_object(
         owner: &SuiAddress,
         object_kind: InputObjectKind,
         object: &Object,

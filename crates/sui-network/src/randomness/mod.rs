@@ -35,6 +35,7 @@ use tracing::{debug, error, info, instrument, warn};
 
 mod auth;
 mod builder;
+mod encrypted_transaction_keys;
 #[allow(clippy::result_large_err)]
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/sui.Randomness.rs"));
@@ -45,6 +46,7 @@ mod server;
 mod tests;
 
 pub use builder::{Builder, UnstartedRandomness};
+pub use encrypted_transaction_keys::SendEncryptedTransactionKeySharesRequest;
 pub use generated::{
     randomness_client::RandomnessClient,
     randomness_server::{Randomness, RandomnessServer},
@@ -156,6 +158,24 @@ impl Handle {
             .expect("RandomnessEventLoop mailbox should not overflow or be closed")
     }
 
+    /// Derives the key of an encrypted transaction. The receiver yields the verified key. The
+    /// caller must call this only after the commit that holds the transaction is processed,
+    /// because it releases this node's shares. The derivation continues if the receiver is
+    /// dropped, and another call for the same identity joins it.
+    pub fn derive_encrypted_transaction_key(
+        &self,
+        epoch: EpochId,
+        id_message: Vec<u8>,
+    ) -> oneshot::Receiver<RandomnessSignature> {
+        let (sender, receiver) = oneshot::channel();
+        self.sender
+            .try_send(RandomnessMessage::DeriveEncryptedTransactionKey(
+                epoch, id_message, sender,
+            ))
+            .expect("RandomnessEventLoop mailbox should not overflow or be closed");
+        receiver
+    }
+
     // For testing.
     pub fn new_stub() -> Self {
         let (sender, mut receiver) = mpsc::channel(100);
@@ -206,6 +226,8 @@ enum RandomnessMessage {
         RandomnessSignature,
         oneshot::Sender<Result<()>>,
     ),
+    DeriveEncryptedTransactionKey(EpochId, Vec<u8>, oneshot::Sender<RandomnessSignature>),
+    ReceiveEncryptedTransactionKeyShares(PeerId, SendEncryptedTransactionKeySharesRequest),
 }
 
 struct RandomnessEventLoop {
@@ -238,6 +260,7 @@ struct RandomnessEventLoop {
     received_partial_sigs: BTreeMap<(RandomnessRound, PeerId), Vec<RandomnessPartialSignature>>,
     completed_sigs: BTreeMap<RandomnessRound, RandomnessSignature>,
     highest_completed_round: BTreeMap<EpochId, RandomnessRound>,
+    encrypted_transaction_keys: encrypted_transaction_keys::EncryptedTransactionKeyState,
 }
 
 impl RandomnessEventLoop {
@@ -311,6 +334,12 @@ impl RandomnessEventLoop {
             }
             RandomnessMessage::AdminInjectFullSignature(round, sig, result_channel) => {
                 let _ = result_channel.send(self.admin_inject_full_signature(round, sig));
+            }
+            RandomnessMessage::DeriveEncryptedTransactionKey(epoch, id_message, sender) => {
+                self.derive_encrypted_transaction_key(epoch, id_message, sender)
+            }
+            RandomnessMessage::ReceiveEncryptedTransactionKeyShares(peer_id, request) => {
+                self.receive_encrypted_transaction_key_shares(peer_id, request)
             }
         }
     }
@@ -386,6 +415,8 @@ impl RandomnessEventLoop {
         for round in rounds_to_aggregate {
             self.maybe_aggregate_partial_signatures(new_epoch, round);
         }
+
+        self.encrypted_transaction_keys.update_epoch(new_epoch);
 
         Ok(())
     }

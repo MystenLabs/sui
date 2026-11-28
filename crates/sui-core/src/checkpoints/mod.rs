@@ -2013,7 +2013,8 @@ impl CheckpointBuilder {
                         randomness_rounds
                             .insert(*effects.transaction_digest(), rsu.randomness_round);
                     }
-                    TransactionKind::ProgrammableTransaction(_) => {
+                    TransactionKind::ProgrammableTransaction(_)
+                    | TransactionKind::EncryptedTransaction(_) => {
                         // Only transactions that are not roots should be included in the call to
                         // `consensus_messages_processed_notify`. roots come directly from the consensus
                         // commit and so are known to be processed already.

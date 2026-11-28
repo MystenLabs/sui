@@ -137,6 +137,17 @@ pub enum ConsensusDeterminedVersionAssignments {
             Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
         )>,
     ),
+    /// Cancelled transaction version assignments, plus the keys of the encrypted transactions
+    /// that execute their commands in the commit. Nodes that replay checkpoints decrypt the
+    /// transactions with these keys. An encrypted transaction without a key runs no command.
+    CancelledAndEncryptedTransactions {
+        cancelled_transactions: Vec<(
+            TransactionDigest,
+            Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
+        )>,
+        /// Transaction digests and compressed G1 keys (48 bytes).
+        encrypted_transaction_keys: Vec<(TransactionDigest, Vec<u8>)>,
+    },
 }
 
 impl ConsensusDeterminedVersionAssignments {

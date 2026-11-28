@@ -115,6 +115,7 @@ use crate::consensus_handler::{
     ConsensusCommitInfo, SequencedConsensusTransaction, SequencedConsensusTransactionKey,
     SequencedConsensusTransactionKind, VerifiedSequencedConsensusTransaction,
 };
+use crate::encrypted_transactions::EncryptedTransactionKeys;
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::randomness::{
     RandomnessManager, RandomnessReporter, SINGLETON_KEY, VersionedProcessedMessage,
@@ -407,6 +408,9 @@ pub struct AuthorityPerEpochStore {
     /// State machine managing randomness DKG and generation.
     pub(crate) randomness_manager: OnceCell<tokio::sync::Mutex<RandomnessManager>>,
     randomness_reporter: OnceCell<RandomnessReporter>,
+
+    /// Derives encrypted transaction keys. Set by the node when it starts the epoch.
+    encrypted_transaction_keys: OnceCell<Arc<dyn EncryptedTransactionKeys>>,
 
     /// Manages recording execution time observations and generating estimates.
     pub(crate) execution_time_estimator: tokio::sync::Mutex<ExecutionTimeEstimator>,
@@ -1082,6 +1086,7 @@ impl AuthorityPerEpochStore {
             jwk_aggregator,
             randomness_manager: OnceCell::new(),
             randomness_reporter: OnceCell::new(),
+            encrypted_transaction_keys: OnceCell::new(),
             execution_time_estimator: tokio::sync::Mutex::new(execution_time_estimator),
             tx_local_execution_time: OnceCell::new(),
             tx_object_debts: OnceCell::new(),
@@ -1124,6 +1129,16 @@ impl AuthorityPerEpochStore {
         self.epoch_start_configuration
             .randomness_obj_initial_shared_version()
             .is_some()
+    }
+
+    pub fn set_encrypted_transaction_keys(&self, keys: Arc<dyn EncryptedTransactionKeys>) {
+        if self.encrypted_transaction_keys.set(keys).is_err() {
+            debug_fatal!("BUG: `set_encrypted_transaction_keys` called more than once");
+        }
+    }
+
+    pub fn encrypted_transaction_keys(&self) -> Option<Arc<dyn EncryptedTransactionKeys>> {
+        self.encrypted_transaction_keys.get().cloned()
     }
 
     pub fn randomness_reporter(&self) -> Option<RandomnessReporter> {
