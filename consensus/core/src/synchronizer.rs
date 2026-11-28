@@ -768,8 +768,13 @@ where
         let resp = match resp {
             Ok(Err(err)) => {
                 // Add a delay before retrying - if that is needed. If request has timed out then eventually
-                // this will be a no-op.
-                sleep_until(start + request_timeout).await;
+                // this will be a no-op. A throttled peer rejected the request without doing any
+                // work, so a caller that moves to another peer can retry right away. Live sync
+                // (fetch_missing_ancestors) retries the same peer, so it keeps the delay.
+                let throttled = matches!(err, ConsensusError::FetchBlocksThrottled(_));
+                if !throttled || fetch_missing_ancestors {
+                    sleep_until(start + request_timeout).await;
+                }
                 failed_attempts += 1;
                 Err(err)
             } // network error
@@ -973,8 +978,9 @@ where
                     .fetch_blocks_scheduler_inflight
                     .inc();
                 let total_requested = missing_blocks.len();
+                let start = Instant::now();
 
-                let results = if missing_blocks.is_empty() {
+                let (results, throttled) = if missing_blocks.is_empty() {
                     let _scope = monitored_scope("BlockSync::Periodic::HighestAcceptedRounds");
                     // Fetch blocks from a random peer using highest accepted rounds (commit sync failover)
                     Self::fetch_blocks_with_fetch_after_rounds(
@@ -1003,7 +1009,17 @@ where
                     .node_metrics
                     .fetch_blocks_scheduler_inflight
                     .dec();
+                // Throttled requests return without waiting for their timeout, so a run that saw
+                // a throttle can end early. The next run starts only after this task ends, so
+                // waiting here keeps runs at most as frequent as when every failure took a full
+                // request timeout.
+                let pace = || async {
+                    if throttled {
+                        sleep_until(start + FETCH_REQUEST_TIMEOUT).await;
+                    }
+                };
                 if results.is_empty() {
+                    pace().await;
                     return;
                 }
 
@@ -1047,6 +1063,7 @@ where
                     "Total blocks requested to fetch: {}, total fetched: {}",
                     total_requested, total_fetched
                 );
+                pace().await;
             }));
 
         Ok(())
@@ -1137,47 +1154,58 @@ where
         network_client: Arc<SynchronizerClient<VC, OC>>,
         dag_state: Arc<RwLock<DagState>>,
         peers_pool: Arc<PeersPool>,
-    ) -> Vec<(BlocksGuard, Vec<Bytes>, PeerId)> {
+    ) -> (Vec<(BlocksGuard, Vec<Bytes>, PeerId)>, bool) {
         let fetch_after_rounds = Self::get_fetch_after_rounds(&context, &dag_state);
 
-        // Pick a random peer (excluding self).
         // Get available peers from the PeersPool
-        let peers = peers_pool.get_known_peers();
+        let mut peers = peers_pool.get_known_peers();
 
         // TODO: in the future it would be possible, temporarily, for an Observer node to not have peers to fetch from.
         // We should change this assertion to allow for this case.
         assert!(!peers.is_empty(), "No known peers to fetch blocks from");
 
-        let peer = if cfg!(test) {
-            peers.first()
-        } else {
-            peers.choose(&mut ThreadRng::default())
+        // Try random peers. A throttled peer rejects the request without doing any work, so the
+        // next peer is tried right away. Any other failure ends this attempt.
+        if cfg!(not(test)) {
+            peers.shuffle(&mut ThreadRng::default());
         }
-        .unwrap()
-        .clone();
-
-        let response = timeout(
-            FETCH_REQUEST_TIMEOUT,
-            network_client.fetch_blocks(
-                peer.clone(),
-                vec![],
-                fetch_after_rounds,
-                false,
+        let mut serialized_blocks = None;
+        let mut throttled = false;
+        for peer in peers.into_iter().take(MAX_PERIODIC_SYNC_PEERS) {
+            let response = timeout(
                 FETCH_REQUEST_TIMEOUT,
-            ),
-        )
-        .await;
-
-        let serialized_blocks = match response {
-            Ok(Ok(blocks)) => blocks,
-            Ok(Err(err)) => {
-                debug!("Failed to fetch blocks with fetch_after_rounds from peer {peer}: {err}");
-                return vec![];
+                network_client.fetch_blocks(
+                    peer.clone(),
+                    vec![],
+                    fetch_after_rounds.clone(),
+                    false,
+                    FETCH_REQUEST_TIMEOUT,
+                ),
+            )
+            .await;
+            match response {
+                Ok(Ok(blocks)) => {
+                    serialized_blocks = Some((blocks, peer));
+                    break;
+                }
+                Ok(Err(ConsensusError::FetchBlocksThrottled(err))) => {
+                    debug!("Fetch blocks with fetch_after_rounds throttled by peer {peer}: {err}");
+                    throttled = true;
+                }
+                Ok(Err(err)) => {
+                    debug!(
+                        "Failed to fetch blocks with fetch_after_rounds from peer {peer}: {err}"
+                    );
+                    return (vec![], throttled);
+                }
+                Err(_) => {
+                    debug!("Timed out fetching blocks with fetch_after_rounds from peer {peer}");
+                    return (vec![], throttled);
+                }
             }
-            Err(_) => {
-                debug!("Timed out fetching blocks with fetch_after_rounds from peer {peer}");
-                return vec![];
-            }
+        }
+        let Some((serialized_blocks, peer)) = serialized_blocks else {
+            return (vec![], throttled);
         };
 
         let blocks_guard = BlocksGuard {
@@ -1186,7 +1214,7 @@ where
             peer: peer.clone(),
         };
 
-        vec![(blocks_guard, serialized_blocks, peer)]
+        (vec![(blocks_guard, serialized_blocks, peer)], throttled)
     }
 
     /// Fetches the `missing_blocks` from peers. Requests the same number of authorities with missing blocks from each peer.
@@ -1201,7 +1229,7 @@ where
         missing_blocks: BTreeSet<BlockRef>,
         dag_state: Arc<RwLock<DagState>>,
         peers_pool: Arc<PeersPool>,
-    ) -> Vec<(BlocksGuard, Vec<Bytes>, PeerId)> {
+    ) -> (Vec<(BlocksGuard, Vec<Bytes>, PeerId)>, bool) {
         // Preliminary truncation of missing blocks to fetch. Since each peer can have different
         // number of missing blocks and the fetching is batched by peer, so keep more than max_blocks_per_fetch
         // per peer on average.
@@ -1318,6 +1346,7 @@ where
         }
 
         let mut results = Vec::new();
+        let mut throttled = false;
         let fetcher_timeout = sleep(FETCH_FROM_PEERS_TIMEOUT);
 
         tokio::pin!(fetcher_timeout);
@@ -1325,16 +1354,21 @@ where
         // Stop as soon as no pending requests are left, instead of waiting for the timeout.
         while !request_futures.is_empty() {
             tokio::select! {
-                Some((response, blocks_guard, _failed_attempts, peer, fetch_after_rounds)) = request_futures.next() => {
+                Some((response, blocks_guard, failed_attempts, peer, fetch_after_rounds)) = request_futures.next() => {
                     match response {
                         Ok(fetched_blocks) => {
                             results.push((blocks_guard, fetched_blocks, peer));
                         },
-                        Err(_) => {
+                        Err(err) => {
+                            throttled |= matches!(err, ConsensusError::FetchBlocksThrottled(_));
                             let peer_name = peer.labelname(&context);
                             context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer_name.as_str(), "periodic"]).inc();
-                            // try again if there is any peer left
-                            if let Some(next_peer) = peers.next() {
+                            // Try again if there is any peer left. Throttled requests fail without
+                            // a delay, so the number of retries per batch is capped to avoid
+                            // sending one batch to many peers in a burst.
+                            if failed_attempts as usize > MAX_PERIODIC_SYNC_PEERS {
+                                debug!("Giving up on the batch after {failed_attempts} failed attempts");
+                            } else if let Some(next_peer) = peers.next() {
                                 // do best effort to lock guards. If we can't lock then don't bother at this run.
                                 if let Some(blocks_guard) = inflight_blocks.swap_locks(blocks_guard, next_peer.clone()) {
                                     info!(
@@ -1354,7 +1388,7 @@ where
                                         fetch_after_rounds,
                                         false,
                                         FETCH_REQUEST_TIMEOUT,
-                                        0,
+                                        failed_attempts,
                                     ));
                                 } else {
                                     debug!("Couldn't acquire locks to fetch blocks from peer {:?}.", next_peer)
@@ -1372,7 +1406,7 @@ where
             }
         }
 
-        results
+        (results, throttled)
     }
 }
 
@@ -1425,6 +1459,8 @@ mod tests {
     #[derive(Default)]
     struct MockNetworkClient {
         fetch_blocks_requests: Mutex<BTreeMap<FetchRequestKey, FetchRequestResponse>>,
+        // Peers that reject their next fetch_blocks request with FetchBlocksThrottled.
+        throttled_peers: Mutex<BTreeSet<AuthorityIndex>>,
         fetch_latest_blocks_requests:
             Mutex<BTreeMap<FetchLatestBlockKey, Vec<FetchLatestBlockResponse>>>,
     }
@@ -1442,6 +1478,10 @@ mod tests {
                 .map(|block| block.reference())
                 .collect::<Vec<_>>();
             lock.insert((block_refs, peer), (blocks, latency));
+        }
+
+        async fn throttle_next_fetch_blocks(&self, peer: AuthorityIndex) {
+            self.throttled_peers.lock().await.insert(peer);
         }
 
         async fn stub_fetch_blocks_for_key(
@@ -1493,6 +1533,9 @@ mod tests {
             _fetch_missing_ancestors: bool,
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
+            if self.throttled_peers.lock().await.remove(&peer) {
+                return Err(ConsensusError::FetchBlocksThrottled(peer.to_string()));
+            }
             let mut lock = self.fetch_blocks_requests.lock().await;
             let response = lock.remove(&(block_refs.clone(), peer)).unwrap_or_else(|| {
                 panic!(
@@ -1906,6 +1949,168 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn fetch_blocks_from_peers_moves_to_next_peer_when_throttled() {
+        type TestSynchronizer = Synchronizer<
+            NoopBlockVerifier,
+            MockCoreThreadDispatcher,
+            MockNetworkClient,
+            MockNetworkClient,
+        >;
+
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let mock_client = Arc::new(MockNetworkClient::default());
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let network_client = Arc::new(SynchronizerClient::new(
+            context.clone(),
+            Some(mock_client.clone()),
+            Some(mock_client.clone()),
+        ));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
+        let inflight_blocks = InflightBlocksMap::new();
+
+        // One missing block, so one request goes to the first peer. The first peer throttles it
+        // and the second peer serves it.
+        let block = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
+        let missing_blocks = BTreeSet::from([block.reference()]);
+        mock_client
+            .throttle_next_fetch_blocks(AuthorityIndex::new_for_test(1))
+            .await;
+        mock_client
+            .stub_fetch_blocks(vec![block.clone()], AuthorityIndex::new_for_test(2), None)
+            .await;
+
+        let start = tokio::time::Instant::now();
+        let (results, throttled) = TestSynchronizer::fetch_blocks_from_peers(
+            context.clone(),
+            inflight_blocks.clone(),
+            network_client.clone(),
+            missing_blocks,
+            dag_state.clone(),
+            peers_pool.clone(),
+        )
+        .await;
+        assert!(throttled);
+
+        // The retry goes out right away instead of after the throttled request's timeout slot.
+        assert_eq!(results.len(), 1);
+        assert_eq!(
+            results[0].2,
+            PeerId::Validator(AuthorityIndex::new_for_test(2))
+        );
+        assert_eq!(start.elapsed(), Duration::ZERO);
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn fetch_blocks_from_peers_caps_retries_when_throttled() {
+        type TestSynchronizer = Synchronizer<
+            NoopBlockVerifier,
+            MockCoreThreadDispatcher,
+            MockNetworkClient,
+            MockNetworkClient,
+        >;
+
+        let (context, _) = Context::new_for_test(8);
+        let context = Arc::new(context);
+        let mock_client = Arc::new(MockNetworkClient::default());
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let network_client = Arc::new(SynchronizerClient::new(
+            context.clone(),
+            Some(mock_client.clone()),
+            Some(mock_client.clone()),
+        ));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
+        let inflight_blocks = InflightBlocksMap::new();
+
+        // One missing block, so one batch. Every peer throttles it.
+        let block = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
+        let missing_blocks = BTreeSet::from([block.reference()]);
+        for peer in 1..8 {
+            mock_client
+                .throttle_next_fetch_blocks(AuthorityIndex::new_for_test(peer))
+                .await;
+        }
+
+        let (results, throttled) = TestSynchronizer::fetch_blocks_from_peers(
+            context.clone(),
+            inflight_blocks,
+            network_client,
+            missing_blocks,
+            dag_state,
+            peers_pool,
+        )
+        .await;
+        assert!(throttled);
+
+        // The batch goes to the first peer and is retried on MAX_PERIODIC_SYNC_PEERS more, so
+        // the last three peers are never asked.
+        assert!(results.is_empty());
+        let not_asked = mock_client.throttled_peers.lock().await.clone();
+        assert_eq!(
+            not_asked,
+            (5..8)
+                .map(AuthorityIndex::new_for_test)
+                .collect::<BTreeSet<_>>()
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn fetch_blocks_with_fetch_after_rounds_moves_to_next_peer_when_throttled() {
+        type TestSynchronizer = Synchronizer<
+            NoopBlockVerifier,
+            MockCoreThreadDispatcher,
+            MockNetworkClient,
+            MockNetworkClient,
+        >;
+
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let mock_client = Arc::new(MockNetworkClient::default());
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let network_client = Arc::new(SynchronizerClient::new(
+            context.clone(),
+            Some(mock_client.clone()),
+            Some(mock_client.clone()),
+        ));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
+        let inflight_blocks = InflightBlocksMap::new();
+
+        // The first peer throttles the failover request, and the second peer serves it.
+        let block = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
+        mock_client
+            .throttle_next_fetch_blocks(AuthorityIndex::new_for_test(1))
+            .await;
+        mock_client
+            .stub_fetch_blocks_for_key(
+                vec![],
+                vec![block.clone()],
+                AuthorityIndex::new_for_test(2),
+                None,
+            )
+            .await;
+
+        let (results, throttled) = TestSynchronizer::fetch_blocks_with_fetch_after_rounds(
+            context.clone(),
+            inflight_blocks,
+            network_client,
+            dag_state,
+            peers_pool,
+        )
+        .await;
+        assert!(throttled);
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(
+            results[0].2,
+            PeerId::Validator(AuthorityIndex::new_for_test(2))
+        );
+        assert_eq!(results[0].1, vec![block.serialized().clone()]);
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn fetch_blocks_from_peers_returns_when_no_requests_are_pending() {
         type TestSynchronizer = Synchronizer<
             NoopBlockVerifier,
@@ -1951,7 +2156,7 @@ mod tests {
 
         // WHEN
         let start = tokio::time::Instant::now();
-        let results = TestSynchronizer::fetch_blocks_from_peers(
+        let (results, _) = TestSynchronizer::fetch_blocks_from_peers(
             context.clone(),
             inflight_blocks.clone(),
             network_client.clone(),
@@ -1980,7 +2185,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         let start = tokio::time::Instant::now();
-        let results = TestSynchronizer::fetch_blocks_from_peers(
+        let (results, _) = TestSynchronizer::fetch_blocks_from_peers(
             context,
             inflight_blocks.clone(),
             network_client,

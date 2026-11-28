@@ -339,7 +339,7 @@ impl ObserverNetworkService for ObserverService {
 
     async fn handle_fetch_blocks(
         &self,
-        _peer: NodeId,
+        peer: NodeId,
         block_refs: Vec<BlockRef>,
         fetch_after_rounds: Vec<Round>,
         fetch_missing_ancestors: bool,
@@ -348,7 +348,12 @@ impl ObserverNetworkService for ObserverService {
 
         // Delegate to BlockSyncService
         self.block_sync_service
-            .fetch_blocks(block_refs, fetch_after_rounds, fetch_missing_ancestors)
+            .fetch_blocks(
+                PeerId::Observer(Box::new(peer)),
+                block_refs,
+                fetch_after_rounds,
+                fetch_missing_ancestors,
+            )
             .await
     }
 

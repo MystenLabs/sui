@@ -29,6 +29,7 @@ commit_sync_request_timeout:
 commit_sync_probe_timeout:
   secs: 2
   nanos: 0
+fetch_blocks_admission_control: true
 tonic:
   keepalive_interval:
     secs: 10

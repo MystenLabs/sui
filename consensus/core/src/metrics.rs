@@ -149,6 +149,9 @@ pub(crate) struct NodeMetrics {
     pub(crate) blocks_per_commit_count: Histogram,
     pub(crate) blocks_pruned_on_commit: IntCounterVec,
     pub(crate) block_sync_service_read_blocks_count: IntCounter,
+    pub(crate) block_sync_service_store_fetch_rejected: IntCounterVec,
+    pub(crate) block_sync_service_store_fetch_inflight: IntGaugeVec,
+    pub(crate) block_sync_service_store_fetch_duration: HistogramVec,
     pub(crate) commit_observer_last_recovered_commit_index: IntGauge,
     pub(crate) core_add_blocks_batch_size: Histogram,
     pub(crate) core_check_block_refs_batch_size: Histogram,
@@ -411,6 +414,26 @@ impl NodeMetrics {
             block_sync_service_read_blocks_count: register_int_counter_with_registry!(
                 "block_sync_service_read_blocks_count",
                 "Number of times the block sync service needs to read blocks from the store",
+                registry,
+            ).unwrap(),
+            block_sync_service_store_fetch_rejected: register_int_counter_vec_with_registry!(
+                "block_sync_service_store_fetch_rejected",
+                "Number of store-backed FetchBlocks requests rejected by admission control, by requesting peer and request kind",
+                &["peer", "kind"],
+                registry,
+            ).unwrap(),
+            block_sync_service_store_fetch_inflight: register_int_gauge_vec_with_registry!(
+                "block_sync_service_store_fetch_inflight",
+                "Number of admitted store-backed FetchBlocks requests, queued for or running on the blocking pool, by requesting peer and request kind",
+                &["peer", "kind"],
+                registry,
+            ).unwrap(),
+            block_sync_service_store_fetch_duration: register_histogram_vec_with_registry!(
+                "block_sync_service_store_fetch_duration",
+                "Wall-clock duration of store-backed FetchBlocks requests on the blocking pool, by request kind",
+                &["kind"],
+                // The buckets cover 1ms to about 16s.
+                exponential_buckets(0.001, 2.0, 15).unwrap(),
                 registry,
             ).unwrap(),
             commit_observer_last_recovered_commit_index: register_int_gauge_with_registry!(
