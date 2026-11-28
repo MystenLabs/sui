@@ -21,7 +21,7 @@ RE_RELEASE_NOTES_HEADING = re.compile(
 )
 
 RE_CHECKBOX = re.compile(
-    r"^\s*-\s*\[.\]",
+    r"^\s*-\s*\[.?\]",
     re.MULTILINE,
 )
 

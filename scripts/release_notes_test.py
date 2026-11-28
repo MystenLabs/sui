@@ -800,6 +800,22 @@ Just a description, no release notes section.
         self.assertFalse(notes["CLI"].checked)
         self.assertTrue(notes["GraphQL"].checked)
 
+    def test_parse_notes_empty_checkbox_brackets_end_previous_note(self):
+        """An empty checkbox [] should end the note before it, like any other checkbox."""
+        from release_notes import parse_notes
+
+        body = """## Release notes
+- [x] Protocol: Bumps the version
+- [] CLI:
+- [x] GraphQL: Adds a field
+"""
+        notes = parse_notes(body)
+
+        self.assertEqual(notes["Protocol"].note, "Bumps the version")
+        self.assertFalse(notes["CLI"].checked)
+        self.assertEqual(notes["CLI"].note, "")
+        self.assertEqual(notes["GraphQL"].note, "Adds a field")
+
 
 class TestDoGenerateProtocolVersionDisplay(unittest.TestCase):
     """Tests for protocol version bump detection in do_generate."""
