@@ -42,9 +42,10 @@ env:
 # failures from that directory once for the notification.
 #
 # The SSH plumbing shared by the jobs lives in .github/actions/simtest-*:
-# the Teleport session, the wait-for-idle-host loop, and the detached
-# start / poll / check sequence for one phase job. Each job checks out
-# .github/actions to load them; the sui tree under test is cloned on the host.
+# the Teleport session, the wait-for-idle-host loop, and the start (as a
+# transient systemd unit) / poll / check sequence for one phase job. Each job
+# checks out .github/actions to load them; the sui tree under test is cloned
+# on the host.
 #
 # Host files, per phase: ~/simtest_<phase>_stdout.log and
 # ~/simtest_<phase>_exit_code, where <phase> is seed-search or
@@ -78,8 +79,9 @@ jobs:
       # *second* (and beyond) call within the same step. One handshake
       # = one chance to flake.
       #
-      # The pkill block kills any stale simtest workers from a prior
-      # nightly that was cancelled mid-run and nohup'd onto the host —
+      # The systemctl stop / pkill block kills any stale simtest run from a
+      # prior nightly that was cancelled mid-run and left running on the
+      # host (as a transient simtest-* unit, or detached the old way) —
       # otherwise the survivor's in-flight cargo/test processes race
       # our re-clone, exec test binaries we're about to delete, and
       # corrupt the shared stdout logs via a leaked fd.
@@ -95,6 +97,7 @@ jobs:
           # own shell, so pkill can no longer SIGKILL its own parent.
           tsh -i ${{ steps.teleport.outputs.identity-file }} ssh ubuntu@simtest-01 "set -e; \
             echo teleport OK; \
+            sudo systemctl stop 'simtest-*.service' 2>/dev/null || true; \
             pkill -9 -f 'scripts/simtest/(simtest-run|seed-search)' || true; \
             pkill -9 -f 'cargo-simtest[ ]simtest' || true; \
             pkill -9 -f 'target/simulator/d[e]ps/' || true; \
@@ -183,8 +186,8 @@ jobs:
       # The finalize job clears the marker once both phases are done. Only
       # clear it here when the workspace was never set up, i.e. a setup step
       # failed and the later jobs will not run. Skip on cancellation: the
-      # simtest was launched with `nohup ... &`, so a cancelled Actions run
-      # leaves the remote process alive. Clearing the marker here would falsely
+      # simtest runs as a transient systemd unit on the host, so a cancelled
+      # Actions run leaves it alive. Clearing the marker here would falsely
       # advertise the host as idle while a run is still in flight. The next
       # nightly's "Environment clean" step pkills the survivor and removes the
       # marker together, so leaving it on cancel is safe.

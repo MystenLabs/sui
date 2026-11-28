@@ -37,6 +37,22 @@ LOG_FILE="$LOG_DIR/log"
 # By default run 1 iteration for each test, if not specified.
 : ${TEST_NUM:=1}
 
+# Stress workers are capped separately from NUM_CPUS: each holds several GB of
+# RSS plus its temp state in tmpfs, and 24 of them do not fit in the simtest
+# host's 251 GB.
+: ${STRESS_NUM_CPUS:=12}
+
+# All temp state goes under one per-run tree, scoped per phase and per stress
+# worker, and is removed as soon as that phase or worker is done. /tmp on the
+# simtest host is tmpfs, so leaked temp state is leaked RAM. tempfile,
+# std::env::temp_dir() and mktemp all honor TMPDIR.
+SIMTEST_TMP_ROOT="${TMPDIR:-/tmp}/simtest-$SIMTEST_RUN_ID"
+
+phase_tmpdir() {
+  export TMPDIR="$SIMTEST_TMP_ROOT/$1"
+  mkdir -p "$TMPDIR"
+}
+
 # SIMTEST_PHASES selects which phases run, as a comma-separated subset of
 # seed-search, stress and determinism. The nightly workflow runs seed-search in
 # one GitHub job and stress,determinism in a second one so that neither job hits
@@ -64,6 +80,7 @@ date
 
 # Phase 1 runs every (test, seed) pair in its own OS process via seed-search.py.
 mkdir -p "$LOG_DIR/e2e"
+phase_tmpdir seed-search
 
 scripts/simtest/seed-search.py \
   --package consensus-simtests \
@@ -78,8 +95,7 @@ scripts/simtest/seed-search.py \
   --no-reachability 2>&1 | tee "$LOG_FILE"
 PHASE1_EXIT=${PIPESTATUS[0]}
 
-# Clean up temp files from the e2e phase to prevent /tmp (tmpfs) from filling up.
-rm -rf /tmp/tmp.* /tmp/.tmp* /tmp/sui-* 2>/dev/null
+rm -rf "$TMPDIR"
 
 fi
 
@@ -87,33 +103,38 @@ if phase_enabled stress; then
 
 echo ""
 echo "============================================="
-echo "Running $NUM_CPUS stress simtests in parallel"
+echo "Running $STRESS_NUM_CPUS stress simtests in parallel"
 echo "============================================="
 date
 
-for SUB_SEED in `seq 1 $NUM_CPUS`; do
+for SUB_SEED in `seq 1 $STRESS_NUM_CPUS`; do
   SEED="$SUB_SEED$DATE"
   LOG_FILE="$LOG_DIR/log-$SEED"
+  WORKER_TMPDIR="$SIMTEST_TMP_ROOT/stress-$SUB_SEED"
+  mkdir -p "$WORKER_TMPDIR"
   echo "Iteration $SUB_SEED using MSIM_TEST_SEED=$SEED, logging to $LOG_FILE"
 
   # --test-threads 1 is important: parallelism is achieved via the for loop
-  MSIM_TEST_SEED="$SEED" \
-  MSIM_WATCHDOG_TIMEOUT_MS=60000 \
-  SIM_STRESS_TEST_DURATION_SECS=300 \
-  scripts/simtest/cargo-simtest simtest \
-    --color always \
-    --package sui-benchmark \
-    --test-threads 1 \
-    --profile simtestnightly \
-    > "$LOG_FILE" 2>&1 &
+  (
+    TMPDIR="$WORKER_TMPDIR" \
+    MSIM_TEST_SEED="$SEED" \
+    MSIM_WATCHDOG_TIMEOUT_MS=60000 \
+    SIM_STRESS_TEST_DURATION_SECS=300 \
+    scripts/simtest/cargo-simtest simtest \
+      --color always \
+      --package sui-benchmark \
+      --test-threads 1 \
+      --profile simtestnightly \
+      > "$LOG_FILE" 2>&1
+    rm -rf "$WORKER_TMPDIR"
+  ) &
 
 done
 
 # wait for all the jobs to end
 wait
 
-# Clean up temp files from the stress phase before running determinism tests.
-rm -rf /tmp/tmp.* /tmp/.tmp* /tmp/sui-* 2>/dev/null
+rm -rf "$SIMTEST_TMP_ROOT"/stress-*
 
 fi
 
@@ -129,12 +150,17 @@ date
 # output (replaces the retired in-process MSIM_TEST_CHECK_DETERMINISM mechanism).
 LOG_FILE="$LOG_DIR/determinism-log"
 echo "Using MSIM_TEST_SEED=$SEED, logging to $LOG_FILE"
+phase_tmpdir determinism
 
 MSIM_TEST_SEED="$SEED" \
 MSIM_WATCHDOG_TIMEOUT_MS=60000 \
 scripts/simtest/check-determinism.sh 2>&1 | tee "$LOG_FILE"
 
+rm -rf "$TMPDIR"
+
 fi
+
+rm -rf "$SIMTEST_TMP_ROOT"
 
 echo ""
 echo "============================================="
