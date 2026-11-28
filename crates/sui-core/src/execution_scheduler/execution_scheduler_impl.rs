@@ -334,7 +334,7 @@ impl ExecutionScheduler {
         self.send_transaction_for_execution(&cert, execution_env, enqueue_time);
     }
 
-    pub fn send_transaction_for_execution(
+    fn send_transaction_for_execution(
         &self,
         cert: &VerifiedExecutableTransaction,
         execution_env: ExecutionEnv,

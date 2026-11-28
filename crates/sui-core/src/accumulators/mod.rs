@@ -37,7 +37,6 @@ pub mod funds_read;
 // provides balance read functionality for RPC
 pub mod balances;
 pub mod coin_reservations;
-pub mod object_funds_checker;
 pub(crate) mod transaction_rewriting;
 pub mod unsettled_object_withdrawals;
 
@@ -548,7 +547,6 @@ mod barrier_settlement_key_tests {
                 checkpoint_height
             ))
         );
-        assert!(kind.is_accumulator_barrier_settle_tx());
     }
 
     #[test]
@@ -560,7 +558,6 @@ mod barrier_settlement_key_tests {
         let txns = builder.build_tx(&protocol_config, 5, SequenceNumber::from_u64(1), 42, 0);
         for txn in txns {
             assert_eq!(txn.accumulator_barrier_settlement_key(), None);
-            assert!(!txn.is_accumulator_barrier_settle_tx());
         }
     }
 }
