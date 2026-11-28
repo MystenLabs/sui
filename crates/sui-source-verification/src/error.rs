@@ -23,6 +23,12 @@ pub enum Error {
     ToolchainVersionNotFound,
 
     #[error(
+        "The toolchain version {version:?} is not a release version of the form MAJOR.MINOR.PATCH. \
+         Pass --toolchain-version to specify the version to rebuild the package with."
+    )]
+    InvalidToolchainVersion { version: String },
+
+    #[error(
         "The recorded toolchain sui {version} cannot verify this package: {reason}. \
          Passing --toolchain-version {alternative} may work, since compiler output rarely changes \
          between adjacent releases."
