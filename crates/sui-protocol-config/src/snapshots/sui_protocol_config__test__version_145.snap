@@ -178,6 +178,7 @@ feature_flags:
   split_checkpoints_in_consensus_handler: true
   consensus_always_accept_system_transactions: true
   validator_metadata_verify_v2: true
+  validator_metadata_require_compressed_bls: true
   defer_owned_object_double_spend: true
   allowed_proposers: true
   staggered_submission_signal: true
